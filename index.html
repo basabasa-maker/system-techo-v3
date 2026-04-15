@@ -15,28 +15,17 @@
     <title>システム手帳</title>
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=20260415-103554" />
+    <link rel="stylesheet" href="css/style.css?v=20260415-104448" />
   </head>
   <body>
     <div id="app-shell">
-      <header id="app-header">
-        <h1>システム手帳</h1>
-      </header>
+      <header id="app-header"><h1>システム手帳</h1></header>
       <main id="scroll-container">
         <div id="tab-content">
-          <p style="padding: 24px; color: #888">
-            Sprint 0 セットアップ完了。Sprint 1 で Task タブが稼働します。
-          </p>
+          <p style="padding: 24px; color: #888">読み込み中…</p>
         </div>
       </main>
     </div>
-    <script type="module" src="js/app.js?v=20260415-103554"></script>
-    <script>
-      if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("sw.js").catch(function (e) {
-          console.error("SW register failed", e);
-        });
-      }
-    </script>
+    <script type="module" src="js/app.js?v=20260415-104448"></script>
   </body>
 </html>

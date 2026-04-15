@@ -1,10 +1,10 @@
 // sw.js - Service Worker
 // 戦略:
-// - HTML: Network First（常に最新を取りに行き、失敗時にキャッシュ）
-// - CSS/JS/静的アセット: Cache First（ビルドごとのハッシュ付きURLで更新）
+// - HTML: Network First
+// - CSS/JS/静的アセット: Cache First（URLに ?v=ビルド時刻 付与で更新）
 // - キャッシュ名はビルド時刻バージョンを含め、デプロイ時に自動更新する
 
-const BUILD_VERSION = "20260415-103554";
+const BUILD_VERSION = "20260415-104448";
 const CACHE_NAME = `system-techo-v3-${BUILD_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -38,6 +38,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  // 同一オリジン以外（GAS等）はキャッシュしない
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
 
   const isHTML =
     req.mode === "navigate" ||
