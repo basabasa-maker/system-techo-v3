@@ -642,7 +642,7 @@ textarea {
 }
 
 .memo-row-del {
-  right: 0;
+  right: -1px;
   background: #d95252;
 }
 
