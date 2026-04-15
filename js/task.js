@@ -143,17 +143,117 @@ function renderList() {
     });
   }
 
-  listEl.querySelectorAll(".task-item").forEach((el) => {
-    const id = el.dataset.id;
-    el.querySelector(".task-check").addEventListener("click", (e) => {
+  listEl.querySelectorAll(".task-item-wrap").forEach((wrap) => {
+    const row = wrap.querySelector(".task-item");
+    const id = wrap.dataset.id;
+
+    // チェック（完了トグル）→ 確認ダイアログ
+    wrap.querySelector(".task-check").addEventListener("click", (e) => {
       e.stopPropagation();
+      if (isSwipedOrSwiping(wrap)) {
+        resetAllTaskSwipes();
+        return;
+      }
       toggleDone(id);
     });
-    el.querySelector(".task-body").addEventListener("click", () => {
+
+    // 本文タップ → 編集モーダル
+    wrap.querySelector(".task-body").addEventListener("click", () => {
+      if (isSwipedOrSwiping(wrap)) {
+        resetAllTaskSwipes();
+        return;
+      }
       const t = store.loadTasks().find((x) => x.id === id);
       if (t) openEditor(t);
     });
+
+    // 削除アクションボタン
+    wrap.querySelector(".task-row-del").addEventListener("click", (e) => {
+      e.stopPropagation();
+      resetAllTaskSwipes();
+      confirmDeleteTask(id);
+    });
+
+    // スワイプ（左方向のみで削除ボタン露出）
+    bindTaskSwipe(wrap, row);
   });
+}
+
+function isSwipedOrSwiping(wrap) {
+  return (
+    wrap.classList.contains("swiping") || wrap.classList.contains("swiped-left")
+  );
+}
+
+function resetAllTaskSwipes(exceptWrap) {
+  if (!rootEl) return;
+  rootEl.querySelectorAll(".task-item-wrap").forEach((w) => {
+    if (w === exceptWrap) return;
+    const r = w.querySelector(".task-item");
+    if (r) r.style.transform = "";
+    w.classList.remove("swiping", "swiped-left");
+  });
+}
+
+function bindTaskSwipe(wrap, row) {
+  let startX = 0,
+    startY = 0,
+    dx = 0,
+    active = false;
+  const THRESHOLD = 60;
+  row.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length !== 1) return;
+      resetAllTaskSwipes(wrap);
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      dx = 0;
+      active = true;
+      wrap.classList.add("swiping");
+      row.style.transition = "none";
+    },
+    { passive: true },
+  );
+  row.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!active) return;
+      const diffX = e.touches[0].clientX - startX;
+      const diffY = e.touches[0].clientY - startY;
+      if (Math.abs(diffY) > Math.abs(diffX)) {
+        active = false;
+        wrap.classList.remove("swiping");
+        row.style.transform = "";
+        return;
+      }
+      dx = diffX;
+      // 左スワイプのみ有効（右は0に丸める）
+      const clamped = Math.min(0, Math.max(-140, dx));
+      row.style.transform = `translateX(${clamped}px)`;
+    },
+    { passive: true },
+  );
+  row.addEventListener("touchend", () => {
+    if (!active) return;
+    active = false;
+    row.style.transition = "";
+    wrap.classList.remove("swiping");
+    if (dx <= -THRESHOLD) {
+      row.style.transform = "translateX(-100px)";
+      wrap.classList.add("swiped-left");
+    } else {
+      row.style.transform = "";
+    }
+  });
+}
+
+function confirmDeleteTask(id) {
+  const t = store.loadTasks().find((x) => x.id === id);
+  if (!t) return;
+  if (!confirm(`「${t.title}」を削除しますか？\nこの操作は取り消せません。`))
+    return;
+  deleteTask(id);
 }
 
 function sortInPlace(arr) {
@@ -197,15 +297,18 @@ function taskItemHtml(t) {
     : "";
   const prClass = `pri-${t.priority || "mid"}`;
   return `
-    <li class="task-item ${checked ? "is-done" : ""}" data-id="${escapeHtml(t.id)}">
-      <button class="task-check ${checked ? "checked" : ""}" aria-label="完了トグル">${checked ? "✓" : ""}</button>
-      <div class="task-body">
-        <div class="task-title-row">
-          <span class="task-priority ${prClass}">${PRIORITY_LABEL[t.priority] || "中"}</span>
-          <span class="task-title">${escapeHtml(t.title)}</span>
+    <li class="task-item-wrap" data-id="${escapeHtml(t.id)}">
+      <div class="task-row-action task-row-del" data-action="del">削除</div>
+      <div class="task-item ${checked ? "is-done" : ""}" data-id="${escapeHtml(t.id)}">
+        <button class="task-check ${checked ? "checked" : ""}" aria-label="完了トグル">${checked ? "✓" : ""}</button>
+        <div class="task-body">
+          <div class="task-title-row">
+            <span class="task-priority ${prClass}">${PRIORITY_LABEL[t.priority] || "中"}</span>
+            <span class="task-title">${escapeHtml(t.title)}</span>
+          </div>
+          ${due}
+          ${t.memo ? `<div class="task-memo">${escapeHtml(t.memo)}</div>` : ""}
         </div>
-        ${due}
-        ${t.memo ? `<div class="task-memo">${escapeHtml(t.memo)}</div>` : ""}
       </div>
     </li>`;
 }
@@ -351,9 +454,14 @@ async function toggleDone(id) {
   const list = store.loadTasks();
   const t = list.find((x) => x.id === id);
   if (!t) return;
+  const willComplete = t.status !== "done";
+  const msg = willComplete
+    ? `「${t.title}」を完了にしますか？`
+    : `「${t.title}」を未完了に戻しますか？`;
+  if (!confirm(msg)) return;
   const next = {
     ...t,
-    status: t.status === "done" ? "todo" : "done",
+    status: willComplete ? "done" : "todo",
     updated_at: nowJst(),
   };
   await saveTask(next);

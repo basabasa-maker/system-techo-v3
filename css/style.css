@@ -198,13 +198,43 @@ textarea {
   list-style: none;
 }
 
+.task-item-wrap {
+  position: relative;
+  overflow: hidden;
+  background: #1a3556;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  min-height: 56px;
+}
+
+.task-row-action {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.task-row-del {
+  right: -1px;
+  background: #d95252;
+}
+
 .task-item {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: #1e3a5f;
   min-height: 56px;
+  transition: transform 0.2s ease;
 }
 
 .task-item.is-done .task-title {
