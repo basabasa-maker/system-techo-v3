@@ -1,5 +1,6 @@
 // system-techo-v3 GAS Web API
 // Sprint 3: Memoタブ（memo_notes / memo_search / memo_url_fetch / memo_inbox_write）を追加
+// Sprint 4: iOSショートカット共有シート連携（share_add）を追加
 // 設計思想:
 // - pullAll API は作らない（v1白紙化の教訓）
 // - push系は1件upsertのみ
@@ -99,7 +100,7 @@ function doGet(e) {
         ok: true,
         data: {
           schema_version: SCHEMA_VERSION,
-          sprint: 3,
+          sprint: 4,
           now: nowJstString(),
           calendar_count: CALENDAR_DEFS.length,
         },
@@ -170,6 +171,12 @@ function doPost(e) {
       return jsonResponse({
         ok: true,
         data: memoInboxWrite(body.entry_id || "", body.date || ""),
+      });
+    }
+    if (type === "share_add") {
+      return jsonResponse({
+        ok: true,
+        data: shareAdd(body.url || "", body.title || "", body.source || "ios_share"),
       });
     }
     return jsonResponse({ ok: false, error: "Unknown type: " + type });
@@ -517,6 +524,45 @@ function writeInboxMarkdown(row) {
     String(row.body || ""),
   ].join("\n");
   folder.createFile(filename, md, MimeType.PLAIN_TEXT);
+}
+
+// ---------- iOSショートカット共有シート連携 ----------
+// POST {type:"share_add", url, title(任意), source(任意)}
+// - http(s) 以外のURLは拒否
+// - title が空の場合は memoUrlFetch 相当の処理でタイトル取得を試みる（失敗時は空のまま）
+// - memoシートに entry_type=read_later で新規追加（既存upsertロジックを使う）
+// - body には "URL" を格納（タイトルは title フィールドへ）
+function shareAdd(url, title, source) {
+  const u = String(url || "").trim();
+  if (!u) throw new Error("url required");
+  if (!/^https?:\/\//i.test(u)) throw new Error("scheme not allowed (http/https only)");
+
+  let resolvedTitle = String(title || "").trim();
+  if (!resolvedTitle) {
+    try {
+      const fetched = memoUrlFetch(u);
+      if (fetched && fetched.title) resolvedTitle = String(fetched.title).trim();
+    } catch (err) {
+      // タイトル取得失敗は致命的ではない。空のまま進める。
+      console.warn("share_add title fetch failed: " + err);
+    }
+  }
+  if (!resolvedTitle) resolvedTitle = u;
+
+  // 今日の日付（JST）を date に、現在の時刻帯を hour_slot に
+  const todayStr = Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd");
+  const hourStr = Utilities.formatDate(new Date(), "Asia/Tokyo", "HH");
+
+  const entry = {
+    entry_type: "read_later",
+    date: todayStr,
+    hour_slot: hourStr,
+    title: resolvedTitle,
+    body: u,
+    tags: String(source || "ios_share"),
+  };
+  const saved = memoUpsert(entry);
+  return { id: saved.id, title: saved.title, url: u };
 }
 
 function memoDelete(id) {
