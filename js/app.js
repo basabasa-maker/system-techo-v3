@@ -15,26 +15,8 @@ const appState = {
 };
 
 function init() {
-  document.body.innerHTML = `
-    <div id="app-shell">
-      <header id="app-header">
-        <h1>システム手帳</h1>
-        <button id="btn-refresh" class="btn-refresh" aria-label="更新">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35A7.96 7.96 0 0012 4C7.58 4 4.01 7.58 4.01 12S7.58 20 12 20c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-          更新
-        </button>
-      </header>
-      <nav id="tab-bar">
-        <button class="tab-btn" data-tab="task">Task</button>
-        <button class="tab-btn" data-tab="daily">Daily</button>
-        <button class="tab-btn" data-tab="memo">Memo</button>
-      </nav>
-      <main id="scroll-container">
-        <div id="tab-content"></div>
-      </main>
-    </div>
-  `;
-
+  // index.html側で app-shell を事前レンダリング済み（起動時のレイアウトブレ対策）
+  // ここではイベントバインドとタブ初期化のみ
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.disabled) return;
