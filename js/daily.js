@@ -51,11 +51,6 @@ export function renderDailyTab(container) {
         <h3>この日のタスク</h3>
         <ul class="daily-task-list" id="daily-task-list"></ul>
       </div>
-      <div class="daily-journal">
-        <h3>この日のジャーナル</h3>
-        <ul class="daily-journal-list" id="daily-journal-list"></ul>
-      </div>
-      <button id="btn-new-journal" class="fab" aria-label="ジャーナル追加">＋</button>
     </div>
   `;
 
@@ -70,12 +65,8 @@ export function renderDailyTab(container) {
   container.querySelector("#nav-date").addEventListener("click", () => {
     openDatePicker();
   });
-  container
-    .querySelector("#btn-new-journal")
-    .addEventListener("click", () => openJournalEditor(null));
 
   paintEvents();
-  paintJournal();
   paintTasks();
   scrollToCurrentHour();
 }
@@ -374,7 +365,6 @@ export async function pullAndRender() {
     store.saveJournal(state.date, entries);
     if (rootEl) {
       paintEvents();
-      paintJournal();
       paintTasks();
     }
     toast("最新化しました", "success");

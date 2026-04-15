@@ -635,9 +635,10 @@ textarea {
 
 /* ---------- Toast ---------- */
 
+/* トーストはタブバーをブロックしないよう最上部（safe-area直下）に配置 */
 #toast-root {
   position: fixed;
-  top: calc(env(safe-area-inset-top) + 70px);
+  top: calc(env(safe-area-inset-top) + 4px);
   left: 0;
   right: 0;
   display: flex;
