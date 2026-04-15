@@ -9,6 +9,32 @@
 const SPREADSHEET_ID = "1pENt1pTtF9A3CV-VY0VnP8VlbNM5mPZW9tSAtE8YKXs";
 const SCHEMA_VERSION = 1;
 
+/**
+ * authorizeOnce
+ * 全スコープを一括でトリガーし、OAuth承認画面を出すための関数。
+ * バサバサがGASエディタから手動で1回実行し「許可」をクリックするだけ。
+ * 以後のWeb App呼出は自動でこれらのスコープを使える。
+ */
+function authorizeOnce() {
+  const results = {};
+  try {
+    results.spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID).getName();
+  } catch (e) { results.spreadsheet = "ERR: " + e; }
+  try {
+    const cal = CalendarApp.getDefaultCalendar();
+    results.calendar = cal ? cal.getName() : "no-default";
+  } catch (e) { results.calendar = "ERR: " + e; }
+  try {
+    results.email = Session.getActiveUser().getEmail();
+  } catch (e) { results.email = "ERR: " + e; }
+  try {
+    UrlFetchApp.fetch("https://www.google.com/robots.txt", { muteHttpExceptions: true });
+    results.fetch = "ok";
+  } catch (e) { results.fetch = "ERR: " + e; }
+  Logger.log(JSON.stringify(results, null, 2));
+  return results;
+}
+
 // ---- Sheets定義 ----
 
 const TASKS_SHEET = "tasks";
