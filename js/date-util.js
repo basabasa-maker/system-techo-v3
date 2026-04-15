@@ -39,6 +39,43 @@ export function daysAgoYmd(days) {
   return toYmd(d);
 }
 
+// 現在の時刻（時）を返す（0-23）
+export function nowHour() {
+  return new Date().getHours();
+}
+
+// 現在の時刻を15分単位に丸めた分（0,15,30,45）と時
+export function nowQuarter() {
+  const d = new Date();
+  const m = d.getMinutes();
+  const q = Math.floor(m / 15) * 15;
+  return { hour: d.getHours(), minute: q };
+}
+
+// YYYY-MM-DD に日数加算
+export function addDaysYmd(ymd, days) {
+  const d = parseYmd(ymd);
+  if (!d) return ymd;
+  d.setDate(d.getDate() + days);
+  return toYmd(d);
+}
+
+// YYYY-MM-DD -> "YYYY年MM月DD日(曜)"
+export function formatYmdLong(ymd) {
+  const d = parseYmd(ymd);
+  if (!d) return ymd;
+  const w = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+  return `${d.getFullYear()}年${pad2(d.getMonth() + 1)}月${pad2(d.getDate())}日(${w})`;
+}
+
+// "YYYY-MM-DD HH:mm" → {hour, minute}。不正なら null
+export function parseHhMm(s) {
+  if (!s) return null;
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return null;
+  return { hour: parseInt(m[4], 10), minute: parseInt(m[5], 10) };
+}
+
 // 表示用：期限→残日数
 export function dueLabel(ymd) {
   const d = parseYmd(ymd);

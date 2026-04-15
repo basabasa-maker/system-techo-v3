@@ -1,8 +1,9 @@
 // app.js - エントリーポイント
-// Sprint 1: Task タブ実装。Daily / Memo はプレースホルダ。
+// Sprint 2: Task / Daily を活性化。Memo はプレースホルダ。
 
 import { LS_KEY_ACTIVE_TAB } from "./config.js";
-import { renderTaskTab, pullAndRender } from "./task.js";
+import { renderTaskTab, pullAndRender as pullTask } from "./task.js";
+import { renderDailyTab, pullAndRender as pullDaily } from "./daily.js";
 import { daysAgoYmd } from "./date-util.js";
 import { toast } from "./toast.js";
 
@@ -24,7 +25,7 @@ function init() {
       </header>
       <nav id="tab-bar">
         <button class="tab-btn" data-tab="task">Task</button>
-        <button class="tab-btn" data-tab="daily" disabled>Daily</button>
+        <button class="tab-btn" data-tab="daily">Daily</button>
         <button class="tab-btn" data-tab="memo" disabled>Memo</button>
       </nav>
       <main id="scroll-container">
@@ -55,17 +56,23 @@ function switchTab(tab) {
   const content = document.getElementById("tab-content");
   if (tab === "task") {
     renderTaskTab(content);
+  } else if (tab === "daily") {
+    renderDailyTab(content);
   } else {
-    content.innerHTML = `<p class="empty-hint">「${tab}」タブは Sprint ${tab === "daily" ? 2 : 3} で実装予定です。</p>`;
+    content.innerHTML = `<p class="empty-hint">「Memo」タブは Sprint 3 で実装予定です。</p>`;
   }
 }
 
 async function onRefresh() {
   if (appState.activeTab === "task") {
-    await pullAndRender(daysAgoYmd(30));
+    await pullTask(daysAgoYmd(30));
     return;
   }
-  toast("このタブは Sprint 1 では対象外です", "info");
+  if (appState.activeTab === "daily") {
+    await pullDaily();
+    return;
+  }
+  toast("このタブは現在のSprintでは対象外です", "info");
 }
 
 if (document.readyState === "loading") {

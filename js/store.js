@@ -4,6 +4,8 @@
 import {
   LS_KEY_TASKS,
   LS_KEY_CACHE_SCHEMA,
+  LS_KEY_CAL_PREFIX,
+  LS_KEY_JOURNAL_PREFIX,
   CACHE_SCHEMA_VERSION,
 } from "./config.js";
 
@@ -80,4 +82,53 @@ export function upsertLocal(task) {
 export function deleteLocal(id) {
   const list = loadTasks().filter((t) => t.id !== id);
   saveTasks(list);
+}
+
+// ---------- Daily (calendar events / journal entries) ----------
+// 日付ごとに小さなJSONとしてキャッシュ。取得はその日のタブ表示直後に1度、
+// 更新ボタン押下でも再取得して上書きする。
+
+export function loadCalendar(dateYmd) {
+  try {
+    const raw = localStorage.getItem(LS_KEY_CAL_PREFIX + dateYmd);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveCalendar(dateYmd, events) {
+  localStorage.setItem(
+    LS_KEY_CAL_PREFIX + dateYmd,
+    JSON.stringify(Array.isArray(events) ? events : []),
+  );
+}
+
+export function loadJournal(dateYmd) {
+  try {
+    const raw = localStorage.getItem(LS_KEY_JOURNAL_PREFIX + dateYmd);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveJournal(dateYmd, entries) {
+  localStorage.setItem(
+    LS_KEY_JOURNAL_PREFIX + dateYmd,
+    JSON.stringify(Array.isArray(entries) ? entries : []),
+  );
+}
+
+export function upsertJournalLocal(dateYmd, entry) {
+  const list = loadJournal(dateYmd);
+  const idx = list.findIndex((e) => e.id === entry.id);
+  if (idx >= 0) list[idx] = entry;
+  else list.push(entry);
+  saveJournal(dateYmd, list);
+  return list;
 }

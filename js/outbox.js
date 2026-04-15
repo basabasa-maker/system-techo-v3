@@ -1,6 +1,7 @@
 // outbox.js
 // IndexedDB ベースの書込キュー。オフライン時にpushを積み、
 // オンライン復帰＋更新ボタンで再送する。
+// Sprint 2: memo_upsert / memo_delete にも対応（op.type で分岐）
 
 const DB_NAME = "sth_v3";
 const DB_VERSION = 1;
@@ -26,7 +27,7 @@ export async function enqueue(op) {
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
     const req = store.add({
-      op: op, // { type: "task_upsert" | "task_delete", payload: {...} }
+      op: op, // { type: "task_upsert" | "task_delete" | "memo_upsert" | "memo_delete", payload: {...} }
       enqueued_at: Date.now(),
     });
     req.onsuccess = () => resolve(req.result);

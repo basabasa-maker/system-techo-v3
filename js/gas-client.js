@@ -20,6 +20,8 @@ async function fetchJson(url, options) {
   }
 }
 
+// ---- Task ----
+
 export async function pullTasks(sinceYmd) {
   const url = new URL(GAS_URL);
   url.searchParams.set("type", "tasks");
@@ -46,5 +48,47 @@ export async function pushTaskDelete(id) {
     body: JSON.stringify({ type: "task_delete", id: id }),
   });
   if (!body.ok) throw new Error(body.error || "task_delete failed");
+  return body.data;
+}
+
+// ---- Calendar ----
+
+export async function pullCalendar(dateYmd) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "calendar");
+  url.searchParams.set("date", dateYmd);
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullCalendar failed");
+  return body.data.events || [];
+}
+
+// ---- Memo (Journal) ----
+
+export async function pullMemoJournal(dateYmd) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "memo_journal");
+  url.searchParams.set("date", dateYmd);
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullMemoJournal failed");
+  return body.data.entries || [];
+}
+
+export async function pushMemoUpsert(entry) {
+  const body = await fetchJson(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ type: "memo_upsert", entry: entry }),
+  });
+  if (!body.ok) throw new Error(body.error || "memo_upsert failed");
+  return body.data;
+}
+
+export async function pushMemoDelete(id) {
+  const body = await fetchJson(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ type: "memo_delete", id: id }),
+  });
+  if (!body.ok) throw new Error(body.error || "memo_delete failed");
   return body.data;
 }

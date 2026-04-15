@@ -4,7 +4,7 @@
 // - CSS/JS/静的アセット: Cache First（URLに ?v=ビルド時刻 付与で更新）
 // - キャッシュ名はビルド時刻バージョンを含め、デプロイ時に自動更新する
 
-const BUILD_VERSION = "20260415-111131";
+const BUILD_VERSION = "20260415-112245";
 const CACHE_NAME = `system-techo-v3-${BUILD_VERSION}`;
 
 const PRECACHE_URLS = [

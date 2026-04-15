@@ -297,6 +297,248 @@ textarea {
   z-index: 20;
 }
 
+/* ---------- Daily Tab ---------- */
+
+.daily-tab {
+  padding-bottom: 96px;
+}
+
+.daily-datenav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #1e3a5f;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.daily-datenav .nav-btn {
+  min-width: 48px;
+  min-height: 44px;
+  background: #25436c;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.daily-datenav .nav-date {
+  flex: 1;
+  min-height: 44px;
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.daily-allday {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.allday-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  min-height: 32px;
+}
+
+.allday-chip .ev-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.allday-chip .ev-cal {
+  font-size: 10px;
+  opacity: 0.85;
+  flex: 0 0 auto;
+}
+
+.daily-timeline-wrap {
+  height: 420px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: #16304f;
+}
+
+.daily-timeline {
+  position: relative;
+  height: 1152px; /* 24 * 48 */
+  margin-left: 52px;
+}
+
+.hour-row {
+  position: absolute;
+  left: -52px;
+  right: 0;
+  height: 48px;
+}
+
+.hour-label {
+  position: absolute;
+  left: 0;
+  top: -8px;
+  width: 48px;
+  text-align: right;
+  font-size: 11px;
+  color: #8ea0bc;
+}
+
+.hour-line {
+  position: absolute;
+  left: 52px;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.events-layer {
+  position: absolute;
+  inset: 0;
+}
+
+.event-block {
+  position: absolute;
+  left: 4px;
+  right: 6px;
+  border-radius: 4px;
+  padding: 3px 6px;
+  color: #fff;
+  font-size: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  border-left: 3px solid rgba(0, 0, 0, 0.25);
+}
+
+.event-block .event-title {
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.event-block .event-time {
+  font-size: 10px;
+  opacity: 0.85;
+  margin-top: 2px;
+}
+
+.now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #ff5252;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.now-line::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background: #ff5252;
+}
+
+.daily-related,
+.daily-journal {
+  padding: 12px 12px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.daily-related h3,
+.daily-journal h3 {
+  font-size: 13px;
+  color: #aab8cc;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.daily-task-list,
+.daily-journal-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.daily-task-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  background: #25436c;
+  border-radius: 6px;
+  min-height: 44px;
+}
+
+.daily-task-item.is-done .task-title {
+  text-decoration: line-through;
+  color: #7888a0;
+}
+
+.journal-item {
+  padding: 10px;
+  background: #25436c;
+  border-radius: 6px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.journal-item .journal-meta {
+  font-size: 11px;
+  color: #8ea0bc;
+  margin-bottom: 2px;
+}
+
+.journal-item .journal-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.journal-item .journal-body {
+  font-size: 13px;
+  color: #d9e1ec;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.empty-hint-sm {
+  padding: 10px;
+  color: #8ea0bc;
+  font-size: 13px;
+  text-align: center;
+}
+
 /* ---------- Modal ---------- */
 
 .modal-backdrop {
