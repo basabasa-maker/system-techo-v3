@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="theme-color" content="#1e3a5f" />
+    <title>システム手帳</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="stylesheet" href="css/style.css?v=20260415-103554" />
+  </head>
+  <body>
+    <div id="app-shell">
+      <header id="app-header">
+        <h1>システム手帳</h1>
+      </header>
+      <main id="scroll-container">
+        <div id="tab-content">
+          <p style="padding: 24px; color: #888">
+            Sprint 0 セットアップ完了。Sprint 1 で Task タブが稼働します。
+          </p>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="js/app.js?v=20260415-103554"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("sw.js").catch(function (e) {
+          console.error("SW register failed", e);
+        });
+      }
+    </script>
+  </body>
+</html>
