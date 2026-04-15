@@ -222,8 +222,16 @@ function normalizeTaskOut(row) {
     memo: row.memo ? String(row.memo) : "",
     created_at: formatDateCell(row.created_at, "yyyy-MM-dd HH:mm"),
     updated_at: formatDateCell(row.updated_at, "yyyy-MM-dd HH:mm"),
-    deleted: row.deleted ? 1 : 0,
+    deleted: isDeletedTruthy(row.deleted) ? 1 : 0,
   };
+}
+
+// 文字列書式('@')セルは "0" を返すが、JSでは truthy のため明示的に判定する
+function isDeletedTruthy(v) {
+  if (v === 1 || v === true) return true;
+  if (v === 0 || v === false || v == null || v === "") return false;
+  const s = String(v).trim();
+  return s === "1" || s.toLowerCase() === "true";
 }
 
 function formatDateCell(v, pattern) {
