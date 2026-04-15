@@ -69,6 +69,7 @@ const MEMO_HEADERS = [
   "updated_at",
   "deleted",
   "claude_taken",
+  "pinned",
 ];
 
 const MEMO_ALLOWED_TYPES = ["journal", "note", "read_later"];
@@ -130,6 +131,11 @@ function doGet(e) {
     if (type === "memo_day") {
       const date = (e.parameter && e.parameter.date) || "";
       return jsonResponse({ ok: true, data: { entries: pullMemoDay(date) } });
+    }
+    if (type === "memo_all") {
+      const since = (e.parameter && e.parameter.since) || "";
+      const limit = parseInt((e.parameter && e.parameter.limit) || "500", 10);
+      return jsonResponse({ ok: true, data: pullMemoAll(since, limit) });
     }
     return jsonResponse({ ok: false, error: "Unknown type: " + type });
   } catch (err) {
@@ -288,6 +294,10 @@ function memoUpsert(entry) {
     updated_at: now,
     deleted: entry.deleted ? 1 : 0,
     claude_taken: isDeletedTruthy(base.claude_taken) ? 1 : 0,
+    pinned:
+      entry.pinned != null
+        ? (isDeletedTruthy(entry.pinned) ? 1 : 0)
+        : (isDeletedTruthy(base.pinned) ? 1 : 0),
   };
 
   const values = MEMO_HEADERS.map((h) => merged[h]);
@@ -299,7 +309,7 @@ function memoUpsert(entry) {
   return normalizeMemoOut(merged);
 }
 
-// ノート／あとで読む／ジャーナル全種別を、新しい順で返す（journal含む）
+// ノート／あとで読む のみ（journal除外）を、新しい順で返す
 function pullMemoNotes(limit, offset) {
   const lim = isNaN(limit) || limit <= 0 ? 100 : Math.min(limit, 500);
   const off = isNaN(offset) || offset < 0 ? 0 : offset;
@@ -311,7 +321,7 @@ function pullMemoNotes(limit, offset) {
     if (!row.id) continue;
     if (isDeletedTruthy(row.deleted)) continue;
     const type = String(row.entry_type || "");
-    if (MEMO_ALLOWED_TYPES.indexOf(type) < 0) continue;
+    if (type !== "note" && type !== "read_later") continue;
     out.push(normalizeMemoOut(row));
   }
   out.sort((a, b) => {
@@ -675,7 +685,36 @@ function normalizeMemoOut(row) {
     updated_at: formatDateCell(row.updated_at, "yyyy-MM-dd HH:mm"),
     deleted: isDeletedTruthy(row.deleted) ? 1 : 0,
     claude_taken: isDeletedTruthy(row.claude_taken) ? 1 : 0,
+    pinned: isDeletedTruthy(row.pinned) ? 1 : 0,
   };
+}
+
+// Memoタブ一覧用：指定日以降の全種別（journal/note/read_later）を返す
+// since が空なら全件。新しい順。
+function pullMemoAll(sinceStr, limit) {
+  const sheet = getSheet(MEMO_SHEET, MEMO_HEADERS);
+  const rows = readAllRows(sheet, MEMO_HEADERS);
+  const lim = isNaN(limit) || limit <= 0 ? 500 : Math.min(limit, 2000);
+  const sinceOk = /^\d{4}-\d{2}-\d{2}$/.test(String(sinceStr || ""));
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.id) continue;
+    if (isDeletedTruthy(row.deleted)) continue;
+    const type = String(row.entry_type || "");
+    if (MEMO_ALLOWED_TYPES.indexOf(type) < 0) continue;
+    if (sinceOk) {
+      const d = formatDateCell(row.date, "yyyy-MM-dd");
+      if (d && d < sinceStr) continue;
+    }
+    out.push(normalizeMemoOut(row));
+  }
+  out.sort((a, b) => {
+    const ua = a.updated_at || a.created_at || "";
+    const ub = b.updated_at || b.created_at || "";
+    return ua < ub ? 1 : ua > ub ? -1 : 0;
+  });
+  return { entries: out.slice(0, lim), total: out.length };
 }
 
 // 文字列書式('@')セルは "0" を返すが、JSでは truthy のため明示的に判定する

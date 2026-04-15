@@ -115,6 +115,16 @@ export async function pullMemoSearch(q, entryType) {
   return body.data || { entries: [], total: 0 };
 }
 
+export async function pullMemoAll(sinceYmd, limit) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "memo_all");
+  if (sinceYmd) url.searchParams.set("since", sinceYmd);
+  if (limit != null) url.searchParams.set("limit", String(limit));
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullMemoAll failed");
+  return body.data || { entries: [], total: 0 };
+}
+
 export async function pullMemoDay(dateYmd) {
   const url = new URL(GAS_URL);
   url.searchParams.set("type", "memo_day");

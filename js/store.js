@@ -8,6 +8,7 @@ import {
   LS_KEY_JOURNAL_PREFIX,
   LS_KEY_MEMO_DAY_PREFIX,
   LS_KEY_MEMO_NOTES,
+  LS_KEY_MEMO_ALL,
   CACHE_SCHEMA_VERSION,
 } from "./config.js";
 
@@ -17,6 +18,26 @@ function ensureCacheSchema() {
   const stored = localStorage.getItem(LS_KEY_CACHE_SCHEMA);
   if (stored !== String(CACHE_SCHEMA_VERSION)) {
     localStorage.removeItem(LS_KEY_TASKS);
+    localStorage.removeItem(LS_KEY_MEMO_NOTES);
+    localStorage.removeItem(LS_KEY_MEMO_ALL);
+    // 旧 memoday_/journal_/cal_ プレフィックスのキーも全削除
+    try {
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (
+          k &&
+          (k.startsWith(LS_KEY_MEMO_DAY_PREFIX) ||
+            k.startsWith(LS_KEY_JOURNAL_PREFIX) ||
+            k.startsWith(LS_KEY_CAL_PREFIX))
+        ) {
+          toRemove.push(k);
+        }
+      }
+      for (const k of toRemove) localStorage.removeItem(k);
+    } catch (e) {
+      // noop
+    }
     localStorage.setItem(LS_KEY_CACHE_SCHEMA, String(CACHE_SCHEMA_VERSION));
   }
 }
@@ -167,6 +188,40 @@ export function upsertMemoDayLocal(dateYmd, entry) {
 export function deleteMemoDayLocal(dateYmd, id) {
   const list = loadMemoDay(dateYmd).filter((e) => e.id !== id);
   saveMemoDay(dateYmd, list);
+  return list;
+}
+
+// Memoタブの一覧キャッシュ（全種別）
+export function loadMemoAll() {
+  try {
+    const raw = localStorage.getItem(LS_KEY_MEMO_ALL);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveMemoAll(entries) {
+  localStorage.setItem(
+    LS_KEY_MEMO_ALL,
+    JSON.stringify(Array.isArray(entries) ? entries : []),
+  );
+}
+
+export function upsertMemoAllLocal(entry) {
+  const list = loadMemoAll();
+  const idx = list.findIndex((e) => e.id === entry.id);
+  if (idx >= 0) list[idx] = entry;
+  else list.unshift(entry);
+  saveMemoAll(list);
+  return list;
+}
+
+export function deleteMemoAllLocal(id) {
+  const list = loadMemoAll().filter((e) => e.id !== id);
+  saveMemoAll(list);
   return list;
 }
 

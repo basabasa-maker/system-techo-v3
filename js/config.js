@@ -10,7 +10,8 @@ export const LS_KEY_CAL_PREFIX = "sth_v3_cal_"; // + YYYY-MM-DD
 export const LS_KEY_JOURNAL_PREFIX = "sth_v3_journal_"; // + YYYY-MM-DD
 export const LS_KEY_MEMO_DAY_PREFIX = "sth_v3_memoday_"; // + YYYY-MM-DD
 export const LS_KEY_MEMO_NOTES = "sth_v3_memo_notes";
-export const CACHE_SCHEMA_VERSION = 3;
+export const LS_KEY_MEMO_ALL = "sth_v3_memo_all";
+export const CACHE_SCHEMA_VERSION = 4;
 
 // Memoタブ種別の色・アイコン
 export const MEMO_TYPE_DEFS = {
