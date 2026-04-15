@@ -1,14 +1,43 @@
 // store.js - localStorage ベースの表示キャッシュ
 // Sheets が正。localStorage は UI の即時表示用。
 
-import { LS_KEY_TASKS } from "./config.js";
+import {
+  LS_KEY_TASKS,
+  LS_KEY_CACHE_SCHEMA,
+  CACHE_SCHEMA_VERSION,
+} from "./config.js";
+
+// 起動時にキャッシュスキーマをチェックし、旧バージョンなら破棄する
+// （Sprint 1で Date.toString 形式の旧キャッシュが残ると表示崩壊するため）
+function ensureCacheSchema() {
+  const stored = localStorage.getItem(LS_KEY_CACHE_SCHEMA);
+  if (stored !== String(CACHE_SCHEMA_VERSION)) {
+    localStorage.removeItem(LS_KEY_TASKS);
+    localStorage.setItem(LS_KEY_CACHE_SCHEMA, String(CACHE_SCHEMA_VERSION));
+  }
+}
+ensureCacheSchema();
+
+// 日時フィールドがYYYY-MM-DD/YYYY-MM-DD HH:mm形式でない場合は空文字に正規化
+function sanitizeTask(t) {
+  if (!t || typeof t !== "object") return t;
+  const dueOk = /^\d{4}-\d{2}-\d{2}$/.test(t.due_date || "");
+  const cAt = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(t.created_at || "");
+  const uAt = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(t.updated_at || "");
+  return {
+    ...t,
+    due_date: dueOk ? t.due_date : "",
+    created_at: cAt ? t.created_at : "",
+    updated_at: uAt ? t.updated_at : "",
+  };
+}
 
 export function loadTasks() {
   try {
     const raw = localStorage.getItem(LS_KEY_TASKS);
     if (!raw) return [];
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+    return Array.isArray(arr) ? arr.map(sanitizeTask) : [];
   } catch (e) {
     return [];
   }

@@ -5,3 +5,5 @@ export const GAS_URL =
 
 export const LS_KEY_TASKS = "sth_v3_tasks_cache";
 export const LS_KEY_ACTIVE_TAB = "sth_v3_active_tab";
+export const LS_KEY_CACHE_SCHEMA = "sth_v3_cache_schema";
+export const CACHE_SCHEMA_VERSION = 2;

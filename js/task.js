@@ -190,7 +190,9 @@ function escapeHtml(s) {
 
 function taskItemHtml(t) {
   const checked = t.status === "done";
-  const due = t.due_date
+  // due_dateが正しい形式(YYYY-MM-DD)の時のみ表示
+  const dueValid = /^\d{4}-\d{2}-\d{2}$/.test(t.due_date || "");
+  const due = dueValid
     ? `<span class="task-due">${escapeHtml(dueLabel(t.due_date))}（${escapeHtml(t.due_date)}）</span>`
     : "";
   const prClass = `pri-${t.priority || "mid"}`;
