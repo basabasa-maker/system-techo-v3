@@ -137,6 +137,12 @@ function taskDelete(id) {
   return { id: id, deleted: true };
 }
 
+function enforceTextFormat(sheet) {
+  // 日時列を文字列書式(@)に強制。Sheetsの自動Date解釈による9時間ズレを防ぐ
+  const maxRows = sheet.getMaxRows();
+  sheet.getRange(1, 1, maxRows, TASKS_HEADERS.length).setNumberFormat("@");
+}
+
 // ---------- Sheet helpers ----------
 
 function getSheet(name) {
@@ -145,8 +151,10 @@ function getSheet(name) {
   if (!sheet) {
     sheet = ss.insertSheet(name);
     sheet.getRange(1, 1, 1, TASKS_HEADERS.length).setValues([TASKS_HEADERS]);
+    enforceTextFormat(sheet);
     return sheet;
   }
+  enforceTextFormat(sheet);
   // ヘッダー欠損時の補修（memo列追加など後方互換）
   const firstRow = sheet
     .getRange(1, 1, 1, Math.max(TASKS_HEADERS.length, sheet.getLastColumn() || 1))
@@ -207,15 +215,23 @@ function normalizeTaskOut(row) {
     id: String(row.id || ""),
     title: String(row.title || ""),
     status: String(row.status || "todo"),
-    due_date: row.due_date ? String(row.due_date) : "",
+    due_date: formatDateCell(row.due_date, "yyyy-MM-dd"),
     priority: String(row.priority || "mid"),
     tags: row.tags ? String(row.tags) : "",
     source: row.source ? String(row.source) : "",
     memo: row.memo ? String(row.memo) : "",
-    created_at: String(row.created_at || ""),
-    updated_at: String(row.updated_at || ""),
+    created_at: formatDateCell(row.created_at, "yyyy-MM-dd HH:mm"),
+    updated_at: formatDateCell(row.updated_at, "yyyy-MM-dd HH:mm"),
     deleted: row.deleted ? 1 : 0,
   };
+}
+
+function formatDateCell(v, pattern) {
+  if (v == null || v === "") return "";
+  if (v instanceof Date) {
+    return Utilities.formatDate(v, "Asia/Tokyo", pattern);
+  }
+  return String(v);
 }
 
 // ---------- Date helpers (JST, toISOString禁止) ----------
