@@ -8,7 +8,16 @@ export const LS_KEY_ACTIVE_TAB = "sth_v3_active_tab";
 export const LS_KEY_CACHE_SCHEMA = "sth_v3_cache_schema";
 export const LS_KEY_CAL_PREFIX = "sth_v3_cal_"; // + YYYY-MM-DD
 export const LS_KEY_JOURNAL_PREFIX = "sth_v3_journal_"; // + YYYY-MM-DD
-export const CACHE_SCHEMA_VERSION = 2;
+export const LS_KEY_MEMO_DAY_PREFIX = "sth_v3_memoday_"; // + YYYY-MM-DD
+export const LS_KEY_MEMO_NOTES = "sth_v3_memo_notes";
+export const CACHE_SCHEMA_VERSION = 3;
+
+// Memoタブ種別の色・アイコン
+export const MEMO_TYPE_DEFS = {
+  journal: { label: "ジャーナル", color: "#4d90fe", mark: "J" },
+  note: { label: "ノート", color: "#4ea572", mark: "N" },
+  read_later: { label: "あとで読む", color: "#e08a3a", mark: "R" },
+};
 
 // カレンダー定義（basabasa-hq/システム手帳/config/calendar_ids.json と同期、9本）
 // GAS側 CALENDAR_DEFS と必ず同じ順序・ラベルにする

@@ -6,6 +6,8 @@ import {
   LS_KEY_CACHE_SCHEMA,
   LS_KEY_CAL_PREFIX,
   LS_KEY_JOURNAL_PREFIX,
+  LS_KEY_MEMO_DAY_PREFIX,
+  LS_KEY_MEMO_NOTES,
   CACHE_SCHEMA_VERSION,
 } from "./config.js";
 
@@ -131,4 +133,57 @@ export function upsertJournalLocal(dateYmd, entry) {
   else list.push(entry);
   saveJournal(dateYmd, list);
   return list;
+}
+
+// ---------- Memo tab cache ----------
+
+export function loadMemoDay(dateYmd) {
+  try {
+    const raw = localStorage.getItem(LS_KEY_MEMO_DAY_PREFIX + dateYmd);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveMemoDay(dateYmd, entries) {
+  localStorage.setItem(
+    LS_KEY_MEMO_DAY_PREFIX + dateYmd,
+    JSON.stringify(Array.isArray(entries) ? entries : []),
+  );
+}
+
+export function upsertMemoDayLocal(dateYmd, entry) {
+  const list = loadMemoDay(dateYmd);
+  const idx = list.findIndex((e) => e.id === entry.id);
+  if (idx >= 0) list[idx] = entry;
+  else list.push(entry);
+  saveMemoDay(dateYmd, list);
+  return list;
+}
+
+export function deleteMemoDayLocal(dateYmd, id) {
+  const list = loadMemoDay(dateYmd).filter((e) => e.id !== id);
+  saveMemoDay(dateYmd, list);
+  return list;
+}
+
+export function loadMemoNotes() {
+  try {
+    const raw = localStorage.getItem(LS_KEY_MEMO_NOTES);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveMemoNotes(entries) {
+  localStorage.setItem(
+    LS_KEY_MEMO_NOTES,
+    JSON.stringify(Array.isArray(entries) ? entries : []),
+  );
 }

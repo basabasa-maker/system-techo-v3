@@ -1,5 +1,5 @@
 // system-techo-v3 GAS Web API
-// Sprint 2: Task + Daily（calendar / memo_journal / memo_upsert）を実装
+// Sprint 3: Memoタブ（memo_notes / memo_search / memo_url_fetch / memo_inbox_write）を追加
 // 設計思想:
 // - pullAll API は作らない（v1白紙化の教訓）
 // - push系は1件upsertのみ
@@ -7,7 +7,11 @@
 //   GAS内定数 CALENDAR_DEFS に同期する（初回コピペ、同期手段は別タスク）
 
 const SPREADSHEET_ID = "1pENt1pTtF9A3CV-VY0VnP8VlbNM5mPZW9tSAtE8YKXs";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+
+// Claude取込用Driveフォルダ（未設定の場合はファイル書き出しをスキップし、claude_takenフラグのみ更新）
+// バサバサが後日 Drive フォルダID を設定する。設定済なら memo_inbox_write で Markdown を書き出す。
+const INBOX_FOLDER_ID = "";
 
 /**
  * authorizeOnce
@@ -64,7 +68,10 @@ const MEMO_HEADERS = [
   "created_at",
   "updated_at",
   "deleted",
+  "claude_taken",
 ];
+
+const MEMO_ALLOWED_TYPES = ["journal", "note", "read_later"];
 
 // ---- カレンダー定義（basabasa-hq/システム手帳/config/calendar_ids.json 由来、9本） ----
 // 出所: /Users/basabasa/basabasa-hq/システム手帳/config/calendar_ids.json (version:1)
@@ -91,7 +98,7 @@ function doGet(e) {
         ok: true,
         data: {
           schema_version: SCHEMA_VERSION,
-          sprint: 2,
+          sprint: 3,
           now: nowJstString(),
           calendar_count: CALENDAR_DEFS.length,
         },
@@ -108,6 +115,21 @@ function doGet(e) {
     if (type === "memo_journal") {
       const date = (e.parameter && e.parameter.date) || "";
       return jsonResponse({ ok: true, data: { entries: pullMemoJournal(date) } });
+    }
+    if (type === "memo_notes") {
+      const limit = parseInt((e.parameter && e.parameter.limit) || "100", 10);
+      const offset = parseInt((e.parameter && e.parameter.offset) || "0", 10);
+      return jsonResponse({ ok: true, data: pullMemoNotes(limit, offset) });
+    }
+    if (type === "memo_search") {
+      const q = (e.parameter && e.parameter.q) || "";
+      // type パラメータはルーティング用なので、種別フィルタは entry_type パラメータで受け取る
+      const entryType = (e.parameter && e.parameter.entry_type) || "all";
+      return jsonResponse({ ok: true, data: pullMemoSearch(q, entryType) });
+    }
+    if (type === "memo_day") {
+      const date = (e.parameter && e.parameter.date) || "";
+      return jsonResponse({ ok: true, data: { entries: pullMemoDay(date) } });
     }
     return jsonResponse({ ok: false, error: "Unknown type: " + type });
   } catch (err) {
@@ -134,6 +156,15 @@ function doPost(e) {
     }
     if (type === "memo_delete") {
       return jsonResponse({ ok: true, data: memoDelete(body.id || "") });
+    }
+    if (type === "memo_url_fetch") {
+      return jsonResponse({ ok: true, data: memoUrlFetch(body.url || "") });
+    }
+    if (type === "memo_inbox_write") {
+      return jsonResponse({
+        ok: true,
+        data: memoInboxWrite(body.entry_id || "", body.date || ""),
+      });
     }
     return jsonResponse({ ok: false, error: "Unknown type: " + type });
   } catch (err) {
@@ -234,9 +265,8 @@ function pullMemoJournal(dateStr) {
 function memoUpsert(entry) {
   if (!entry) throw new Error("entry required");
   const entryType = String(entry.entry_type || "");
-  if (entryType !== "journal") {
-    // Sprint 2では journal のみ対応
-    throw new Error("entry_type must be 'journal' in Sprint 2");
+  if (MEMO_ALLOWED_TYPES.indexOf(entryType) < 0) {
+    throw new Error("entry_type must be one of: " + MEMO_ALLOWED_TYPES.join("/"));
   }
   const sheet = getSheet(MEMO_SHEET, MEMO_HEADERS);
   const now = nowJstString();
@@ -257,6 +287,7 @@ function memoUpsert(entry) {
       : now,
     updated_at: now,
     deleted: entry.deleted ? 1 : 0,
+    claude_taken: isDeletedTruthy(base.claude_taken) ? 1 : 0,
   };
 
   const values = MEMO_HEADERS.map((h) => merged[h]);
@@ -266,6 +297,216 @@ function memoUpsert(entry) {
     sheet.appendRow(values);
   }
   return normalizeMemoOut(merged);
+}
+
+// ノート／あとで読む／ジャーナル全種別を、新しい順で返す（journal含む）
+function pullMemoNotes(limit, offset) {
+  const lim = isNaN(limit) || limit <= 0 ? 100 : Math.min(limit, 500);
+  const off = isNaN(offset) || offset < 0 ? 0 : offset;
+  const sheet = getSheet(MEMO_SHEET, MEMO_HEADERS);
+  const rows = readAllRows(sheet, MEMO_HEADERS);
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.id) continue;
+    if (isDeletedTruthy(row.deleted)) continue;
+    const type = String(row.entry_type || "");
+    if (MEMO_ALLOWED_TYPES.indexOf(type) < 0) continue;
+    out.push(normalizeMemoOut(row));
+  }
+  out.sort((a, b) => {
+    const ua = a.updated_at || a.created_at || "";
+    const ub = b.updated_at || b.created_at || "";
+    return ua < ub ? 1 : ua > ub ? -1 : 0;
+  });
+  const total = out.length;
+  const slice = out.slice(off, off + lim);
+  return { entries: slice, total: total, limit: lim, offset: off };
+}
+
+// 全文検索（title + body + tags）、entry_typeフィルタ可（all/journal/note/read_later）
+function pullMemoSearch(q, entryType) {
+  const sheet = getSheet(MEMO_SHEET, MEMO_HEADERS);
+  const rows = readAllRows(sheet, MEMO_HEADERS);
+  const needle = String(q || "").toLowerCase().trim();
+  const filterType = String(entryType || "all");
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.id) continue;
+    if (isDeletedTruthy(row.deleted)) continue;
+    const type = String(row.entry_type || "");
+    if (MEMO_ALLOWED_TYPES.indexOf(type) < 0) continue;
+    if (filterType !== "all" && type !== filterType) continue;
+    if (needle) {
+      const hay = (
+        String(row.title || "") +
+        "\n" +
+        String(row.body || "") +
+        "\n" +
+        String(row.tags || "")
+      ).toLowerCase();
+      if (hay.indexOf(needle) < 0) continue;
+    }
+    out.push(normalizeMemoOut(row));
+  }
+  out.sort((a, b) => {
+    const ua = a.updated_at || a.created_at || "";
+    const ub = b.updated_at || b.created_at || "";
+    return ua < ub ? 1 : ua > ub ? -1 : 0;
+  });
+  return { entries: out, total: out.length };
+}
+
+// 指定日の全種別エントリを hour_slot 昇順で返す（Memoタブの時間軸ビュー用）
+function pullMemoDay(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ""))) {
+    throw new Error("date required (YYYY-MM-DD)");
+  }
+  const sheet = getSheet(MEMO_SHEET, MEMO_HEADERS);
+  const rows = readAllRows(sheet, MEMO_HEADERS);
+  const out = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.id) continue;
+    if (isDeletedTruthy(row.deleted)) continue;
+    const type = String(row.entry_type || "");
+    if (MEMO_ALLOWED_TYPES.indexOf(type) < 0) continue;
+    const dateVal = formatDateCell(row.date, "yyyy-MM-dd");
+    if (dateVal !== dateStr) continue;
+    out.push(normalizeMemoOut(row));
+  }
+  out.sort((a, b) => {
+    const ha = parseInt(a.hour_slot, 10);
+    const hb = parseInt(b.hour_slot, 10);
+    if (!isNaN(ha) && !isNaN(hb) && ha !== hb) return ha - hb;
+    return (a.created_at || "") < (b.created_at || "") ? -1 : 1;
+  });
+  return out;
+}
+
+// URL のタイトル取得（OG:title → <title> の順）
+// 取得失敗時は title="" で返す（エラーにしない）
+function memoUrlFetch(url) {
+  const u = String(url || "").trim();
+  if (!u) return { title: "", url: "", error: "url required" };
+  if (!/^https?:\/\//i.test(u)) {
+    return { title: "", url: u, error: "scheme not allowed" };
+  }
+  try {
+    const res = UrlFetchApp.fetch(u, {
+      muteHttpExceptions: true,
+      followRedirects: true,
+      validateHttpsCertificates: true,
+      method: "get",
+      headers: { "User-Agent": "Mozilla/5.0 system-techo-v3" },
+    });
+    const code = res.getResponseCode();
+    if (code < 200 || code >= 400) {
+      return { title: "", url: u, error: "http " + code };
+    }
+    const html = res.getContentText();
+    const title = extractTitleFromHtml(html);
+    return { title: title, url: u };
+  } catch (err) {
+    return { title: "", url: u, error: String(err) };
+  }
+}
+
+function extractTitleFromHtml(html) {
+  if (!html) return "";
+  // og:title
+  const og = html.match(
+    /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i,
+  );
+  if (og && og[1]) return decodeHtmlEntities(og[1]).trim();
+  const og2 = html.match(
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:title["']/i,
+  );
+  if (og2 && og2[1]) return decodeHtmlEntities(og2[1]).trim();
+  // <title>
+  const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (m && m[1]) return decodeHtmlEntities(m[1]).replace(/\s+/g, " ").trim();
+  return "";
+}
+
+function decodeHtmlEntities(s) {
+  return String(s)
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+// Claude 取込処理。claude_taken=1 にマーク。
+// INBOX_FOLDER_ID が設定されていれば Drive に Markdown を書き出す。
+function memoInboxWrite(entryId, dateStr) {
+  const sheet = getSheet(MEMO_SHEET, MEMO_HEADERS);
+  const rows = readAllRows(sheet, MEMO_HEADERS);
+  const targets = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.id) continue;
+    if (isDeletedTruthy(row.deleted)) continue;
+    const type = String(row.entry_type || "");
+    if (MEMO_ALLOWED_TYPES.indexOf(type) < 0) continue;
+    if (entryId) {
+      if (String(row.id) === String(entryId)) targets.push({ row: row, idx: i + 2 });
+    } else if (dateStr) {
+      const dateVal = formatDateCell(row.date, "yyyy-MM-dd");
+      if (dateVal === dateStr) targets.push({ row: row, idx: i + 2 });
+    }
+  }
+  if (targets.length === 0) {
+    return { ok: false, taken: 0, not_found: true };
+  }
+  const now = nowJstString();
+  let driveWrittenCount = 0;
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
+    t.row.claude_taken = 1;
+    t.row.updated_at = now;
+    const values = MEMO_HEADERS.map((h) => (t.row[h] != null ? t.row[h] : ""));
+    sheet.getRange(t.idx, 1, 1, MEMO_HEADERS.length).setValues([values]);
+    if (INBOX_FOLDER_ID) {
+      try {
+        writeInboxMarkdown(t.row);
+        driveWrittenCount++;
+      } catch (err) {
+        console.warn("inbox write failed: " + t.row.id + " - " + err);
+      }
+    }
+  }
+  return {
+    ok: true,
+    taken: targets.length,
+    drive_written: driveWrittenCount,
+    drive_folder_configured: !!INBOX_FOLDER_ID,
+  };
+}
+
+function writeInboxMarkdown(row) {
+  const folder = DriveApp.getFolderById(INBOX_FOLDER_ID);
+  const dateVal = formatDateCell(row.date, "yyyy-MM-dd");
+  const safeTitle = String(row.title || "untitled").replace(/[\/\\:?*"<>|]/g, "_").slice(0, 40);
+  const filename = dateVal + "_" + String(row.entry_type || "memo") + "_" + safeTitle + ".md";
+  const md = [
+    "---",
+    "id: " + row.id,
+    "type: " + row.entry_type,
+    "date: " + dateVal,
+    "hour_slot: " + (row.hour_slot || ""),
+    "tags: " + (row.tags || ""),
+    "created_at: " + formatDateCell(row.created_at, "yyyy-MM-dd HH:mm"),
+    "---",
+    "",
+    "# " + (row.title || "(無題)"),
+    "",
+    String(row.body || ""),
+  ].join("\n");
+  folder.createFile(filename, md, MimeType.PLAIN_TEXT);
 }
 
 function memoDelete(id) {
@@ -433,6 +674,7 @@ function normalizeMemoOut(row) {
     created_at: formatDateCell(row.created_at, "yyyy-MM-dd HH:mm"),
     updated_at: formatDateCell(row.updated_at, "yyyy-MM-dd HH:mm"),
     deleted: isDeletedTruthy(row.deleted) ? 1 : 0,
+    claude_taken: isDeletedTruthy(row.claude_taken) ? 1 : 0,
   };
 }
 

@@ -92,3 +92,57 @@ export async function pushMemoDelete(id) {
   if (!body.ok) throw new Error(body.error || "memo_delete failed");
   return body.data;
 }
+
+// ---- Memo (Notes / Search / Day / UrlFetch / Inbox) ----
+
+export async function pullMemoNotes(limit, offset) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "memo_notes");
+  if (limit != null) url.searchParams.set("limit", String(limit));
+  if (offset != null) url.searchParams.set("offset", String(offset));
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullMemoNotes failed");
+  return body.data || { entries: [], total: 0 };
+}
+
+export async function pullMemoSearch(q, entryType) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "memo_search");
+  url.searchParams.set("q", q || "");
+  url.searchParams.set("entry_type", entryType || "all");
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullMemoSearch failed");
+  return body.data || { entries: [], total: 0 };
+}
+
+export async function pullMemoDay(dateYmd) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "memo_day");
+  url.searchParams.set("date", dateYmd);
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullMemoDay failed");
+  return body.data.entries || [];
+}
+
+export async function fetchUrlTitle(url) {
+  const body = await fetchJson(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ type: "memo_url_fetch", url: url }),
+  });
+  if (!body.ok) throw new Error(body.error || "memo_url_fetch failed");
+  return body.data;
+}
+
+export async function pushMemoInboxWrite(entryId, dateYmd) {
+  const payload = { type: "memo_inbox_write" };
+  if (entryId) payload.entry_id = entryId;
+  if (dateYmd) payload.date = dateYmd;
+  const body = await fetchJson(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(payload),
+  });
+  if (!body.ok) throw new Error(body.error || "memo_inbox_write failed");
+  return body.data;
+}

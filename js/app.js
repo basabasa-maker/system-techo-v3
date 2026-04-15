@@ -4,6 +4,7 @@
 import { LS_KEY_ACTIVE_TAB } from "./config.js";
 import { renderTaskTab, pullAndRender as pullTask } from "./task.js";
 import { renderDailyTab, pullAndRender as pullDaily } from "./daily.js";
+import { renderMemoTab, pullAndRender as pullMemo } from "./memo.js";
 import { daysAgoYmd } from "./date-util.js";
 import { toast } from "./toast.js";
 
@@ -26,7 +27,7 @@ function init() {
       <nav id="tab-bar">
         <button class="tab-btn" data-tab="task">Task</button>
         <button class="tab-btn" data-tab="daily">Daily</button>
-        <button class="tab-btn" data-tab="memo" disabled>Memo</button>
+        <button class="tab-btn" data-tab="memo">Memo</button>
       </nav>
       <main id="scroll-container">
         <div id="tab-content"></div>
@@ -58,8 +59,8 @@ function switchTab(tab) {
     renderTaskTab(content);
   } else if (tab === "daily") {
     renderDailyTab(content);
-  } else {
-    content.innerHTML = `<p class="empty-hint">「Memo」タブは Sprint 3 で実装予定です。</p>`;
+  } else if (tab === "memo") {
+    renderMemoTab(content);
   }
 }
 
@@ -70,6 +71,10 @@ async function onRefresh() {
   }
   if (appState.activeTab === "daily") {
     await pullDaily();
+    return;
+  }
+  if (appState.activeTab === "memo") {
+    await pullMemo();
     return;
   }
   toast("このタブは現在のSprintでは対象外です", "info");
