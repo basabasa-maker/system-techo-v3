@@ -535,6 +535,22 @@ textarea {
   color: #7888a0;
 }
 
+.daily-task-item.is-overdue {
+  background: rgba(217, 82, 82, 0.15);
+  border-left: 3px solid #d95252;
+}
+
+.daily-task-item.is-overdue .task-title {
+  color: #ff8a8a;
+}
+
+.task-overdue-date {
+  margin-left: auto;
+  font-size: 11px;
+  color: #d95252;
+  white-space: nowrap;
+}
+
 .journal-item {
   padding: 10px;
   background: #25436c;

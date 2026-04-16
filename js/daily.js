@@ -179,15 +179,28 @@ function paintJournal() {
 function paintTasks() {
   const listEl = rootEl.querySelector("#daily-task-list");
   if (!listEl) return;
-  const tasks = store
-    .loadTasks()
-    .filter((t) => !t.deleted && t.due_date === state.date);
-  if (tasks.length === 0) {
+  const allTasks = store.loadTasks().filter((t) => !t.deleted);
+
+  // この日が期限のタスク
+  const todayTasks = allTasks.filter((t) => t.due_date === state.date);
+  // 期限切れ（due_dateが表示日より前）かつ未完了のタスク
+  const overdueTasks = allTasks.filter(
+    (t) => t.due_date && t.due_date < state.date && t.status !== "done",
+  );
+
+  if (todayTasks.length === 0 && overdueTasks.length === 0) {
     listEl.innerHTML = `<li class="empty-hint-sm">この日のタスクはありません</li>`;
     return;
   }
   let h = "";
-  for (const t of tasks) {
+  for (const t of overdueTasks) {
+    h += `<li class="daily-task-item is-overdue">
+      <span class="task-priority pri-${t.priority || "mid"}">${t.priority === "high" ? "高" : t.priority === "low" ? "低" : "中"}</span>
+      <span class="task-title">${escapeHtml(t.title)}</span>
+      <span class="task-overdue-date">期限: ${t.due_date}</span>
+    </li>`;
+  }
+  for (const t of todayTasks) {
     const doneCls = t.status === "done" ? "is-done" : "";
     h += `<li class="daily-task-item ${doneCls}">
       <span class="task-priority pri-${t.priority || "mid"}">${t.priority === "high" ? "高" : t.priority === "low" ? "低" : "中"}</span>
