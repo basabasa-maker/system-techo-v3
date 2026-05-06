@@ -159,6 +159,9 @@ function memoRowHtml(en) {
     "(無題)";
   const preview = firstLine(en.body || "", 80);
   const pinIcon = en.pinned ? `<span class="memo-pin-icon">📌</span>` : "";
+  const claudeBadge = isClaudeTaken(en)
+    ? `<span class="memo-claude-badge" title="Claude取込み済み">✓Claude</span>`
+    : "";
   return `
     <div class="memo-row-wrap" data-id="${escapeAttr(en.id)}">
       <div class="memo-row-action memo-row-pin" data-action="pin">${en.pinned ? "ピン解除" : "ピン留め"}</div>
@@ -170,12 +173,23 @@ function memoRowHtml(en) {
             ${pinIcon}
             <span class="memo-row-time">${escapeHtml(hhmm)}</span>
             <span class="memo-row-title">${escapeHtml(title)}</span>
+            ${claudeBadge}
           </div>
           ${preview && preview !== title ? `<div class="memo-row-preview">${escapeHtml(preview)}</div>` : ""}
         </div>
       </div>
     </div>
   `;
+}
+
+function isClaudeTaken(en) {
+  const v = en && en.claude_taken;
+  if (v === 1 || v === true) return true;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    return s === "1" || s === "true";
+  }
+  return false;
 }
 
 function bindRowEvents(bodyEl) {
@@ -294,12 +308,16 @@ function renderDetail() {
   const def = MEMO_TYPE_DEFS[en.entry_type] || MEMO_TYPE_DEFS.note;
   const bodyHtml = linkifyBody(en.body || "");
   const hhmm = extractHhMmFromCreated(en.created_at);
+  const claudeBadgeDetail = isClaudeTaken(en)
+    ? `<span class="memo-detail-claude-badge" title="Claude取込み済み">✓Claude取込済</span>`
+    : "";
   return `
     <div class="memo-detail">
       <div class="memo-detail-header">
         <button class="btn-back" id="d-back">← 戻る</button>
         <span class="memo-detail-label" style="background:${def.color}">${escapeHtml(def.label)}</span>
         <span class="memo-detail-time">${escapeHtml(en.date || "")} ${escapeHtml(hhmm)}</span>
+        ${claudeBadgeDetail}
         <button class="btn-take-sm" id="d-take">取込む</button>
       </div>
       ${en.title ? `<h2 class="memo-detail-title">${escapeHtml(en.title)}</h2>` : ""}

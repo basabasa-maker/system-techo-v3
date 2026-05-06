@@ -733,6 +733,27 @@ textarea {
   flex: 0 0 auto;
 }
 
+.memo-claude-badge {
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #1f5e3a;
+  color: #c8f5d0;
+  flex: 0 0 auto;
+  letter-spacing: 0.02em;
+}
+
+.memo-detail-claude-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: #1f5e3a;
+  color: #c8f5d0;
+  margin-left: 8px;
+}
+
 .memo-row-time {
   font-size: 12px;
   color: #aab8cc;
