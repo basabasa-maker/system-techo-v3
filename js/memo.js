@@ -3,17 +3,19 @@
 // - 縦スクロールのリスト、日付でグループ化（今日／昨日／YYYY-MM-DD）
 // - ソート切替（新しい順/古い順）、全文検索
 // - 右スワイプ → ピン留め / 左スワイプ → 削除
-// - ピン留めは各日付グループ内で上位
+// - ピン留めは全日付をまとめて先頭の枠に出す
+// - 行の長押しで上下に移動（ピン枠・各日付の枠の中で入れ替え）。既定の並びは入力日時順
+// - 日記（journal）はDailyタブの内容なので、Memoタブには出さない
 // - 行タップで詳細画面（全画面遷移）
 // - 種別の選択は廃止。メモは1種類（ロディアのブロックメモ風の罫線入り）
-//   新規は保存時に種別 "note" として記録する。過去の journal / read_later も
-//   そのまま一覧に出る（消さない）
+//   新規は保存時に種別 "note" として記録する
 
 import * as store from "./store.js";
 import * as gas from "./gas-client.js";
 import * as outbox from "./outbox.js";
 import { toast, showSpinner, hideSpinner } from "./toast.js";
 import { todayYmd, nowJst, addDaysYmd } from "./date-util.js";
+import { enableLongPressReorder, justDragged } from "./reorder.js";
 
 const state = {
   searchQuery: "",
@@ -28,6 +30,21 @@ let swipeCtx = null; // 現在スワイプ中の行情報
 export function renderMemoTab(container) {
   rootEl = container;
   paintRoot();
+  syncQuietly();
+}
+
+// タブを開いたとき、画面を止めずに最新の一覧へ入れ替える（失敗しても手元の表示のまま）
+async function syncQuietly() {
+  try {
+    await flushOutbox();
+    const res = await gas.pullMemoAll(addDaysYmd(todayYmd(), -365), 1000);
+    store.saveMemoAll(res.entries || []);
+    if (rootEl && state.view === "list" && rootEl.querySelector("#memo-body")) {
+      paintBody();
+    }
+  } catch (e) {
+    console.warn("memo sync skipped:", e.message);
+  }
 }
 
 function paintRoot() {
@@ -84,6 +101,8 @@ function paintBody() {
   const needle = state.searchQuery.trim().toLowerCase();
   const filtered = all.filter((e) => {
     if (e.deleted) return false;
+    // 日記（journal）はDailyタブの内容。Memoタブには出さない
+    if (e.entry_type === "journal") return false;
     if (needle) {
       const hay = (
         String(e.title || "") +
@@ -100,10 +119,12 @@ function paintBody() {
     bodyEl.innerHTML = `<p class="empty-hint">メモはまだありません。</p>`;
     return;
   }
-  // 日付グループ化
+  // ピン留めは全日付をまとめて先頭の枠に。それ以外は日付ごとのグループ
+  const pinned = filtered.filter((e) => e.pinned);
   const groups = {};
   const order = [];
   for (const en of filtered) {
+    if (en.pinned) continue;
     const d = en.date || extractDateFromCreated(en.created_at) || "";
     if (!groups[d]) {
       groups[d] = [];
@@ -113,26 +134,73 @@ function paintBody() {
   }
   order.sort((a, b) => (state.sortDesc ? (a < b ? 1 : -1) : a < b ? -1 : 1));
   let html = `<div class="memo-list">`;
+  if (pinned.length > 0) {
+    pinned.sort(compareMemo);
+    html += `<div class="memo-date-header">📌 ピン留め</div>`;
+    html += `<div class="memo-group" data-group="pinned">`;
+    for (const en of pinned) html += memoRowHtml(en);
+    html += `</div>`;
+  }
   for (const d of order) {
     const list = groups[d];
-    // pinned を先頭、以降は時刻で
-    list.sort((a, b) => {
-      const pa = a.pinned ? 1 : 0;
-      const pb = b.pinned ? 1 : 0;
-      if (pa !== pb) return pb - pa;
-      const ka = a.created_at || "";
-      const kb = b.created_at || "";
-      if (state.sortDesc) return ka < kb ? 1 : ka > kb ? -1 : 0;
-      return ka < kb ? -1 : ka > kb ? 1 : 0;
-    });
+    list.sort(compareMemo);
     html += `<div class="memo-date-header">${escapeHtml(dateGroupLabel(d))}</div>`;
-    for (const en of list) {
-      html += memoRowHtml(en);
-    }
+    html += `<div class="memo-group" data-group="${escapeAttr(d)}">`;
+    for (const en of list) html += memoRowHtml(en);
+    html += `</div>`;
   }
   html += `</div>`;
   bodyEl.innerHTML = html;
   bindRowEvents(bodyEl);
+
+  // 長押しで上下に移動。ピン留めの枠・各日付の枠の中だけで入れ替える
+  bodyEl.querySelectorAll(".memo-group").forEach((g) => {
+    enableLongPressReorder(g, {
+      itemSelector: ".memo-row-wrap",
+      onReorder: onReorderMemos,
+    });
+  });
+}
+
+// 並び: 長押しで決めた順（sort_order）を優先。決めていないものは入力日時順。
+// 並べ替えた後に新しく書いたメモは、新しい順なら先頭、古い順なら末尾に入る
+function compareMemo(a, b) {
+  const ao = Number(a.sort_order) || 0;
+  const bo = Number(b.sort_order) || 0;
+  if (ao && bo) return ao - bo;
+  if (ao || bo) {
+    const newFirst = state.sortDesc ? -1 : 1;
+    return ao ? -newFirst : newFirst;
+  }
+  const ka = a.created_at || "";
+  const kb = b.created_at || "";
+  if (ka === kb) return 0;
+  return state.sortDesc ? (ka < kb ? 1 : -1) : ka < kb ? -1 : 1;
+}
+
+// 並べ替え結果を sort_order に保存する（変わった行だけ1件ずつ送信）
+async function onReorderMemos(ids) {
+  const changed = [];
+  ids.forEach((id, i) => {
+    const en = findEntry(id);
+    if (!en) return;
+    const order = (i + 1) * 10;
+    if (Number(en.sort_order) !== order) {
+      const next = { ...en, sort_order: order, updated_at: nowJst() };
+      store.upsertMemoAllLocal(next);
+      changed.push(next);
+    }
+  });
+  paintBody();
+  for (const en of changed) {
+    try {
+      await gas.pushMemoUpsert(en);
+    } catch (e) {
+      await outbox.enqueue({ type: "memo_upsert", payload: en });
+      toast("オフライン：送信キューに追加", "warn");
+      break;
+    }
+  }
 }
 
 function memoRowHtml(en) {
@@ -189,7 +257,8 @@ function bindRowEvents(bodyEl) {
 
     // クリック（タップ）→ 詳細画面
     row.addEventListener("click", (e) => {
-      // スワイプ中なら無視
+      // 並べ替えの直後・スワイプ中なら無視
+      if (justDragged()) return;
       if (
         wrap.classList.contains("swiping") ||
         wrap.classList.contains("swiped-left") ||

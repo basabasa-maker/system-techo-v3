@@ -1081,7 +1081,9 @@ textarea {
 }
 .reorder-active,
 .habit-item,
-.task-item-wrap {
+.task-item-wrap,
+.memo-row-wrap,
+.tab-btn {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;

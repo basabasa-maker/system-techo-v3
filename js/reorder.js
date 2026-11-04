@@ -1,6 +1,7 @@
-// reorder.js - 長押しで行を動かす共通部品（習慣タブ・タスクタブで共用）
-// 使い方: enableLongPressReorder(listEl, { itemSelector, onReorder(ids) })
-// - 行を約0.45秒押し続けると持ち上がる。そのまま上下に動かして離すと確定
+// reorder.js - 長押しで行を動かす共通部品（習慣・タスク・Memo・上のタブで共用）
+// 使い方: enableLongPressReorder(listEl, { itemSelector, onReorder(ids), axis })
+// - 約0.45秒押し続けると持ち上がる。そのまま動かして離すと確定
+// - axis: "y"（既定・縦に並ぶ行）/ "x"（横に並ぶ上のタブ）
 // - 押し始めてから指が8px以上動いたら、通常のスクロールとみなして長押しを取り消す
 // - ids は並べ替え後の data-id の配列
 // - タッチ（iPhone）とマウス（PC確認用）の両方に対応
@@ -14,6 +15,7 @@ export function enableLongPressReorder(listEl, opts) {
   const itemSelector = opts.itemSelector;
   const onReorder = opts.onReorder;
   const ignoreSelector = opts.ignoreSelector || "";
+  const horizontal = opts.axis === "x";
   const scroller = document.getElementById("scroll-container");
 
   let timer = null;
@@ -22,9 +24,11 @@ export function enableLongPressReorder(listEl, opts) {
   let dragging = false;
   let item = null;
   let ghost = null;
-  let grabOffsetY = 0;
-  let lastY = 0;
+  let grabOffset = 0;
+  let lastPos = 0;
   let scrollTimer = null;
+
+  const pos = (x, y) => (horizontal ? x : y);
 
   function cleanup() {
     clearTimeout(timer);
@@ -39,16 +43,17 @@ export function enableLongPressReorder(listEl, opts) {
     dragging = false;
   }
 
-  function begin(el, y) {
+  function begin(el) {
     item = el;
     dragging = true;
     const rect = el.getBoundingClientRect();
-    grabOffsetY = y - rect.top;
+    grabOffset = horizontal ? startX - rect.left : startY - rect.top;
     ghost = el.cloneNode(true);
     ghost.classList.add("reorder-ghost");
     ghost.style.position = "fixed";
     ghost.style.left = rect.left + "px";
     ghost.style.width = rect.width + "px";
+    ghost.style.height = rect.height + "px";
     ghost.style.top = rect.top + "px";
     ghost.style.margin = "0";
     ghost.style.pointerEvents = "none";
@@ -63,7 +68,7 @@ export function enableLongPressReorder(listEl, opts) {
         /* 非対応は無視 */
       }
     }
-    scrollTimer = setInterval(autoScroll, 30);
+    if (!horizontal) scrollTimer = setInterval(autoScroll, 30);
   }
 
   function siblings() {
@@ -72,15 +77,18 @@ export function enableLongPressReorder(listEl, opts) {
     );
   }
 
-  function move(y) {
-    lastY = y;
+  function move(p) {
+    lastPos = p;
     if (!ghost || !item) return;
-    ghost.style.top = y - grabOffsetY + "px";
-    const centerY = y - grabOffsetY + ghost.offsetHeight / 2;
+    if (horizontal) ghost.style.left = p - grabOffset + "px";
+    else ghost.style.top = p - grabOffset + "px";
+    const size = horizontal ? ghost.offsetWidth : ghost.offsetHeight;
+    const center = p - grabOffset + size / 2;
     let placed = false;
     for (const sib of siblings()) {
       const r = sib.getBoundingClientRect();
-      if (centerY < r.top + r.height / 2) {
+      const mid = horizontal ? r.left + r.width / 2 : r.top + r.height / 2;
+      if (center < mid) {
         if (item.nextElementSibling !== sib) sib.parentNode.insertBefore(item, sib);
         placed = true;
         break;
@@ -98,9 +106,9 @@ export function enableLongPressReorder(listEl, opts) {
   function autoScroll() {
     if (!dragging || !scroller) return;
     const r = scroller.getBoundingClientRect();
-    if (lastY < r.top + EDGE_PX) scroller.scrollTop -= SCROLL_STEP;
-    else if (lastY > r.bottom - EDGE_PX) scroller.scrollTop += SCROLL_STEP;
-    move(lastY);
+    if (lastPos < r.top + EDGE_PX) scroller.scrollTop -= SCROLL_STEP;
+    else if (lastPos > r.bottom - EDGE_PX) scroller.scrollTop += SCROLL_STEP;
+    move(lastPos);
   }
 
   function finish() {
@@ -109,7 +117,7 @@ export function enableLongPressReorder(listEl, opts) {
       return;
     }
     const ids = Array.from(listEl.querySelectorAll(itemSelector)).map(
-      (n) => n.dataset.id,
+      (n) => n.dataset.id || n.dataset.tab,
     );
     cleanup();
     lastDragEnd = Date.now();
@@ -122,10 +130,17 @@ export function enableLongPressReorder(listEl, opts) {
     if (ignoreSelector && e.target.closest(ignoreSelector)) return false;
     startX = x;
     startY = y;
-    lastY = y;
+    lastPos = pos(x, y);
     clearTimeout(timer);
-    timer = setTimeout(() => begin(el, startY), HOLD_MS);
+    timer = setTimeout(() => begin(el), HOLD_MS);
     return true;
+  }
+
+  function movedTooFar(x, y) {
+    return (
+      Math.abs(x - startX) > MOVE_CANCEL_PX ||
+      Math.abs(y - startY) > MOVE_CANCEL_PX
+    );
   }
 
   // ---- タッチ ----
@@ -143,14 +158,10 @@ export function enableLongPressReorder(listEl, opts) {
       const t = e.touches[0];
       if (dragging) {
         e.preventDefault(); // 持ち上げ中は画面スクロールさせない
-        move(t.clientY);
+        move(pos(t.clientX, t.clientY));
         return;
       }
-      if (
-        timer &&
-        (Math.abs(t.clientX - startX) > MOVE_CANCEL_PX ||
-          Math.abs(t.clientY - startY) > MOVE_CANCEL_PX)
-      ) {
+      if (timer && movedTooFar(t.clientX, t.clientY)) {
         clearTimeout(timer);
         timer = null;
       }
@@ -171,14 +182,10 @@ export function enableLongPressReorder(listEl, opts) {
   });
   window.addEventListener("mousemove", (e) => {
     if (dragging) {
-      move(e.clientY);
+      move(pos(e.clientX, e.clientY));
       return;
     }
-    if (
-      timer &&
-      (Math.abs(e.clientX - startX) > MOVE_CANCEL_PX ||
-        Math.abs(e.clientY - startY) > MOVE_CANCEL_PX)
-    ) {
+    if (timer && movedTooFar(e.clientX, e.clientY)) {
       clearTimeout(timer);
       timer = null;
     }

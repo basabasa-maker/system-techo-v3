@@ -9,8 +9,33 @@ import { renderHabitTab, pullAndRender as pullHabit } from "./habit.js";
 import { renderMealTab, pullAndRender as pullMeal } from "./meal.js";
 import { daysAgoYmd } from "./date-util.js";
 import { toast } from "./toast.js";
+import { enableLongPressReorder, justDragged } from "./reorder.js";
 
 const TABS = ["task", "daily", "memo", "habit", "meal"];
+const LS_KEY_TAB_ORDER = "sth_v3_tab_order";
+
+// 上のタブの並びを、前回の並びに戻す（知らないタブ名は無視、足りないタブは末尾へ）
+function applyTabOrder() {
+  let saved = [];
+  try {
+    saved = JSON.parse(localStorage.getItem(LS_KEY_TAB_ORDER) || "[]");
+  } catch (e) {
+    saved = [];
+  }
+  const bar = document.getElementById("tab-bar");
+  if (!bar || !Array.isArray(saved)) return;
+  const byTab = new Map(
+    Array.from(bar.querySelectorAll(".tab-btn")).map((b) => [b.dataset.tab, b]),
+  );
+  const order = [
+    ...saved.filter((t) => byTab.has(t)),
+    ...TABS.filter((t) => !saved.includes(t)),
+  ];
+  for (const t of order) {
+    const b = byTab.get(t);
+    if (b) bar.appendChild(b);
+  }
+}
 
 const appState = {
   activeTab: localStorage.getItem(LS_KEY_ACTIVE_TAB) || "task",
@@ -21,9 +46,19 @@ function init() {
   // ここではイベントバインドとタブ初期化のみ
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (btn.disabled) return;
+      if (btn.disabled || justDragged()) return;
       switchTab(btn.dataset.tab);
     });
+  });
+
+  // 上のタブは長押しで左右に動かせる。並びはこの端末に保存する
+  applyTabOrder();
+  enableLongPressReorder(document.getElementById("tab-bar"), {
+    itemSelector: ".tab-btn",
+    axis: "x",
+    onReorder: (ids) => {
+      localStorage.setItem(LS_KEY_TAB_ORDER, JSON.stringify(ids));
+    },
   });
 
   document.getElementById("btn-refresh").addEventListener("click", onRefresh);
