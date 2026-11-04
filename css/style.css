@@ -1080,9 +1080,15 @@ textarea {
   list-style: none;
 }
 .reorder-active,
+.reorder-active *,
 .habit-item,
+.habit-item *,
 .task-item-wrap,
+.task-item-wrap *,
+.memo-group,
+.memo-group *,
 .memo-row-wrap,
+.memo-row-wrap *,
 .tab-btn {
   -webkit-touch-callout: none;
   -webkit-user-select: none;

@@ -61,6 +61,13 @@ export function enableLongPressReorder(listEl, opts) {
     document.body.appendChild(ghost);
     el.classList.add("reorder-placeholder");
     listEl.classList.add("reorder-active");
+    // すでに選択が始まっていたら解除する
+    try {
+      const sel = window.getSelection && window.getSelection();
+      if (sel && sel.removeAllRanges) sel.removeAllRanges();
+    } catch (err) {
+      /* 解除できなくても続行 */
+    }
     if (navigator.vibrate) {
       try {
         navigator.vibrate(15);
@@ -170,8 +177,12 @@ export function enableLongPressReorder(listEl, opts) {
   );
   listEl.addEventListener("touchend", finish);
   listEl.addEventListener("touchcancel", cleanup);
-  // 長押し後の文字選択・メニューを出さない
+  // 長押し後の文字選択・メニューを出さない（iPhoneは長押しで文字選択が始まるため、
+  // 押している間は選択の開始そのものを止める）
   listEl.addEventListener("contextmenu", (e) => {
+    if (dragging || timer) e.preventDefault();
+  });
+  listEl.addEventListener("selectstart", (e) => {
     if (dragging || timer) e.preventDefault();
   });
 
