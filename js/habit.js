@@ -131,13 +131,19 @@ function itemHtml(item) {
         <span class="habit-label">${escapeHtml(item.label)}</span>
       </li>`;
   }
-  const shown = valueLabel(item, v);
+  const filled = v != null && v !== "";
+  const input =
+    item.type === "time"
+      ? `<input type="time" class="habit-value habit-value-input ${filled ? "filled" : ""}" value="${escapeHtml(toHhMm(v))}" />`
+      : `<input type="number" inputmode="decimal" step="any" placeholder="入力" class="habit-value habit-value-input ${filled ? "filled" : ""}" value="${filled ? escapeHtml(v) : ""}" />`;
+  const unit = item.type !== "time" && item.unit ? `<span class="habit-unit-out">${escapeHtml(item.unit)}</span>` : "";
   return `
     <li class="habit-item" data-id="${escapeHtml(item.id)}">
       ${del}
       ${icon}
       <span class="habit-label">${escapeHtml(item.label)}</span>
-      <button class="habit-value ${shown ? "filled" : ""}">${shown || "タップで入力"}</button>
+      ${input}${unit}
+      <button class="habit-clear" aria-label="消す" ${filled ? "" : "hidden"}>×</button>
     </li>`;
 }
 
@@ -200,9 +206,30 @@ function bind() {
         toggleCheck(id);
       });
     } else {
-      li.querySelector(".habit-value").addEventListener("click", () => {
-        if (justDragged()) return;
-        openValueModal(item);
+      const inp = li.querySelector(".habit-value-input");
+      const clr = li.querySelector(".habit-clear");
+      const commit = () => {
+        const raw = inp.value;
+        let val = "";
+        if (item.type === "time") val = raw ? toHhMm(raw) : "";
+        else if (raw !== "") {
+          const n = Number(raw);
+          if (!Number.isFinite(n)) return;
+          val = n;
+        }
+        const cur = state.values[id];
+        if ((cur == null ? "" : cur) === val) return;
+        setValue(id, val, true);
+        inp.classList.toggle("filled", val !== "");
+        clr.hidden = val === "";
+      };
+      inp.addEventListener("change", commit);
+      inp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") inp.blur();
+      });
+      clr.addEventListener("click", () => {
+        inp.value = "";
+        commit();
       });
     }
     if (state.editMode) {
@@ -216,6 +243,7 @@ function bind() {
   enableLongPressReorder(listEl, {
     itemSelector: ".habit-item",
     onReorder: onReorderItems,
+    ignoreSelector: ".habit-value-input, .habit-clear",
   });
 }
 
@@ -234,13 +262,19 @@ function reloadDay() {
 
 // ---------- 値の更新 ----------
 
-function setValue(id, value) {
+function setValue(id, value, quiet) {
   const next = { ...state.values };
   if (value === "" || value == null || value === false) delete next[id];
   else next[id] = value;
   state.values = next;
   saveDayLocal(state.date, next);
-  paint();
+  if (quiet) {
+    // 入力中の欄を作り直さない。睡眠時間だけ更新する
+    const el = rootEl && rootEl.querySelector(".habit-sleep-val");
+    if (el) el.textContent = sleepLabel(next);
+  } else {
+    paint();
+  }
   schedulePush(state.date, next);
 }
 

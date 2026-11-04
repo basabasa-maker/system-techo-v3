@@ -202,6 +202,54 @@ textarea {
   list-style: none;
 }
 
+/* 今日やること: 橙の枠で囲み、前後に余白をとる */
+.task-today {
+  margin: 14px 10px 22px;
+  padding: 0 0 4px;
+  border: 2px solid #f2a33a;
+  border-radius: 14px;
+  background: rgba(242, 163, 58, 0.08);
+  overflow: hidden;
+}
+.task-today h2 {
+  color: #f2a33a;
+  font-size: 14px;
+}
+
+/* ステータス表示: 左の帯と小さな札 */
+.task-item-wrap.st-doing .task-item {
+  box-shadow: inset 4px 0 0 #2fb5a0;
+}
+.task-item-wrap.st-todo .task-item {
+  box-shadow: inset 4px 0 0 #566b89;
+}
+.task-item-wrap.st-done .task-item {
+  box-shadow: inset 4px 0 0 #4d90fe;
+}
+.task-status {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.task-status-todo {
+  background: rgba(255, 255, 255, 0.1);
+  color: #aab8cc;
+}
+.task-status-doing {
+  background: rgba(47, 181, 160, 0.25);
+  color: #5fe0cb;
+}
+.task-status-done {
+  background: rgba(77, 144, 254, 0.25);
+  color: #8ab8ff;
+}
+.task-status-archived {
+  background: rgba(255, 255, 255, 0.08);
+  color: #8796ab;
+}
+
 .task-item-wrap {
   position: relative;
   overflow: hidden;
@@ -1229,6 +1277,33 @@ textarea {
   text-align: center;
   cursor: pointer;
 }
+input.habit-value {
+  width: 112px;
+  min-width: 0;
+  padding: 0 8px;
+  font-family: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+input.habit-value::placeholder {
+  color: #8796ab;
+}
+.habit-unit-out {
+  font-size: 12px;
+  color: #8796ab;
+  margin-left: 4px;
+}
+.habit-clear {
+  width: 32px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: #8796ab;
+  font-size: 18px;
+}
+.habit-clear[hidden] {
+  display: none;
+}
 .habit-value.filled {
   background: rgba(127, 209, 176, 0.18);
   color: #7fd1b0;
@@ -1362,7 +1437,7 @@ textarea {
 }
 .meal-text {
   width: 100%;
-  min-height: 64px;
+  min-height: 192px;
   padding: 10px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1487,6 +1562,17 @@ textarea {
 }
 .memo-detail-body.memo-paper a {
   color: #3b5bdb;
+}
+.memo-backdrop {
+  align-items: flex-start;
+  padding-top: env(safe-area-inset-top);
+}
+.memo-backdrop .memo-modal {
+  border-radius: 0 0 16px 16px;
+  border-top: none;
+  border-bottom: 5px solid var(--paper-orange);
+  padding-bottom: 0;
+  max-height: 70vh;
 }
 .memo-modal {
   background: var(--paper);

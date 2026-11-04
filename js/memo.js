@@ -444,6 +444,38 @@ function newEntry() {
   };
 }
 
+// 罫線の空き行をタップしたら、その行まで改行を足してカーソルを置く
+function bindPaperTap(ta) {
+  const LINE = 32;
+  const mirror = document.createElement("div");
+  const renderedHeight = () => {
+    const cs = getComputedStyle(ta);
+    mirror.style.cssText =
+      "position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre-wrap;word-wrap:break-word;" +
+      `width:${ta.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)}px;` +
+      `font:${cs.font};line-height:${LINE}px;`;
+    mirror.textContent = ta.value + "\n";
+    document.body.appendChild(mirror);
+    const h = mirror.offsetHeight - LINE; // 末尾の改行ぶんを除く
+    mirror.remove();
+    return h;
+  };
+  ta.addEventListener("click", (e) => {
+    const rect = ta.getBoundingClientRect();
+    const y = e.clientY - rect.top + ta.scrollTop;
+    const usedLines = Math.max(1, Math.round(renderedHeight() / LINE));
+    const tapLine = Math.floor(y / LINE);
+    if (tapLine < usedLines) return; // 文字がある行は、ふつうに位置が決まる
+    const add = tapLine - usedLines + 1;
+    // 最終行が空でなければ、そこから改行して目的の行へ
+    ta.value = ta.value + "\n".repeat(add);
+    const end = ta.value.length;
+    ta.setSelectionRange(end, end);
+    ta.focus();
+  });
+  setTimeout(() => ta.focus(), 50);
+}
+
 function openEditor(existing) {
   const en = { ...existing };
   const isNew = !!en._isNew;
@@ -455,7 +487,7 @@ function openEditor(existing) {
     : "";
 
   const modal = document.createElement("div");
-  modal.className = "modal-backdrop";
+  modal.className = "modal-backdrop memo-backdrop";
   modal.innerHTML = `
     <div class="modal memo-modal">
       <header>${isNew ? "新しいメモ" : "メモを編集"}</header>
@@ -470,6 +502,7 @@ function openEditor(existing) {
       </footer>
     </div>`;
   document.body.appendChild(modal);
+  bindPaperTap(modal.querySelector("#m-body"));
   const close = () => modal.remove();
   modal.querySelector("#m-cancel").addEventListener("click", close);
   modal.addEventListener("click", (e) => {

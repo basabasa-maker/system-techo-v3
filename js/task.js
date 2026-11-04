@@ -115,13 +115,24 @@ function renderList() {
 
   sortInPlace(active);
   sortInPlace(done);
-  const pinned = active.filter((t) => t.pinned);
-  const unpinned = active.filter((t) => !t.pinned);
+  // 今日が期限（期限切れも含む）の未完了タスクは、先頭の枠にまとめる
+  const today = todayYmd();
+  const isToday = (t) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(t.due_date || "") && t.due_date <= today;
+  const todays = active.filter(isToday);
+  const rest = active.filter((t) => !isToday(t));
+  const pinned = rest.filter((t) => t.pinned);
+  const unpinned = rest.filter((t) => !t.pinned);
 
   let html = "";
   if (active.length === 0 && done.length === 0) {
     html = `<p class="empty-hint">タスクはまだありません。右下の＋で追加してください。</p>`;
   } else {
+    if (todays.length > 0) {
+      html += `<section class="task-group task-today"><h2>🔥 今日やること（${todays.length}）</h2><ul class="task-items">`;
+      for (const t of todays) html += taskItemHtml(t);
+      html += `</ul></section>`;
+    }
     if (pinned.length > 0) {
       html += `<section class="task-group"><h2>📌 ピン留め（${pinned.length}）</h2><ul class="task-items" data-group="pinned">`;
       for (const t of pinned) html += taskItemHtml(t);
@@ -368,6 +379,13 @@ function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
+const STATUS_VIEW = {
+  todo: "○ 未着手",
+  doing: "◐ 進行中",
+  done: "● 完了",
+  archived: "▣ 保管",
+};
+
 function taskItemHtml(t) {
   const checked = t.status === "done";
   // due_dateが正しい形式(YYYY-MM-DD)の時のみ表示
@@ -376,8 +394,9 @@ function taskItemHtml(t) {
     ? `<span class="task-due">${escapeHtml(dueLabel(t.due_date))}（${escapeHtml(t.due_date)}）</span>`
     : "";
   const prClass = `pri-${t.priority || "mid"}`;
+  const st = STATUS_VIEW[t.status] || STATUS_VIEW.todo;
   return `
-    <li class="task-item-wrap" data-id="${escapeHtml(t.id)}">
+    <li class="task-item-wrap st-${t.status in STATUS_VIEW ? t.status : "todo"}" data-id="${escapeHtml(t.id)}">
       <div class="task-row-pinhint">${t.pinned ? "解除" : "📌"}</div>
       <div class="task-row-action task-row-del" data-action="del">削除</div>
       <div class="task-item ${checked ? "is-done" : ""}" data-id="${escapeHtml(t.id)}">
@@ -385,6 +404,7 @@ function taskItemHtml(t) {
         <div class="task-body">
           <div class="task-title-row">
             <span class="task-priority ${prClass}">${PRIORITY_LABEL[t.priority] || "中"}</span>
+            <span class="task-status task-status-${t.status in STATUS_VIEW ? t.status : "todo"}">${st}</span>
             <span class="task-title">${escapeHtml(t.title)}</span>
           </div>
           ${due}
