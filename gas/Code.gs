@@ -55,7 +55,17 @@ const TASKS_HEADERS = [
   "created_at",
   "updated_at",
   "deleted",
+  "pinned",
+  "sort_order",
 ];
+
+// 習慣・食事は「日付1行」のJSON保存。全件上書きはしない（日付単位のupsertのみ）
+const HABIT_DAYS_SHEET = "habit_days";
+const HABIT_DAYS_HEADERS = ["date", "json", "updated_at"];
+const HABIT_ITEMS_SHEET = "habit_items";
+const HABIT_ITEMS_HEADERS = ["id", "json", "updated_at"];
+const MEAL_SHEET = "meals";
+const MEAL_HEADERS = ["date", "json", "updated_at"];
 
 const MEMO_SHEET = "memo";
 const MEMO_HEADERS = [
@@ -138,6 +148,17 @@ function doGet(e) {
       const limit = parseInt((e.parameter && e.parameter.limit) || "500", 10);
       return jsonResponse({ ok: true, data: pullMemoAll(since, limit) });
     }
+    if (type === "habit_items") {
+      return jsonResponse({ ok: true, data: { items: pullHabitItems() } });
+    }
+    if (type === "habit_day") {
+      const date = (e.parameter && e.parameter.date) || "";
+      return jsonResponse({ ok: true, data: { values: pullHabitDay(date) } });
+    }
+    if (type === "meal_month") {
+      const month = (e.parameter && e.parameter.month) || "";
+      return jsonResponse({ ok: true, data: { days: pullMealMonth(month) } });
+    }
     return jsonResponse({ ok: false, error: "Unknown type: " + type });
   } catch (err) {
     return jsonResponse({ ok: false, error: String((err && err.stack) || err) });
@@ -171,6 +192,21 @@ function doPost(e) {
       return jsonResponse({
         ok: true,
         data: memoInboxWrite(body.entry_id || "", body.date || ""),
+      });
+    }
+    if (type === "habit_items_upsert") {
+      return jsonResponse({ ok: true, data: habitItemsUpsert(body.items) });
+    }
+    if (type === "habit_day_upsert") {
+      return jsonResponse({
+        ok: true,
+        data: habitDayUpsert(body.date || "", body.values),
+      });
+    }
+    if (type === "meal_day_upsert") {
+      return jsonResponse({
+        ok: true,
+        data: mealDayUpsert(body.date || "", body.slots),
       });
     }
     if (type === "share_add") {
@@ -221,6 +257,16 @@ function taskUpsert(task) {
     created_at: base.created_at || task.created_at || now,
     updated_at: now,
     deleted: task.deleted ? 1 : 0,
+    pinned:
+      task.pinned != null
+        ? isDeletedTruthy(task.pinned)
+          ? 1
+          : 0
+        : isDeletedTruthy(base.pinned)
+          ? 1
+          : 0,
+    sort_order:
+      task.sort_order != null ? Number(task.sort_order) || 0 : Number(base.sort_order) || 0,
   };
 
   const values = TASKS_HEADERS.map((h) => merged[h]);
@@ -244,6 +290,87 @@ function taskDelete(id) {
   const values = TASKS_HEADERS.map((h) => (current[h] != null ? current[h] : ""));
   sheet.getRange(rowIdx, 1, 1, TASKS_HEADERS.length).setValues([values]);
   return { id: id, deleted: true };
+}
+
+// ---------- Habit / Meal operations ----------
+// 1日1行。値はJSON文字列。日付(またはid)で1行だけ読み書きする。
+
+function isYmd(s) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(s || ""));
+}
+
+function upsertJsonRow(sheetName, headers, key, obj) {
+  const sheet = getSheet(sheetName, headers);
+  const now = nowJstString();
+  const rowIdx = findRowIndexById(sheet, key);
+  const values = [key, JSON.stringify(obj), now];
+  if (rowIdx > 0) {
+    sheet.getRange(rowIdx, 1, 1, headers.length).setValues([values]);
+  } else {
+    sheet.appendRow(values);
+  }
+  return { key: key, updated_at: now };
+}
+
+function readJsonRow(sheetName, headers, key) {
+  const sheet = getSheet(sheetName, headers);
+  const rowIdx = findRowIndexById(sheet, key);
+  if (rowIdx <= 0) return null;
+  const row = readRowAt(sheet, rowIdx, headers);
+  try {
+    return JSON.parse(String(row.json || "null"));
+  } catch (err) {
+    return null;
+  }
+}
+
+function pullHabitItems() {
+  const v = readJsonRow(HABIT_ITEMS_SHEET, HABIT_ITEMS_HEADERS, "items");
+  return Array.isArray(v) ? v : null;
+}
+
+function habitItemsUpsert(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error("items required");
+  }
+  return upsertJsonRow(HABIT_ITEMS_SHEET, HABIT_ITEMS_HEADERS, "items", items);
+}
+
+function pullHabitDay(dateStr) {
+  if (!isYmd(dateStr)) throw new Error("date must be yyyy-MM-dd");
+  const v = readJsonRow(HABIT_DAYS_SHEET, HABIT_DAYS_HEADERS, dateStr);
+  return v && typeof v === "object" ? v : null;
+}
+
+function habitDayUpsert(dateStr, values) {
+  if (!isYmd(dateStr)) throw new Error("date must be yyyy-MM-dd");
+  if (!values || typeof values !== "object") throw new Error("values required");
+  return upsertJsonRow(HABIT_DAYS_SHEET, HABIT_DAYS_HEADERS, dateStr, values);
+}
+
+function pullMealMonth(monthStr) {
+  if (!/^\d{4}-\d{2}$/.test(String(monthStr || ""))) {
+    throw new Error("month must be yyyy-MM");
+  }
+  const sheet = getSheet(MEAL_SHEET, MEAL_HEADERS);
+  const rows = readAllRows(sheet, MEAL_HEADERS);
+  const out = {};
+  for (let i = 0; i < rows.length; i++) {
+    const d = String(rows[i].date || "");
+    if (d.indexOf(monthStr + "-") !== 0) continue;
+    try {
+      out[d] = JSON.parse(String(rows[i].json || "null"));
+    } catch (err) {
+      /* 壊れた行は飛ばす */
+    }
+  }
+  return out;
+}
+
+function mealDayUpsert(dateStr, slots) {
+  if (!isYmd(dateStr)) throw new Error("date must be yyyy-MM-dd");
+  if (!slots || typeof slots !== "object") throw new Error("slots required");
+  return upsertJsonRow(MEAL_SHEET, MEAL_HEADERS, dateStr, slots);
 }
 
 // ---------- Memo operations ----------
@@ -715,6 +842,8 @@ function normalizeTaskOut(row) {
     created_at: formatDateCell(row.created_at, "yyyy-MM-dd HH:mm"),
     updated_at: formatDateCell(row.updated_at, "yyyy-MM-dd HH:mm"),
     deleted: isDeletedTruthy(row.deleted) ? 1 : 0,
+    pinned: isDeletedTruthy(row.pinned) ? 1 : 0,
+    sort_order: Number(row.sort_order) || 0,
   };
 }
 

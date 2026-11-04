@@ -401,6 +401,9 @@ async function flushOutbox() {
         await gas.pushMemoUpsert(item.op.payload);
       } else if (item.op.type === "memo_delete") {
         await gas.pushMemoDelete(item.op.payload.id);
+      } else {
+        // 習慣・食事の送信待ちは、そのタブ側で送る。ここでは消さない
+        continue;
       }
       await outbox.remove(item.id);
     } catch (e) {

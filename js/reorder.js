@@ -1,0 +1,199 @@
+// reorder.js - 長押しで行を動かす共通部品（習慣タブ・タスクタブで共用）
+// 使い方: enableLongPressReorder(listEl, { itemSelector, onReorder(ids) })
+// - 行を約0.45秒押し続けると持ち上がる。そのまま上下に動かして離すと確定
+// - 押し始めてから指が8px以上動いたら、通常のスクロールとみなして長押しを取り消す
+// - ids は並べ替え後の data-id の配列
+// - タッチ（iPhone）とマウス（PC確認用）の両方に対応
+
+const HOLD_MS = 450;
+const MOVE_CANCEL_PX = 8;
+const EDGE_PX = 70;
+const SCROLL_STEP = 10;
+
+export function enableLongPressReorder(listEl, opts) {
+  const itemSelector = opts.itemSelector;
+  const onReorder = opts.onReorder;
+  const ignoreSelector = opts.ignoreSelector || "";
+  const scroller = document.getElementById("scroll-container");
+
+  let timer = null;
+  let startX = 0;
+  let startY = 0;
+  let dragging = false;
+  let item = null;
+  let ghost = null;
+  let grabOffsetY = 0;
+  let lastY = 0;
+  let scrollTimer = null;
+
+  function cleanup() {
+    clearTimeout(timer);
+    timer = null;
+    clearInterval(scrollTimer);
+    scrollTimer = null;
+    if (ghost) ghost.remove();
+    ghost = null;
+    if (item) item.classList.remove("reorder-placeholder");
+    listEl.classList.remove("reorder-active");
+    item = null;
+    dragging = false;
+  }
+
+  function begin(el, y) {
+    item = el;
+    dragging = true;
+    const rect = el.getBoundingClientRect();
+    grabOffsetY = y - rect.top;
+    ghost = el.cloneNode(true);
+    ghost.classList.add("reorder-ghost");
+    ghost.style.position = "fixed";
+    ghost.style.left = rect.left + "px";
+    ghost.style.width = rect.width + "px";
+    ghost.style.top = rect.top + "px";
+    ghost.style.margin = "0";
+    ghost.style.pointerEvents = "none";
+    ghost.style.zIndex = "200";
+    document.body.appendChild(ghost);
+    el.classList.add("reorder-placeholder");
+    listEl.classList.add("reorder-active");
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate(15);
+      } catch (e) {
+        /* 非対応は無視 */
+      }
+    }
+    scrollTimer = setInterval(autoScroll, 30);
+  }
+
+  function siblings() {
+    return Array.from(listEl.querySelectorAll(itemSelector)).filter(
+      (n) => n !== item,
+    );
+  }
+
+  function move(y) {
+    lastY = y;
+    if (!ghost || !item) return;
+    ghost.style.top = y - grabOffsetY + "px";
+    const centerY = y - grabOffsetY + ghost.offsetHeight / 2;
+    let placed = false;
+    for (const sib of siblings()) {
+      const r = sib.getBoundingClientRect();
+      if (centerY < r.top + r.height / 2) {
+        if (item.nextElementSibling !== sib) sib.parentNode.insertBefore(item, sib);
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      const sibs = siblings();
+      const last = sibs[sibs.length - 1];
+      if (last && last.nextElementSibling !== item) {
+        last.parentNode.insertBefore(item, last.nextElementSibling);
+      }
+    }
+  }
+
+  function autoScroll() {
+    if (!dragging || !scroller) return;
+    const r = scroller.getBoundingClientRect();
+    if (lastY < r.top + EDGE_PX) scroller.scrollTop -= SCROLL_STEP;
+    else if (lastY > r.bottom - EDGE_PX) scroller.scrollTop += SCROLL_STEP;
+    move(lastY);
+  }
+
+  function finish() {
+    if (!dragging) {
+      cleanup();
+      return;
+    }
+    const ids = Array.from(listEl.querySelectorAll(itemSelector)).map(
+      (n) => n.dataset.id,
+    );
+    cleanup();
+    lastDragEnd = Date.now();
+    onReorder(ids);
+  }
+
+  function down(e, x, y) {
+    const el = e.target.closest(itemSelector);
+    if (!el || !listEl.contains(el)) return false;
+    if (ignoreSelector && e.target.closest(ignoreSelector)) return false;
+    startX = x;
+    startY = y;
+    lastY = y;
+    clearTimeout(timer);
+    timer = setTimeout(() => begin(el, startY), HOLD_MS);
+    return true;
+  }
+
+  // ---- タッチ ----
+  listEl.addEventListener(
+    "touchstart",
+    (e) => {
+      if (e.touches.length !== 1) return;
+      down(e, e.touches[0].clientX, e.touches[0].clientY);
+    },
+    { passive: true },
+  );
+  listEl.addEventListener(
+    "touchmove",
+    (e) => {
+      const t = e.touches[0];
+      if (dragging) {
+        e.preventDefault(); // 持ち上げ中は画面スクロールさせない
+        move(t.clientY);
+        return;
+      }
+      if (
+        timer &&
+        (Math.abs(t.clientX - startX) > MOVE_CANCEL_PX ||
+          Math.abs(t.clientY - startY) > MOVE_CANCEL_PX)
+      ) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    },
+    { passive: false },
+  );
+  listEl.addEventListener("touchend", finish);
+  listEl.addEventListener("touchcancel", cleanup);
+  // 長押し後の文字選択・メニューを出さない
+  listEl.addEventListener("contextmenu", (e) => {
+    if (dragging || timer) e.preventDefault();
+  });
+
+  // ---- マウス（PCでの確認用） ----
+  listEl.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    down(e, e.clientX, e.clientY);
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (dragging) {
+      move(e.clientY);
+      return;
+    }
+    if (
+      timer &&
+      (Math.abs(e.clientX - startX) > MOVE_CANCEL_PX ||
+        Math.abs(e.clientY - startY) > MOVE_CANCEL_PX)
+    ) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  });
+  window.addEventListener("mouseup", () => {
+    if (dragging) finish();
+    else {
+      clearTimeout(timer);
+      timer = null;
+    }
+  });
+}
+
+// 並べ替えを終えた直後（0.4秒以内）に起きる「タップ」を無視するための判定
+let lastDragEnd = 0;
+export function justDragged() {
+  return Date.now() - lastDragEnd < 400;
+}

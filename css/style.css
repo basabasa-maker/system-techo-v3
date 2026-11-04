@@ -1061,3 +1061,452 @@ textarea {
     transform: rotate(360deg);
   }
 }
+
+/* ---------- タブ5つ対応 ---------- */
+.tab-btn {
+  font-size: 14px;
+  padding: 0 2px;
+}
+
+/* ---------- 長押し並べ替え（共通） ---------- */
+.reorder-placeholder {
+  opacity: 0.25;
+}
+.reorder-ghost {
+  background: #2d4f7c !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  opacity: 0.96;
+  list-style: none;
+}
+.reorder-active,
+.habit-item,
+.task-item-wrap {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ---------- Task: ピン留め ---------- */
+.task-row-pinhint {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e08a3a;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ---------- 習慣タブ ---------- */
+.habit-tab,
+.meal-tab {
+  padding: 0 12px 40px;
+}
+.habit-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  background: #1e3a5f;
+}
+.habit-nav-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #25436c;
+  font-size: 22px;
+  cursor: pointer;
+}
+.habit-nav-spacer {
+  width: 44px;
+}
+.habit-date {
+  flex: 1;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+}
+.habit-today {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #25436c;
+  font-size: 13px;
+  cursor: pointer;
+}
+.habit-card {
+  background: #23406a;
+  border-radius: 14px;
+  padding: 10px 14px 14px;
+  margin-top: 12px;
+}
+.habit-card h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #7fd1b0;
+  margin: 4px 0 6px;
+}
+.habit-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.habit-edit-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 22px;
+  border: 1px solid rgba(127, 209, 176, 0.5);
+  background: rgba(127, 209, 176, 0.18);
+  color: #7fd1b0;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.habit-nav {
+  gap: 6px;
+}
+.habit-date {
+  white-space: nowrap;
+  font-size: 16px;
+}
+.habit-list {
+  list-style: none;
+}
+.habit-item,
+.habit-sleep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.habit-item:last-child {
+  border-bottom: none;
+}
+.habit-icon {
+  width: 28px;
+  text-align: center;
+  font-size: 22px;
+}
+.habit-label {
+  flex: 1;
+  font-size: 16px;
+}
+.habit-value {
+  min-width: 110px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #8796ab;
+  font-size: 15px;
+  text-align: center;
+  cursor: pointer;
+}
+.habit-value.filled {
+  background: rgba(127, 209, 176, 0.18);
+  color: #7fd1b0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.habit-unit {
+  margin-left: 3px;
+  font-size: 12px;
+  font-weight: 400;
+}
+.habit-sleep-val {
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(127, 209, 176, 0.18);
+  color: #7fd1b0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.habit-check-row {
+  cursor: pointer;
+}
+.habit-check {
+  width: 34px;
+  height: 34px;
+  border-radius: 17px;
+  border: 2px solid rgba(127, 209, 176, 0.4);
+  background: transparent;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+}
+.habit-check.on {
+  background: #34c759;
+  border-color: #34c759;
+}
+.habit-del {
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  border: none;
+  background: #d95252;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.habit-add {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 6px;
+  border: none;
+  background: transparent;
+  color: #7fd1b0;
+  font-size: 15px;
+  cursor: pointer;
+}
+.habit-hint {
+  padding: 10px 4px 0;
+  font-size: 12px;
+  color: #8796ab;
+  text-align: center;
+}
+
+/* ---------- 食事タブ ---------- */
+.meal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 6px;
+}
+.meal-wd {
+  text-align: center;
+  font-size: 12px;
+  color: #8796ab;
+  padding: 4px 0;
+}
+.meal-cell {
+  position: relative;
+  min-height: 52px;
+  border: none;
+  border-radius: 10px;
+  background: #23406a;
+  cursor: pointer;
+}
+.meal-cell.blank {
+  background: transparent;
+  cursor: default;
+}
+.meal-cell.today {
+  outline: 2px solid #4d90fe;
+}
+.meal-day {
+  font-size: 15px;
+}
+.meal-dot {
+  position: absolute;
+  bottom: 7px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: #7fd1b0;
+}
+.meal-slot {
+  background: #23406a;
+  border-radius: 14px;
+  padding: 10px 14px 14px;
+  margin-top: 12px;
+}
+.meal-slot-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.meal-slot-head h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+.meal-time {
+  min-height: 44px;
+  min-width: 110px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #18304d;
+  color: #fff;
+  font-size: 16px;
+}
+.meal-text {
+  width: 100%;
+  min-height: 64px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #18304d;
+  color: #fff;
+  font-size: 16px;
+  resize: vertical;
+}
+
+/* ---------- Memo: ロディアのブロックメモ風 ----------
+ * 生成り色の紙に、薄い青紫の罫線。上端にオレンジの帯。
+ * 罫線は行の高さ(32px)に合わせ、文字が線の上に乗るようにしている */
+:root {
+  --paper: #fbfaf4;
+  --paper-line: #c9cde4;
+  --paper-ink: #2b2b3a;
+  --paper-sub: #7c8199;
+  --paper-orange: #f26b1d;
+}
+.memo-tab,
+.memo-detail {
+  background: var(--paper);
+  min-height: 100%;
+}
+/* 紙の色を画面の下まで届かせる */
+#scroll-container:has(.memo-tab),
+#scroll-container:has(.memo-detail) {
+  background: var(--paper);
+}
+.memo-controls {
+  background: var(--paper);
+  border-top: 5px solid var(--paper-orange);
+  border-bottom: 1px solid var(--paper-line);
+}
+.memo-search-row input[type="search"] {
+  background: #fff;
+  border: 1px solid var(--paper-line);
+  color: var(--paper-ink);
+}
+.memo-action-row button,
+.btn-sort {
+  background: #efeadb !important;
+  color: var(--paper-ink) !important;
+  border: 1px solid var(--paper-line) !important;
+}
+.memo-list {
+  gap: 0;
+  padding: 0 0 96px;
+}
+.memo-date-header {
+  color: var(--paper-orange);
+  background: var(--paper);
+  padding: 14px 14px 4px;
+  border-bottom: 1px solid var(--paper-line);
+}
+.memo-row-wrap {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid var(--paper-line);
+}
+.memo-row {
+  background: var(--paper);
+}
+.memo-row-inner {
+  padding: 10px 14px;
+}
+.memo-row-time {
+  color: var(--paper-sub);
+}
+.memo-row-title {
+  color: var(--paper-ink);
+  font-weight: 500;
+}
+.memo-row-preview {
+  color: var(--paper-sub);
+}
+.memo-detail-header {
+  background: var(--paper);
+  border-top: 5px solid var(--paper-orange);
+  border-bottom: 1px solid var(--paper-line);
+}
+.memo-detail-header .btn-back {
+  color: var(--paper-ink);
+  border-color: var(--paper-line);
+}
+.memo-detail-time {
+  color: var(--paper-sub);
+}
+.memo-detail-title {
+  color: var(--paper-ink);
+  padding-bottom: 8px;
+}
+.memo-detail-tags {
+  color: var(--paper-sub);
+}
+.memo-detail-footer {
+  background: var(--paper);
+  border-top: 1px solid var(--paper-line);
+}
+.memo-detail-footer .btn-ghost {
+  color: var(--paper-ink);
+  border-color: var(--paper-line) !important;
+}
+.memo-paper {
+  font-size: 16px;
+  line-height: 32px;
+  color: var(--paper-ink);
+  background-color: var(--paper);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    var(--paper-line) 31px,
+    var(--paper-line) 32px
+  );
+  background-attachment: local;
+}
+.memo-detail-body.memo-paper {
+  padding: 0 16px 24px;
+  min-height: 60vh;
+}
+.memo-detail-body.memo-paper a {
+  color: #3b5bdb;
+}
+.memo-modal {
+  background: var(--paper);
+  border-top: 5px solid var(--paper-orange);
+  color: var(--paper-ink);
+}
+.memo-modal header {
+  border-bottom: 1px solid var(--paper-line);
+}
+.memo-modal .btn-ghost {
+  color: var(--paper-ink);
+  border-color: var(--paper-line) !important;
+}
+.modal-body textarea.memo-paper-input {
+  min-height: 288px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 0;
+  color: var(--paper-ink);
+  background-color: var(--paper);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    var(--paper-line) 31px,
+    var(--paper-line) 32px
+  );
+  background-attachment: local;
+  resize: none;
+}
+.modal-body .memo-title-input {
+  background: #fff;
+  border: 1px solid var(--paper-line);
+  color: var(--paper-ink);
+}

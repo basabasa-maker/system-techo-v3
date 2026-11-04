@@ -1,21 +1,21 @@
 // memo.js - Memo タブ（iPhoneメモアプリ風リスト形式）
 // 仕様書 Sprint 3 再実装版：
 // - 縦スクロールのリスト、日付でグループ化（今日／昨日／YYYY-MM-DD）
-// - ソート切替（新しい順/古い順）、種別フィルタ、全文検索
+// - ソート切替（新しい順/古い順）、全文検索
 // - 右スワイプ → ピン留め / 左スワイプ → 削除
 // - ピン留めは各日付グループ内で上位
 // - 行タップで詳細画面（全画面遷移）
-// - FAB → 種別選択 → 種別別入力モーダル
+// - 種別の選択は廃止。メモは1種類（ロディアのブロックメモ風の罫線入り）
+//   新規は保存時に種別 "note" として記録する。過去の journal / read_later も
+//   そのまま一覧に出る（消さない）
 
 import * as store from "./store.js";
 import * as gas from "./gas-client.js";
 import * as outbox from "./outbox.js";
-import { MEMO_TYPE_DEFS } from "./config.js";
 import { toast, showSpinner, hideSpinner } from "./toast.js";
-import { todayYmd, nowJst, addDaysYmd, parseHhMm } from "./date-util.js";
+import { todayYmd, nowJst, addDaysYmd } from "./date-util.js";
 
 const state = {
-  filterType: "all", // all | journal | note | read_later
   searchQuery: "",
   sortDesc: true,
   view: "list", // list | detail
@@ -41,13 +41,7 @@ function paintRoot() {
     <div class="memo-tab">
       <div class="memo-controls">
         <div class="memo-search-row">
-          <input type="search" id="memo-q" placeholder="検索（本文・タグ）" value="${escapeAttr(state.searchQuery)}" />
-          <select id="memo-filter">
-            <option value="all">全て</option>
-            <option value="journal">ジャーナル</option>
-            <option value="note">ノート</option>
-            <option value="read_later">あとで読む</option>
-          </select>
+          <input type="search" id="memo-q" placeholder="検索（本文）" value="${escapeAttr(state.searchQuery)}" />
         </div>
         <div class="memo-action-row">
           <button class="btn-sort" id="memo-sort">${state.sortDesc ? "新しい順" : "古い順"}</button>
@@ -57,7 +51,6 @@ function paintRoot() {
       <button id="btn-new-memo" class="fab" aria-label="新規メモ">＋</button>
     </div>
   `;
-  rootEl.querySelector("#memo-filter").value = state.filterType;
   bindList();
   paintBody();
 }
@@ -70,10 +63,6 @@ function bindList() {
     clearTimeout(t);
     t = setTimeout(paintBody, 200);
   });
-  rootEl.querySelector("#memo-filter").addEventListener("change", (e) => {
-    state.filterType = e.target.value;
-    paintBody();
-  });
   rootEl.querySelector("#memo-sort").addEventListener("click", () => {
     state.sortDesc = !state.sortDesc;
     rootEl.querySelector("#memo-sort").textContent = state.sortDesc
@@ -83,7 +72,7 @@ function bindList() {
   });
   rootEl
     .querySelector("#btn-new-memo")
-    .addEventListener("click", openTypePicker);
+    .addEventListener("click", () => openEditor(newEntry()));
 }
 
 // ---------- List body ----------
@@ -95,8 +84,6 @@ function paintBody() {
   const needle = state.searchQuery.trim().toLowerCase();
   const filtered = all.filter((e) => {
     if (e.deleted) return false;
-    if (state.filterType !== "all" && e.entry_type !== state.filterType)
-      return false;
     if (needle) {
       const hay = (
         String(e.title || "") +
@@ -149,15 +136,18 @@ function paintBody() {
 }
 
 function memoRowHtml(en) {
-  const def = MEMO_TYPE_DEFS[en.entry_type] || MEMO_TYPE_DEFS.note;
   const hhmm = extractHhMmFromCreated(en.created_at);
-  const title =
-    en.title ||
-    (en.entry_type === "read_later"
-      ? firstLine(en.body)
-      : firstLine(en.body)) ||
-    "(無題)";
-  const preview = firstLine(en.body || "", 80);
+  const title = en.title || firstLine(en.body) || "(無題)";
+  // タイトルが無いときは本文の1行目が見出しになる。その場合の下段は2行目以降を出す
+  const preview = en.title
+    ? firstLine(en.body || "", 80)
+    : firstLine(
+        String(en.body || "")
+          .split(/\r?\n/)
+          .slice(1)
+          .join(" "),
+        80,
+      );
   const pinIcon = en.pinned ? `<span class="memo-pin-icon">📌</span>` : "";
   const claudeBadge = isClaudeTaken(en)
     ? `<span class="memo-claude-badge" title="Claude取込み済み">✓Claude</span>`
@@ -167,7 +157,6 @@ function memoRowHtml(en) {
       <div class="memo-row-action memo-row-pin" data-action="pin">${en.pinned ? "ピン解除" : "ピン留め"}</div>
       <div class="memo-row-action memo-row-del" data-action="del">削除</div>
       <div class="memo-row" data-id="${escapeAttr(en.id)}">
-        <div class="memo-type-bar" style="background:${def.color}"></div>
         <div class="memo-row-inner">
           <div class="memo-row-head">
             ${pinIcon}
@@ -305,7 +294,6 @@ function renderDetail() {
   if (!en) {
     return `<div class="memo-detail"><p class="empty-hint">見つかりませんでした。</p><button class="btn-ghost" id="d-back">← 戻る</button></div>`;
   }
-  const def = MEMO_TYPE_DEFS[en.entry_type] || MEMO_TYPE_DEFS.note;
   const bodyHtml = linkifyBody(en.body || "");
   const hhmm = extractHhMmFromCreated(en.created_at);
   const claudeBadgeDetail = isClaudeTaken(en)
@@ -315,14 +303,13 @@ function renderDetail() {
     <div class="memo-detail">
       <div class="memo-detail-header">
         <button class="btn-back" id="d-back">← 戻る</button>
-        <span class="memo-detail-label" style="background:${def.color}">${escapeHtml(def.label)}</span>
         <span class="memo-detail-time">${escapeHtml(en.date || "")} ${escapeHtml(hhmm)}</span>
         ${claudeBadgeDetail}
         <button class="btn-take-sm" id="d-take">取込む</button>
       </div>
       ${en.title ? `<h2 class="memo-detail-title">${escapeHtml(en.title)}</h2>` : ""}
       ${en.tags ? `<div class="memo-detail-tags">${escapeHtml(en.tags)}</div>` : ""}
-      <div class="memo-detail-body">${bodyHtml}</div>
+      <div class="memo-detail-body memo-paper">${bodyHtml}</div>
       <div class="memo-detail-footer">
         <button class="btn-ghost" id="d-edit">編集</button>
         <button class="btn-danger" id="d-delete">削除</button>
@@ -359,44 +346,13 @@ function backToList() {
 
 // ---------- FAB / Type picker / Editor ----------
 
-function openTypePicker() {
-  const modal = document.createElement("div");
-  modal.className = "modal-backdrop";
-  modal.innerHTML = `
-    <div class="modal">
-      <header>種別を選択</header>
-      <div class="modal-body">
-        <button class="btn-type" data-type="journal" style="background:${MEMO_TYPE_DEFS.journal.color}">ジャーナル</button>
-        <button class="btn-type" data-type="note" style="background:${MEMO_TYPE_DEFS.note.color}">ノート</button>
-        <button class="btn-type" data-type="read_later" style="background:${MEMO_TYPE_DEFS.read_later.color}">あとで読む</button>
-      </div>
-      <footer>
-        <div style="flex:1"></div>
-        <button class="btn-ghost" id="p-cancel">キャンセル</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(modal);
-  const close = () => modal.remove();
-  modal.querySelector("#p-cancel").addEventListener("click", close);
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) close();
-  });
-  modal.querySelectorAll(".btn-type").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const type = btn.dataset.type;
-      close();
-      openEditor(newEntry(type));
-    });
-  });
-}
-
-function newEntry(type) {
+function newEntry() {
   const today = todayYmd();
   const now = nowJst();
   const hh = now.slice(11, 13);
   return {
     id: cryptoUuid(),
-    entry_type: type,
+    entry_type: "note",
     date: today,
     hour_slot: String(parseInt(hh, 10)),
     title: "",
@@ -414,56 +370,22 @@ function newEntry(type) {
 function openEditor(existing) {
   const en = { ...existing };
   const isNew = !!en._isNew;
-  const type = en.entry_type;
-  const def = MEMO_TYPE_DEFS[type] || MEMO_TYPE_DEFS.note;
 
-  let bodyHtml = "";
-  if (type === "journal") {
-    bodyHtml = `
-      <label>タイトル（任意）
-        <input type="text" id="m-title" value="${escapeAttr(en.title || "")}" autocomplete="off" />
-      </label>
-      <label>本文（必須）
-        <textarea id="m-body" rows="6">${escapeHtml(en.body || "")}</textarea>
-      </label>
-      <label>タグ（任意）
-        <input type="text" id="m-tags" value="${escapeAttr(en.tags || "")}" autocomplete="off" />
-      </label>
-    `;
-  } else if (type === "note") {
-    bodyHtml = `
-      <label>タイトル
-        <input type="text" id="m-title" value="${escapeAttr(en.title || "")}" autocomplete="off" />
-      </label>
-      <label>本文
-        <textarea id="m-body" rows="6">${escapeHtml(en.body || "")}</textarea>
-      </label>
-      <label>タグ
-        <input type="text" id="m-tags" value="${escapeAttr(en.tags || "")}" autocomplete="off" />
-      </label>
-    `;
-  } else {
-    const existingUrl = extractUrlFromBody(en.body || "");
-    bodyHtml = `
-      <label>URL（必須）
-        <input type="url" id="m-url" value="${escapeAttr(existingUrl)}" autocomplete="off" placeholder="https://…" />
-      </label>
-      <button class="btn-ghost" id="m-fetch" type="button">タイトル取得</button>
-      <label>タイトル
-        <input type="text" id="m-title" value="${escapeAttr(en.title || "")}" autocomplete="off" />
-      </label>
-      <label>タグ（任意）
-        <input type="text" id="m-tags" value="${escapeAttr(en.tags || "")}" autocomplete="off" />
-      </label>
-    `;
-  }
+  // メモは本文1つだけ。ロディア風の罫線入り用紙に書く。
+  // 過去メモにタイトルが付いている場合だけ、消えないようにタイトル欄も出す
+  const titleHtml = en.title
+    ? `<input type="text" id="m-title" class="memo-title-input" value="${escapeAttr(en.title)}" autocomplete="off" placeholder="タイトル" />`
+    : "";
 
   const modal = document.createElement("div");
   modal.className = "modal-backdrop";
   modal.innerHTML = `
-    <div class="modal">
-      <header>${isNew ? "新規" : "編集"}：${escapeHtml(def.label)}</header>
-      <div class="modal-body">${bodyHtml}</div>
+    <div class="modal memo-modal">
+      <header>${isNew ? "新しいメモ" : "メモを編集"}</header>
+      <div class="modal-body memo-modal-body">
+        ${titleHtml}
+        <textarea id="m-body" class="memo-paper memo-paper-input" rows="9" placeholder="ここにメモ">${escapeHtml(en.body || "")}</textarea>
+      </div>
       <footer>
         <div style="flex:1"></div>
         <button class="btn-ghost" id="m-cancel">キャンセル</button>
@@ -477,66 +399,18 @@ function openEditor(existing) {
     if (e.target === modal) close();
   });
 
-  if (type === "read_later") {
-    modal.querySelector("#m-fetch").addEventListener("click", async () => {
-      const url = modal.querySelector("#m-url").value.trim();
-      if (!url) {
-        toast("URLを入力してください", "error");
-        return;
-      }
-      showSpinner();
-      try {
-        const res = await gas.fetchUrlTitle(url);
-        if (res && res.title) {
-          modal.querySelector("#m-title").value = res.title;
-          toast("タイトルを取得しました", "success");
-        } else {
-          toast("取得失敗：手入力してください", "warn");
-        }
-      } catch (err) {
-        toast("取得失敗：" + err.message, "error");
-      } finally {
-        hideSpinner();
-      }
-    });
-  }
-
   modal.querySelector("#m-save").addEventListener("click", async () => {
     const updated = { ...en };
     delete updated._isNew;
-    if (type === "journal") {
-      const body = modal.querySelector("#m-body").value.trim();
-      if (!body) {
-        toast("本文を入力してください", "error");
-        return;
-      }
-      updated.title = modal.querySelector("#m-title").value.trim();
-      updated.body = body;
-      updated.tags = modal.querySelector("#m-tags").value.trim();
-    } else if (type === "note") {
-      const title = modal.querySelector("#m-title").value.trim();
-      const body = modal.querySelector("#m-body").value.trim();
-      if (!title && !body) {
-        toast("タイトルか本文を入力してください", "error");
-        return;
-      }
-      updated.title = title;
-      updated.body = body;
-      updated.tags = modal.querySelector("#m-tags").value.trim();
-    } else {
-      const url = modal.querySelector("#m-url").value.trim();
-      if (!url) {
-        toast("URLを入力してください", "error");
-        return;
-      }
-      if (!/^https?:\/\//i.test(url)) {
-        toast("http / https のURLを入力してください", "error");
-        return;
-      }
-      updated.title = modal.querySelector("#m-title").value.trim();
-      updated.tags = modal.querySelector("#m-tags").value.trim();
-      updated.body = url;
+    const body = modal.querySelector("#m-body").value.trim();
+    const titleEl = modal.querySelector("#m-title");
+    const title = titleEl ? titleEl.value.trim() : en.title || "";
+    if (!title && !body) {
+      toast("メモを入力してください", "error");
+      return;
     }
+    updated.title = title;
+    updated.body = body;
     updated.updated_at = nowJst();
     updated.deleted = 0;
     close();
@@ -717,11 +591,6 @@ function firstLine(s, max) {
     .trim();
   if (max && t.length > max) return t.slice(0, max) + "…";
   return t;
-}
-
-function extractUrlFromBody(body) {
-  const m = String(body || "").match(/^https?:\/\/\S+/);
-  return m ? m[0] : "";
 }
 
 function linkifyBody(body) {

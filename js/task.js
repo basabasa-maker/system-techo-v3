@@ -1,7 +1,8 @@
 // task.js - Task タブのUI実装
 // - 一覧（ステータス別グループ、完了は折りたたみ）
 // - フィルタ（ステータス・優先度）
-// - 並び替え（期限／優先度／作成順）
+// - 並び替え（期限／優先度／作成順／手動）
+// - 行の長押しで上下に移動（手動並びに切り替わる）、右スワイプでピン留め
 // - 新規／編集／削除／完了トグル
 
 import * as store from "./store.js";
@@ -9,6 +10,7 @@ import * as gas from "./gas-client.js";
 import * as outbox from "./outbox.js";
 import { toast, showSpinner, hideSpinner } from "./toast.js";
 import { nowJst, todayYmd, dueLabel } from "./date-util.js";
+import { enableLongPressReorder, justDragged } from "./reorder.js";
 
 const PRIORITY_LABEL = { high: "高", mid: "中", low: "低" };
 const PRIORITY_ORDER = { high: 0, mid: 1, low: 2 };
@@ -54,6 +56,7 @@ export function renderTaskTab(container) {
               <option value="due">期限</option>
               <option value="priority">優先度</option>
               <option value="created">作成順</option>
+              <option value="manual">手動</option>
             </select>
           </label>
         </div>
@@ -112,14 +115,21 @@ function renderList() {
 
   sortInPlace(active);
   sortInPlace(done);
+  const pinned = active.filter((t) => t.pinned);
+  const unpinned = active.filter((t) => !t.pinned);
 
   let html = "";
   if (active.length === 0 && done.length === 0) {
     html = `<p class="empty-hint">タスクはまだありません。右下の＋で追加してください。</p>`;
   } else {
-    if (active.length > 0) {
-      html += `<section class="task-group"><h2>進行中（${active.length}）</h2><ul class="task-items">`;
-      for (const t of active) html += taskItemHtml(t);
+    if (pinned.length > 0) {
+      html += `<section class="task-group"><h2>📌 ピン留め（${pinned.length}）</h2><ul class="task-items" data-group="pinned">`;
+      for (const t of pinned) html += taskItemHtml(t);
+      html += `</ul></section>`;
+    }
+    if (unpinned.length > 0) {
+      html += `<section class="task-group"><h2>進行中（${unpinned.length}）</h2><ul class="task-items" data-group="active">`;
+      for (const t of unpinned) html += taskItemHtml(t);
       html += `</ul></section>`;
     }
     if (done.length > 0) {
@@ -159,6 +169,7 @@ function renderList() {
 
     // 本文タップ → 編集モーダル
     wrap.querySelector(".task-body").addEventListener("click", () => {
+      if (justDragged()) return;
       if (isSwipedOrSwiping(wrap)) {
         resetAllTaskSwipes();
         return;
@@ -174,9 +185,59 @@ function renderList() {
       confirmDeleteTask(id);
     });
 
-    // スワイプ（左方向のみで削除ボタン露出）
+    // スワイプ（左で削除ボタン露出、右でピン留め切替）
     bindTaskSwipe(wrap, row);
   });
+
+  // 長押しで上下に移動。ピン留めと通常は別の列なので、列の中だけで入れ替える
+  listEl.querySelectorAll("ul.task-items[data-group]").forEach((ul) => {
+    enableLongPressReorder(ul, {
+      itemSelector: ".task-item-wrap",
+      onReorder: onReorderTasks,
+    });
+  });
+}
+
+// 並べ替え結果を sort_order に保存する（変わった行だけ1件ずつ送信）
+async function onReorderTasks(ids) {
+  const all = store.loadTasks();
+  const byId = new Map(all.map((t) => [t.id, t]));
+  const changed = [];
+  ids.forEach((id, i) => {
+    const t = byId.get(id);
+    if (!t) return;
+    const order = (i + 1) * 10;
+    if (Number(t.sort_order) !== order) {
+      const next = { ...t, sort_order: order, updated_at: nowJst() };
+      store.upsertLocal(next);
+      changed.push(next);
+    }
+  });
+  state.sortBy = "manual";
+  const sel = rootEl && rootEl.querySelector("#f-sort");
+  if (sel) sel.value = "manual";
+  renderList();
+  for (const t of changed) await pushTask(t);
+}
+
+async function togglePin(id) {
+  const t = store.loadTasks().find((x) => x.id === id);
+  if (!t) return;
+  const next = { ...t, pinned: t.pinned ? 0 : 1, updated_at: nowJst() };
+  store.upsertLocal(next);
+  renderList();
+  await pushTask(next);
+  toast(next.pinned ? "ピン留めしました" : "ピン留めを外しました", "success");
+}
+
+// 画面を止めずに1件送る。失敗したら送信キューへ
+async function pushTask(task) {
+  try {
+    await gas.pushTaskUpsert(task);
+  } catch (e) {
+    await outbox.enqueue({ type: "task_upsert", payload: task });
+    toast("オフライン：送信キューに追加", "warn");
+  }
 }
 
 function isSwipedOrSwiping(wrap) {
@@ -228,8 +289,8 @@ function bindTaskSwipe(wrap, row) {
         return;
       }
       dx = diffX;
-      // 左スワイプのみ有効（右は0に丸める）
-      const clamped = Math.min(0, Math.max(-140, dx));
+      // 左は削除ボタン露出、右はピン留め（途中まで引き出せる）
+      const clamped = Math.min(100, Math.max(-140, dx));
       row.style.transform = `translateX(${clamped}px)`;
     },
     { passive: true },
@@ -242,6 +303,9 @@ function bindTaskSwipe(wrap, row) {
     if (dx <= -THRESHOLD) {
       row.style.transform = "translateX(-100px)";
       wrap.classList.add("swiped-left");
+    } else if (dx >= THRESHOLD && !justDragged()) {
+      row.style.transform = "";
+      togglePin(wrap.dataset.id);
     } else {
       row.style.transform = "";
     }
@@ -275,6 +339,15 @@ function sortInPlace(arr) {
         : 1;
     },
     created: (a, b) => ((a.created_at || "") < (b.created_at || "") ? 1 : -1),
+    // 手動: 長押しで決めた順。未設定のものは末尾（作成の新しい順）
+    manual: (a, b) => {
+      const ao = Number(a.sort_order) || 0;
+      const bo = Number(b.sort_order) || 0;
+      if (ao && bo) return ao - bo;
+      if (ao) return -1;
+      if (bo) return 1;
+      return (a.created_at || "") < (b.created_at || "") ? 1 : -1;
+    },
   }[state.sortBy];
   arr.sort(cmp);
 }
@@ -298,6 +371,7 @@ function taskItemHtml(t) {
   const prClass = `pri-${t.priority || "mid"}`;
   return `
     <li class="task-item-wrap" data-id="${escapeHtml(t.id)}">
+      <div class="task-row-pinhint">${t.pinned ? "解除" : "📌"}</div>
       <div class="task-row-action task-row-del" data-action="del">削除</div>
       <div class="task-item ${checked ? "is-done" : ""}" data-id="${escapeHtml(t.id)}">
         <button class="task-check ${checked ? "checked" : ""}" aria-label="完了トグル">${checked ? "✓" : ""}</button>
@@ -494,6 +568,9 @@ async function flushOutbox() {
         await gas.pushTaskUpsert(item.op.payload);
       } else if (item.op.type === "task_delete") {
         await gas.pushTaskDelete(item.op.payload.id);
+      } else {
+        // 他タブ（メモ・習慣・食事）の送信待ちは、そのタブ側で送る。ここでは消さない
+        continue;
       }
       await outbox.remove(item.id);
     } catch (e) {

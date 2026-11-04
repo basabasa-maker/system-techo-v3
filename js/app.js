@@ -5,10 +5,12 @@ import { LS_KEY_ACTIVE_TAB } from "./config.js";
 import { renderTaskTab, pullAndRender as pullTask } from "./task.js";
 import { renderDailyTab, pullAndRender as pullDaily } from "./daily.js";
 import { renderMemoTab, pullAndRender as pullMemo } from "./memo.js";
+import { renderHabitTab, pullAndRender as pullHabit } from "./habit.js";
+import { renderMealTab, pullAndRender as pullMeal } from "./meal.js";
 import { daysAgoYmd } from "./date-util.js";
 import { toast } from "./toast.js";
 
-const TABS = ["task", "daily", "memo"];
+const TABS = ["task", "daily", "memo", "habit", "meal"];
 
 const appState = {
   activeTab: localStorage.getItem(LS_KEY_ACTIVE_TAB) || "task",
@@ -43,6 +45,10 @@ function switchTab(tab) {
     renderDailyTab(content);
   } else if (tab === "memo") {
     renderMemoTab(content);
+  } else if (tab === "habit") {
+    renderHabitTab(content);
+  } else if (tab === "meal") {
+    renderMealTab(content);
   }
 }
 
@@ -57,6 +63,14 @@ async function onRefresh() {
   }
   if (appState.activeTab === "memo") {
     await pullMemo();
+    return;
+  }
+  if (appState.activeTab === "habit") {
+    await pullHabit();
+    return;
+  }
+  if (appState.activeTab === "meal") {
+    await pullMeal();
     return;
   }
   toast("このタブは現在のSprintでは対象外です", "info");

@@ -156,3 +156,72 @@ export async function pushMemoInboxWrite(entryId, dateYmd) {
   if (!body.ok) throw new Error(body.error || "memo_inbox_write failed");
   return body.data;
 }
+
+// ---- 習慣 ----
+// 日付ごとに1件ずつ保存する。全件の取得・上書きはしない。
+
+export async function pullHabitItems() {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "habit_items");
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullHabitItems failed");
+  return body.data.items || null;
+}
+
+export async function pushHabitItems(items) {
+  const body = await fetchJson(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ type: "habit_items_upsert", items: items }),
+  });
+  if (!body.ok) throw new Error(body.error || "habit_items_upsert failed");
+  return body.data;
+}
+
+export async function pullHabitDay(dateYmd) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "habit_day");
+  url.searchParams.set("date", dateYmd);
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullHabitDay failed");
+  return body.data.values || null;
+}
+
+export async function pushHabitDay(dateYmd, values) {
+  const body = await fetchJson(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      type: "habit_day_upsert",
+      date: dateYmd,
+      values: values,
+    }),
+  });
+  if (!body.ok) throw new Error(body.error || "habit_day_upsert failed");
+  return body.data;
+}
+
+// ---- 食事 ----
+
+export async function pullMealMonth(monthYm) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "meal_month");
+  url.searchParams.set("month", monthYm);
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullMealMonth failed");
+  return body.data.days || {};
+}
+
+export async function pushMealDay(dateYmd, slots) {
+  const body = await fetchJson(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      type: "meal_day_upsert",
+      date: dateYmd,
+      slots: slots,
+    }),
+  });
+  if (!body.ok) throw new Error(body.error || "meal_day_upsert failed");
+  return body.data;
+}
