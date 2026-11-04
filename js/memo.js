@@ -291,6 +291,7 @@ function bindRowEvents(bodyEl) {
     let startY = 0;
     let dx = 0;
     let active = false;
+    let locked = null; // null=未決定 / "h"=横スワイプ / "v"=縦スクロール
     const THRESHOLD = 60;
     row.addEventListener(
       "touchstart",
@@ -302,6 +303,7 @@ function bindRowEvents(bodyEl) {
         startY = e.touches[0].clientY;
         dx = 0;
         active = true;
+        locked = null;
         wrap.classList.add("swiping");
         row.style.transition = "none";
       },
@@ -315,7 +317,12 @@ function bindRowEvents(bodyEl) {
         const y = e.touches[0].clientY;
         const diffX = x - startX;
         const diffY = y - startY;
-        if (Math.abs(diffY) > Math.abs(diffX)) {
+        // 動き始めの10pxは縦か横か決めない（縦スクロール中に行が横へ揺れるのを防ぐ）
+        if (locked === null) {
+          if (Math.max(Math.abs(diffX), Math.abs(diffY)) < 10) return;
+          locked = Math.abs(diffX) > Math.abs(diffY) * 1.5 ? "h" : "v";
+        }
+        if (locked === "v") {
           // 縦スクロール優先
           active = false;
           wrap.classList.remove("swiping");

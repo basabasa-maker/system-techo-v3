@@ -260,7 +260,8 @@ function bindTaskSwipe(wrap, row) {
   let startX = 0,
     startY = 0,
     dx = 0,
-    active = false;
+    active = false,
+    locked = null; // null=未決定 / "h"=横スワイプ / "v"=縦スクロール
   const THRESHOLD = 60;
   row.addEventListener(
     "touchstart",
@@ -271,6 +272,7 @@ function bindTaskSwipe(wrap, row) {
       startY = e.touches[0].clientY;
       dx = 0;
       active = true;
+      locked = null;
       wrap.classList.add("swiping");
       row.style.transition = "none";
     },
@@ -282,7 +284,12 @@ function bindTaskSwipe(wrap, row) {
       if (!active) return;
       const diffX = e.touches[0].clientX - startX;
       const diffY = e.touches[0].clientY - startY;
-      if (Math.abs(diffY) > Math.abs(diffX)) {
+      // 動き始めの10pxは縦か横か決めない（縦スクロール中に行が横へ揺れるのを防ぐ）
+      if (locked === null) {
+        if (Math.max(Math.abs(diffX), Math.abs(diffY)) < 10) return;
+        locked = Math.abs(diffX) > Math.abs(diffY) * 1.5 ? "h" : "v";
+      }
+      if (locked === "v") {
         active = false;
         wrap.classList.remove("swiping");
         row.style.transform = "";
