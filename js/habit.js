@@ -429,7 +429,8 @@ async function syncFromServer() {
   const seq = ++syncSeq;
   const ymd = state.date;
   try {
-    await flushHabitOutbox();
+    // 送信待ちが送れなくても、取得は続ける
+    await flushHabitOutbox().catch(() => {});
     const [items, values] = await Promise.all([
       gas.pullHabitItems(),
       gas.pullHabitDay(ymd),

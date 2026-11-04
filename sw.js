@@ -1,7 +1,7 @@
 // sw.js - Service Worker
 // 戦略:
 // - HTML: Network First
-// - CSS/JS/静的アセット: Cache First（URLに ?v=ビルド時刻 付与で更新）
+// - CSS/JS/静的アセット: Network First（毎回更新を確認。オフライン時のみ保存分を使う）
 // - キャッシュ名はビルド時刻バージョンを含め、デプロイ時に自動更新する
 
 const BUILD_VERSION = "20261104-220419";
@@ -61,14 +61,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // JS/CSS/画像: ネットワーク優先。毎回サーバーに「更新があるか」を確かめ、
+  // 新しければ新しいものを使う（部品ごとの版ずれで画面が止まるのを防ぐ）。
+  // 電波がないときだけ、手元に保存した分を使う
   event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+    fetch(req, { cache: "no-cache" })
+      .then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+        }
         return res;
-      });
-    }),
+      })
+      .catch(() => caches.match(req)),
   );
 });

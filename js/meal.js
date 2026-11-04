@@ -250,13 +250,15 @@ async function pushDay(ymd, slots) {
 async function syncMonth() {
   const key = monthKey();
   try {
-    await flushMealOutbox();
+    // 送信待ちが送れなくても、取得は続ける
+    await flushMealOutbox().catch(() => {});
     const days = await gas.pullMealMonth(key);
-    if (state.view !== "month" || monthKey() !== key) return;
+    // 取得した分は、月をすばやく切り替えた後でも必ず手元に保存する
     for (const ymd of Object.keys(days)) {
       saveDayLocal(ymd, normalizeSlots(days[ymd]));
     }
-    paint();
+    // 画面は、まだその月を見ているときだけ描き直す
+    if (state.view === "month" && monthKey() === key) paint();
   } catch (e) {
     // オフラインや未デプロイ時は、手元のキャッシュ表示のまま使い続ける
     console.warn("meal sync skipped:", e.message);

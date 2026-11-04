@@ -36,7 +36,8 @@ export function renderMemoTab(container) {
 // タブを開いたとき、画面を止めずに最新の一覧へ入れ替える（失敗しても手元の表示のまま）
 async function syncQuietly() {
   try {
-    await flushOutbox();
+    // 送信待ちが送れなくても、取得は続ける
+    await flushOutbox().catch(() => {});
     const res = await gas.pullMemoAll(addDaysYmd(todayYmd(), -365), 1000);
     store.saveMemoAll(res.entries || []);
     if (rootEl && state.view === "list" && rootEl.querySelector("#memo-body")) {
