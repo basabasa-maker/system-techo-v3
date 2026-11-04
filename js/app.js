@@ -9,6 +9,7 @@ import { renderHabitTab, pullAndRender as pullHabit } from "./habit.js";
 import { renderMealTab, pullAndRender as pullMeal } from "./meal.js";
 import { daysAgoYmd } from "./date-util.js";
 import { toast } from "./toast.js";
+import { initTheme } from "./theme.js";
 
 // 上のタブの並びは index.html の順（デイリー・タスク・習慣・食事・メモ）で固定
 const TABS = ["daily", "task", "habit", "meal", "memo"];
@@ -28,6 +29,7 @@ function init() {
   });
 
   document.getElementById("btn-refresh").addEventListener("click", onRefresh);
+  initTheme();
 
   if (!TABS.includes(appState.activeTab)) appState.activeTab = "task";
   switchTab(appState.activeTab);

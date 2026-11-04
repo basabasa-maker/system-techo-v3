@@ -129,7 +129,7 @@ function renderList() {
     html = `<p class="empty-hint">タスクはまだありません。右下の＋で追加してください。</p>`;
   } else {
     if (todays.length > 0) {
-      html += `<section class="task-group task-today"><h2>🔥 今日やること（${todays.length}）</h2><ul class="task-items">`;
+      html += `<section class="task-group task-today"><h2>🔥 今日やること（${todays.length}）</h2><ul class="task-items" data-group="today">`;
       for (const t of todays) html += taskItemHtml(t);
       html += `</ul></section>`;
     }

@@ -13,14 +13,27 @@
     />
     <meta name="theme-color" content="#1e3a5f" />
     <title>システム手帳</title>
+    <script>
+      // 背景色を最初の描画前に反映（ちらつき防止）
+      try {
+        var _t = localStorage.getItem("sth_v3_theme");
+        var _k = { white: 1, cream: 1, sky: 1, mint: 1, pink: 1, lavender: 1 };
+        if (_t) {
+          document.documentElement.dataset.theme = _t;
+          document.documentElement.dataset.kind = _k[_t] ? "light" : "dark";
+        }
+      } catch (e) {}
+    </script>
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
-    <link rel="stylesheet" href="css/style.css?v=20261105-070549" />
+    <link rel="stylesheet" href="css/style.css?v=20261105-072912" />
   </head>
   <body>
     <div id="app-shell">
       <header id="app-header">
         <h1>システム手帳</h1>
+        <div class="header-btns">
+        <button id="btn-theme" class="btn-theme" aria-label="背景色">🎨</button>
         <button id="btn-refresh" class="btn-refresh" aria-label="更新">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path
@@ -29,6 +42,7 @@
           </svg>
           更新
         </button>
+        </div>
       </header>
       <nav id="tab-bar">
         <button class="tab-btn" data-tab="daily">デイリー</button>
@@ -41,6 +55,6 @@
         <div id="tab-content"></div>
       </main>
     </div>
-    <script type="module" src="js/app.js?v=20261105-070549"></script>
+    <script type="module" src="js/app.js?v=20261105-072912"></script>
   </body>
 </html>

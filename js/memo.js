@@ -503,7 +503,19 @@ function openEditor(existing) {
     </div>`;
   document.body.appendChild(modal);
   bindPaperTap(modal.querySelector("#m-body"));
-  const close = () => modal.remove();
+  // キーボードで隠れないよう、見えている高さに合わせる
+  const vv = window.visualViewport;
+  const fit = () => {
+    if (vv) modal.style.setProperty("--memo-h", vv.height + "px");
+  };
+  if (vv) {
+    vv.addEventListener("resize", fit);
+    fit();
+  }
+  const close = () => {
+    if (vv) vv.removeEventListener("resize", fit);
+    modal.remove();
+  };
   modal.querySelector("#m-cancel").addEventListener("click", close);
   modal.addEventListener("click", (e) => {
     if (e.target === modal) close();
