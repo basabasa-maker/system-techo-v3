@@ -136,7 +136,8 @@ function itemHtml(item) {
     item.type === "time"
       ? `<input type="time" class="habit-value habit-value-input ${filled ? "filled" : ""}" value="${escapeHtml(toHhMm(v))}" />`
       : `<input type="number" inputmode="decimal" step="any" placeholder="入力" class="habit-value habit-value-input ${filled ? "filled" : ""}" value="${filled ? escapeHtml(v) : ""}" />`;
-  const unit = item.type !== "time" && item.unit ? `<span class="habit-unit-out">${escapeHtml(item.unit)}</span>` : "";
+  // 単位欄は空でも幅を確保し、入力欄の左右位置を全項目でそろえる
+  const unit = `<span class="habit-unit-out">${item.type !== "time" && item.unit ? escapeHtml(item.unit) : ""}</span>`;
   return `
     <li class="habit-item" data-id="${escapeHtml(item.id)}">
       ${del}

@@ -153,28 +153,14 @@ function openDay(ymd) {
   paint();
 }
 
-// 時刻は「時」「分」の2つの選択欄。分は15分刻み（それ以外の既存値は残す）
-function timeSelectsHtml(slot, selected) {
+// 時刻は1つの時刻入力（iPhoneでは時と分が並んだ回転式の選択になる）
+function timeInputHtml(slot, selected) {
   const m = String(selected || "").match(/^(\d{1,2}):(\d{2})/);
-  const hh = m ? pad2(parseInt(m[1], 10)) : "";
-  const mm = m ? m[2] : "";
-  let hOpts = `<option value="">--</option>`;
-  for (let h = 0; h < 24; h++) {
-    const v = pad2(h);
-    hOpts += `<option value="${v}" ${v === hh ? "selected" : ""}>${h}</option>`;
-  }
-  const mins = [];
-  for (let x = 0; x < 60; x += MEAL_TIME_STEP_MIN) mins.push(pad2(x));
-  if (mm && !mins.includes(mm)) mins.push(mm);
-  mins.sort();
-  let mOpts = `<option value="">--</option>`;
-  for (const v of mins) mOpts += `<option value="${v}" ${v === mm ? "selected" : ""}>${v}</option>`;
+  const v = m ? `${pad2(parseInt(m[1], 10))}:${m[2]}` : "";
   return `
     <span class="meal-time-wrap">
-      <select class="meal-h" data-slot="${slot}" aria-label="${slot}の時">${hOpts}</select>
-      <span class="meal-colon">時</span>
-      <select class="meal-mi" data-slot="${slot}" aria-label="${slot}の分">${mOpts}</select>
-      <span class="meal-colon">分</span>
+      <input type="time" class="meal-time" data-slot="${slot}" step="${MEAL_TIME_STEP_MIN * 60}" value="${v}" aria-label="${slot}の時刻" />
+      <button class="meal-time-clear" data-slot="${slot}" aria-label="時刻を消す" ${v ? "" : "hidden"}>×</button>
     </span>`;
 }
 
@@ -186,7 +172,7 @@ function paintDay() {
       <section class="meal-slot" data-slot="${s}">
         <div class="meal-slot-head">
           <h2>${s}</h2>
-          ${timeSelectsHtml(s, state.slots[s].time)}
+          ${timeInputHtml(s, state.slots[s].time)}
         </div>
         <textarea class="meal-text" data-slot="${s}" rows="2" placeholder="食べたものをメモ">${escapeHtml(state.slots[s].text)}</textarea>
       </section>`,
@@ -209,22 +195,19 @@ function paintDay() {
     syncMonth();
   });
   rootEl.querySelectorAll(".meal-time-wrap").forEach((wrap) => {
-    const hSel = wrap.querySelector(".meal-h");
-    const mSel = wrap.querySelector(".meal-mi");
-    const slot = hSel.dataset.slot;
-    const update = (changed) => {
-      // 時だけ選んだら分は00、時を「--」に戻したら全部消す
-      if (changed === "h") {
-        if (!hSel.value) mSel.value = "";
-        else if (!mSel.value) mSel.value = "00";
-      } else if (changed === "m" && mSel.value && !hSel.value) {
-        hSel.value = pad2(new Date().getHours());
-      }
-      state.slots[slot].time = hSel.value && mSel.value ? `${hSel.value}:${mSel.value}` : "";
+    const inp = wrap.querySelector(".meal-time");
+    const clr = wrap.querySelector(".meal-time-clear");
+    const slot = inp.dataset.slot;
+    const commit = () => {
+      state.slots[slot].time = inp.value || "";
+      clr.hidden = !inp.value;
       onChanged();
     };
-    hSel.addEventListener("change", () => update("h"));
-    mSel.addEventListener("change", () => update("m"));
+    inp.addEventListener("change", commit);
+    clr.addEventListener("click", () => {
+      inp.value = "";
+      commit();
+    });
   });
   rootEl.querySelectorAll(".meal-text").forEach((ta) => {
     ta.addEventListener("input", () => {

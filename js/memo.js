@@ -506,14 +506,20 @@ function openEditor(existing) {
   // キーボードで隠れないよう、見えている高さに合わせる
   const vv = window.visualViewport;
   const fit = () => {
-    if (vv) modal.style.setProperty("--memo-h", vv.height + "px");
+    if (!vv) return;
+    modal.style.setProperty("--memo-h", vv.height + "px");
+    modal.firstElementChild.style.marginTop = vv.offsetTop + "px";
   };
   if (vv) {
     vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
     fit();
   }
   const close = () => {
-    if (vv) vv.removeEventListener("resize", fit);
+    if (vv) {
+      vv.removeEventListener("resize", fit);
+      vv.removeEventListener("scroll", fit);
+    }
     modal.remove();
   };
   modal.querySelector("#m-cancel").addEventListener("click", close);
