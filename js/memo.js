@@ -632,6 +632,7 @@ function bindKeyboardFit(...fields) {
   const start = () => {
     if (on) return;
     on = true;
+    shell.classList.add("kb-fit");
     vv.addEventListener("resize", fit);
     vv.addEventListener("scroll", fit);
     fit();
@@ -642,6 +643,7 @@ function bindKeyboardFit(...fields) {
       if (a && fields.includes(a)) return; // タイトル⇔本文の移動では戻さない
       if (!on) return;
       on = false;
+      shell.classList.remove("kb-fit");
       vv.removeEventListener("resize", fit);
       vv.removeEventListener("scroll", fit);
       shell.style.top = "";
@@ -664,6 +666,7 @@ function backToList() {
   detailPersist = null;
   const shell = document.getElementById("app-shell");
   if (shell) {
+    shell.classList.remove("kb-fit");
     shell.style.top = "";
     shell.style.bottom = "";
     shell.style.height = "";

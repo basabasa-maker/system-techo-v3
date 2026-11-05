@@ -2103,3 +2103,8 @@ textarea.memo-detail-text {
   text-decoration-color: var(--paper-ink);
   text-decoration-thickness: 1.5px;
 }
+
+/* メモ入力中、キーボードの動きに合わせて枠をなめらかに縮める */
+#app-shell.kb-fit {
+  transition: height 0.25s ease-out, top 0.25s ease-out;
+}
