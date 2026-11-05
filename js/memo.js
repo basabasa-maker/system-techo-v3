@@ -635,7 +635,7 @@ function bindKeyboardFit(...fields) {
   } catch (_) {}
   if (kbH < 200 || kbH > 600) kbH = 340;
   const apply = (h) => {
-    shell.style.top = vv.offsetTop + "px";
+    shell.style.top = "0px";
     shell.style.bottom = "auto";
     shell.style.height = Math.max(240, h) + "px";
   };
