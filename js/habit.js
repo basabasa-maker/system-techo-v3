@@ -165,7 +165,7 @@ function itemHtml(item) {
   // 単位欄は空でも幅を確保し、入力欄の左右位置を全項目でそろえる
   const unit = `<span class="habit-unit-out">${item.type !== "time" && item.unit ? escapeHtml(item.unit) : ""}</span>`;
   // 累積の項目：欄に入れた数が、そのまま合計に足される。合計は項目名の下に出す
-  const tail = `<button class="habit-clear" aria-label="${isCum ? "合計を0に戻す" : "消す"}" ${filled ? "" : "hidden"}>×</button>`;
+  const tail = `<button class="habit-clear" aria-label="${isCum ? "合計を0に戻す" : "消す"}" ${filled ? "" : "hidden"}><img src="icons/eraser.png" alt="" width="24" height="24" /></button>`;
   return `
     <li class="habit-item" data-id="${escapeHtml(item.id)}">
       ${del}

@@ -1446,8 +1446,13 @@ input.habit-value::placeholder {
   height: 44px;
   border: none;
   background: transparent;
-  color: var(--muted);
-  font-size: 18px;
+  padding: 0;
+}
+.habit-clear img {
+  display: block;
+  margin: 0 auto;
+  width: 24px;
+  height: 24px;
 }
 .habit-clear[hidden] {
   display: block;
