@@ -5,12 +5,25 @@ import * as gas from "./gas-client.js";
 import { LS_KEY_HABIT_DAY_PREFIX } from "./config.js";
 import { todayYmd, addDaysYmd, parseYmd } from "./date-util.js";
 
-const DAYS = 30;
+// 表示する期間（日数）。グラフ・履歴の上の切り替えで変える
+export const RANGES = [
+  { days: 30, label: "30日" },
+  { days: 90, label: "90日" },
+  { days: 180, label: "半年" },
+  { days: 400, label: "全期間" },
+];
+let rangeDays = 30;
+export function getRangeDays() {
+  return rangeDays;
+}
+export function setRangeDays(n) {
+  rangeDays = n;
+}
 
-export function last30() {
+export function lastDays() {
   const t = todayYmd();
   const out = [];
-  for (let i = DAYS - 1; i >= 0; i--) out.push(addDaysYmd(t, -i));
+  for (let i = rangeDays - 1; i >= 0; i--) out.push(addDaysYmd(t, -i));
   return out;
 }
 
@@ -26,7 +39,7 @@ function localDay(ymd) {
 
 // 30日分（日付→記録）。サーバー分を手元の控えにも書く
 export async function loadRange() {
-  const days = last30();
+  const days = lastDays();
   let remote = {};
   try {
     remote = await gas.pullHabitRange(days[0], days[days.length - 1]);
@@ -121,10 +134,11 @@ function drawChart(canvas, statsEl, days, vals, unit, color, digits) {
   }
   // 日付の目盛り（5日おき）
   ctx.textAlign = "center";
+  const step = days.length <= 35 ? 7 : days.length <= 100 ? 14 : days.length <= 200 ? 30 : 60;
   days.forEach((d, i) => {
-    if (i % 7 !== 0 && !(i === days.length - 1 && i % 7 >= 4)) return;
+    if (i % step !== 0 && !(i === days.length - 1 && i % step >= step * 0.85)) return;
     const x = P.l + (cw * i) / (days.length - 1);
-    ctx.fillText(d.slice(5).replace("-", "/"), x, h - 8);
+    ctx.fillText(days.length > 200 ? d.slice(2, 7).replace("-", "/") : d.slice(5).replace("-", "/"), x, h - 8);
   });
   const xy = (i, v) => [P.l + (cw * i) / (days.length - 1), P.t + ch - ((v - mn) / rng) * ch];
   ctx.beginPath();
@@ -146,7 +160,7 @@ function drawChart(canvas, statsEl, days, vals, unit, color, digits) {
     if (v === null) return;
     const [x, y] = xy(i, v);
     ctx.beginPath();
-    ctx.arc(x, y, 3, 0, Math.PI * 2);
+    ctx.arc(x, y, days.length > 60 ? 1.6 : 3, 0, Math.PI * 2);
     ctx.fill();
   });
   const avg = fv.reduce((a, b) => a + b, 0) / fv.length;
@@ -154,25 +168,35 @@ function drawChart(canvas, statsEl, days, vals, unit, color, digits) {
   statsEl.innerHTML = `<div>平均:<span>${f(avg)}</span></div><div>最高:<span>${f(Math.max(...fv))}</span></div><div>最低:<span>${f(Math.min(...fv))}</span></div><div>記録:<span>${fv.length}日</span></div>`;
 }
 
+function rangeLabel() {
+  const r = RANGES.find((x) => x.days === rangeDays);
+  return r ? r.label : rangeDays + "日";
+}
+
 const CHARTS = [
-  { title: "体重（30日）", unit: "kg", color: "#2ec4a0", digits: 1, get: (v) => num(v, "weight") },
-  { title: "睡眠時間（30日）", unit: "h", color: "#af52de", digits: 1, get: (v, it) => sleepHours(v) },
-  { title: "歩数（30日）", unit: "歩", color: "#34c759", digits: 0, get: (v) => num(v, "steps") },
-  { title: "ルーチン達成率（30日）", unit: "%", color: "#ff9500", digits: 0, get: (v, it) => checkRate(v, it) },
-  { title: "水分摂取量（30日）", unit: "ml", color: "#4d9cff", digits: 0, get: (v) => num(v, "water") },
+  { title: "体重", unit: "kg", color: "#2ec4a0", digits: 1, get: (v) => num(v, "weight") },
+  { title: "睡眠時間", unit: "h", color: "#af52de", digits: 1, get: (v, it) => sleepHours(v) },
+  { title: "歩数", unit: "歩", color: "#34c759", digits: 0, get: (v) => num(v, "steps") },
+  { title: "ルーチン達成率", unit: "%", color: "#ff9500", digits: 0, get: (v, it) => checkRate(v, it) },
+  { title: "水分摂取量", unit: "ml", color: "#4d9cff", digits: 0, get: (v) => num(v, "water") },
 ];
 
 export function renderCharts(box, items, data) {
-  const days = last30();
+  let days = lastDays();
+  // 長い期間では、記録のない最初の部分を省く
+  if (rangeDays > 30) {
+    const first = days.findIndex((d) => data[d]);
+    if (first > 0) days = days.slice(first);
+  }
   box.innerHTML = CHARTS.map(
-    (c, i) => `<div class="chart-c"><div class="chart-t">${c.title}</div><canvas id="hc${i}"></canvas><div class="chart-s" id="hs${i}"></div></div>`,
+    (c, i) => `<div class="chart-c"><div class="chart-t">${c.title}（${rangeLabel()}）</div><canvas id="hc${i}"></canvas><div class="chart-s" id="hs${i}"></div></div>`,
   ).join("");
   requestAnimationFrame(() => {
     CHARTS.forEach((c, i) => {
       const vals = days.map((d) => {
         const v = data[d];
         if (!v) return null;
-        return c.title.startsWith("ルーチン") ? checkRate(v, items) : c.get(v, items);
+        return c.title === "ルーチン達成率" ? checkRate(v, items) : c.get(v, items);
       });
       const cv = box.querySelector("#hc" + i);
       if (cv) drawChart(cv, box.querySelector("#hs" + i), days, vals, c.unit, c.color, c.digits);

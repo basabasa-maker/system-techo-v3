@@ -6,6 +6,7 @@
 
 import * as gas from "./gas-client.js";
 import * as outbox from "./outbox.js";
+import * as sync from "./sync.js";
 import {
   MEAL_SLOTS,
   MEAL_TIME_STEP_MIN,
@@ -258,8 +259,10 @@ async function syncMonth() {
     // 送信待ちが送れなくても、取得は続ける
     await flushMealOutbox().catch(() => {});
     const days = await gas.pullMealMonth(key);
-    // 取得した分は、月をすばやく切り替えた後でも必ず手元に保存する
+    const keys = await sync.pendingKeys();
+    // 取得した分は、月をすばやく切り替えた後でも必ず手元に保存する（未送信の日は消さない）
     for (const ymd of Object.keys(days)) {
+      if (keys.has("meal:" + ymd) || (pendingPush && pendingPush.ymd === ymd)) continue;
       saveDayLocal(ymd, normalizeSlots(days[ymd]));
     }
     // 画面は、まだその月を見ているときだけ描き直す
@@ -271,13 +274,7 @@ async function syncMonth() {
 }
 
 export async function flushMealOutbox() {
-  const items = await outbox.listAll();
-  for (const it of items) {
-    if (it.op.type === "meal_day_upsert") {
-      await gas.pushMealDay(it.op.payload.date, it.op.payload.slots);
-      await outbox.remove(it.id);
-    }
-  }
+  return sync.flushAll();
 }
 
 // 更新ボタンから呼ばれる
@@ -285,14 +282,16 @@ export async function pullAndRender() {
   showSpinner();
   try {
     flushPendingPush();
-    await flushMealOutbox();
+    await flushMealOutbox().catch(() => {});
     const days = await gas.pullMealMonth(monthKey());
+    const keys = await sync.pendingKeys();
     for (const ymd of Object.keys(days)) {
+      if (keys.has("meal:" + ymd)) continue;
       saveDayLocal(ymd, normalizeSlots(days[ymd]));
     }
     if (state.view === "day") state.slots = loadDay(state.date);
     paint();
-    toast("最新化しました", "success");
+    toast("最新化しました" + (await sync.pendingNote()), "success");
   } catch (e) {
     console.error(e);
     toast("取得に失敗しました: " + e.message, "error");

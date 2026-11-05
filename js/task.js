@@ -6,6 +6,7 @@
 // - 新規／編集／削除／完了トグル
 
 import * as store from "./store.js";
+import * as sync from "./sync.js";
 import * as gas from "./gas-client.js";
 import * as outbox from "./outbox.js";
 import { toast, showSpinner, hideSpinner } from "./toast.js";
@@ -577,11 +578,11 @@ export async function pullAndRender(sinceYmd, quiet = false) {
   if (!quiet) showSpinner();
   try {
     // outbox を先に flush
-    await flushOutbox();
-    const tasks = await gas.pullTasks(sinceYmd);
-    store.mergeTasks(tasks);
+    await flushOutbox().catch(() => {}); // 送信待ちが詰まっていても、取得は続ける
+    const tasks = await gas.pullTasks("");
+    store.mergeTasks(tasks, await sync.pendingKeys());
     renderList();
-    if (!quiet) toast("最新化しました", "success");
+    if (!quiet) toast("最新化しました" + (await sync.pendingNote()), "success");
   } catch (e) {
     console.error(e);
     if (!quiet) toast("取得に失敗しました: " + e.message, "error");
@@ -591,21 +592,5 @@ export async function pullAndRender(sinceYmd, quiet = false) {
 }
 
 async function flushOutbox() {
-  const items = await outbox.listAll();
-  for (const item of items) {
-    try {
-      if (item.op.type === "task_upsert") {
-        await gas.pushTaskUpsert(item.op.payload);
-      } else if (item.op.type === "task_delete") {
-        await gas.pushTaskDelete(item.op.payload.id);
-      } else {
-        // 他タブ（メモ・習慣・食事）の送信待ちは、そのタブ側で送る。ここでは消さない
-        continue;
-      }
-      await outbox.remove(item.id);
-    } catch (e) {
-      // 失敗したら残して次回に回す
-      throw e;
-    }
-  }
+  return sync.flushAll();
 }

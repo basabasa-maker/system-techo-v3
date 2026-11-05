@@ -74,11 +74,13 @@ export function saveTasks(tasks) {
 
 // サーバからの差分を既存キャッシュにマージ。
 // 同一 id は updated_at が新しい方を採用、deleted=1 はキャッシュから除去。
-export function mergeTasks(serverTasks) {
+export function mergeTasks(serverTasks, pending) {
   const current = loadTasks();
   const byId = new Map();
   for (const t of current) byId.set(t.id, t);
   for (const st of serverTasks) {
+    // まだ送っていない手元の変更があるタスクは、取得結果で上書き・削除しない
+    if (pending && pending.has("task:" + st.id)) continue;
     if (st.deleted) {
       byId.delete(st.id);
       continue;

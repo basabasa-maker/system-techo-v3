@@ -6,6 +6,7 @@
 
 import * as gas from "./gas-client.js";
 import * as outbox from "./outbox.js";
+import * as sync from "./sync.js";
 import {
   HABIT_DEFAULT_ITEMS,
   LS_KEY_HABIT_DAY_PREFIX,
@@ -14,7 +15,7 @@ import {
 import { toast, showSpinner, hideSpinner } from "./toast.js";
 import { todayYmd, addDaysYmd, parseYmd, pad2 } from "./date-util.js";
 import { enableLongPressReorder, justDragged } from "./reorder.js";
-import { loadRange, renderCharts, renderHistory } from "./habit-stats.js";
+import { loadRange, renderCharts, renderHistory, RANGES, getRangeDays, setRangeDays } from "./habit-stats.js";
 
 const state = {
   date: todayYmd(),
@@ -160,19 +161,16 @@ function itemHtml(item) {
   const input =
     item.type === "time"
       ? `<input type="time" class="habit-value habit-value-input ${filled ? "filled" : ""}" value="${escapeHtml(toHhMm(v))}" />`
-      : `<input type="number" inputmode="${isInt ? "numeric" : "decimal"}" step="${isInt ? "1" : "any"}" placeholder="${isCum ? "＋加算" : "入力"}" class="habit-value habit-value-input ${isCum ? "" : filled ? "filled" : ""}" value="${isCum ? "" : filled ? escapeHtml(v) : ""}" />`;
+      : `<input type="number" inputmode="${isInt ? "numeric" : "decimal"}" step="${isInt ? "1" : "any"}" placeholder="${isCum ? "0" : "入力"}" class="habit-value habit-value-input ${filled ? "filled" : ""}" value="${filled ? escapeHtml(v) : ""}" />`;
   // 単位欄は空でも幅を確保し、入力欄の左右位置を全項目でそろえる
   const unit = `<span class="habit-unit-out">${item.type !== "time" && item.unit ? escapeHtml(item.unit) : ""}</span>`;
   // 累積の項目：欄に入れた数が、そのまま合計に足される。合計は項目名の下に出す
   const tail = `<button class="habit-clear" aria-label="${isCum ? "合計を0に戻す" : "消す"}" ${filled ? "" : "hidden"}>×</button>`;
-  const total = isCum
-    ? `<small class="habit-total">合計 ${filled ? escapeHtml(v) : 0}${escapeHtml(item.unit || "")}</small>`
-    : "";
   return `
     <li class="habit-item" data-id="${escapeHtml(item.id)}">
       ${del}
       ${icon}
-      <span class="habit-label">${escapeHtml(item.label)}${total}</span>
+      <span class="habit-label">${escapeHtml(item.label)}</span>
       ${input}${unit}
       ${tail}
     </li>`;
@@ -194,8 +192,15 @@ function bindSubTabs() {
 }
 
 async function paintStats() {
-  rootEl.innerHTML = `<div class="habit-tab">${subTabsHtml()}<div id="habit-stats" class="habit-stats"><p class="empty-hint">読み込み中…</p></div></div>`;
+  const rangeHtml = `<div class="habit-ranges">${RANGES.map((r) => `<button class="habit-range ${getRangeDays() === r.days ? "on" : ""}" data-days="${r.days}">${r.label}</button>`).join("")}</div>`;
+  rootEl.innerHTML = `<div class="habit-tab">${subTabsHtml()}${rangeHtml}<div id="habit-stats" class="habit-stats"><p class="empty-hint">読み込み中…</p></div></div>`;
   bindSubTabs();
+  rootEl.querySelectorAll(".habit-range").forEach((b) => {
+    b.addEventListener("click", () => {
+      setRangeDays(Number(b.dataset.days));
+      paintStats();
+    });
+  });
   const sub = state.sub;
   const data = await loadRange();
   const box = rootEl && rootEl.querySelector("#habit-stats");
@@ -281,14 +286,6 @@ function bind() {
       const clr = li.querySelector(".habit-clear");
       const commit = () => {
         const raw = inp.value;
-        if (item.type === "cumulative") {
-          // 入れた数を、いまの合計に足す（マイナスで引くことも可）
-          inp.value = "";
-          const n = Math.round(Number(raw));
-          if (raw === "" || !Number.isFinite(n) || n === 0) return;
-          setValue(id, (Number(state.values[id]) || 0) + n);
-          return;
-        }
         let val = "";
         if (item.type === "time") val = raw ? toHhMm(raw) : "";
         else if (raw !== "") {
@@ -303,7 +300,29 @@ function bind() {
         inp.classList.toggle("filled", val !== "");
         if (clr) clr.hidden = val === "";
       };
-      inp.addEventListener("change", commit);
+      if (item.type === "cumulative") {
+        // 欄が合計を表す。押すと空になり（薄い字で今の合計が見える）、入れた数が足される
+        inp.addEventListener("focus", () => {
+          const cur = Number(state.values[id]) || 0;
+          inp.placeholder = String(cur);
+          inp.value = "";
+        });
+        inp.addEventListener("blur", () => {
+          const cur = Number(state.values[id]) || 0;
+          const raw = inp.value;
+          const n = Math.round(Number(raw));
+          let total = cur;
+          if (raw !== "" && Number.isFinite(n) && n !== 0) {
+            total = cur + n;
+            setValue(id, total, true);
+          }
+          inp.value = total || (state.values[id] != null ? String(total) : "");
+          inp.classList.toggle("filled", state.values[id] != null);
+          clr.hidden = state.values[id] == null;
+        });
+      } else {
+        inp.addEventListener("change", commit);
+      }
       inp.addEventListener("keydown", (e) => {
         if (e.key === "Enter") inp.blur();
       });
@@ -371,12 +390,15 @@ function toggleCheck(id) {
   setValue(id, state.values[id] === true ? false : true);
 }
 
+let pendingDay = null; // 入力してから送るまでの短い待ち時間にある日付
 function schedulePush(ymd, values) {
+  pendingDay = ymd;
   clearTimeout(pushTimer);
   pushTimer = setTimeout(() => pushDay(ymd, values), 600);
 }
 
 async function pushDay(ymd, values) {
+  if (pendingDay === ymd) pendingDay = null;
   try {
     await gas.pushHabitDay(ymd, values);
   } catch (e) {
@@ -572,13 +594,16 @@ async function syncFromServer() {
       gas.pullHabitDay(ymd),
     ]);
     if (seq !== syncSeq || !rootEl) return;
+    const keys = await sync.pendingKeys();
+    const holdDay = keys.has("habit_day:" + ymd) || pendingDay === ymd; // 未送信の変更は取得結果で消さない
+    const holdItems = keys.has("habit_items");
     let changed = false;
-    if (Array.isArray(items) && items.length > 0) {
+    if (!holdItems && Array.isArray(items) && items.length > 0) {
       state.items = normalizeItems(items);
       saveItemsLocal(state.items);
       changed = true;
     }
-    if (values && typeof values === "object") {
+    if (!holdDay && values && typeof values === "object") {
       state.values = values;
       saveDayLocal(ymd, values);
       changed = true;
@@ -591,39 +616,29 @@ async function syncFromServer() {
 }
 
 export async function flushHabitOutbox() {
-  const items = await outbox.listAll();
-  for (const it of items) {
-    const t = it.op.type;
-    if (t === "habit_day_upsert") {
-      await gas.pushHabitDay(it.op.payload.date, it.op.payload.values);
-    } else if (t === "habit_items_upsert") {
-      await gas.pushHabitItems(it.op.payload.items);
-    } else {
-      continue;
-    }
-    await outbox.remove(it.id);
-  }
+  return sync.flushAll();
 }
 
 // 更新ボタンから呼ばれる
 export async function pullAndRender() {
   showSpinner();
   try {
-    await flushHabitOutbox();
+    await flushHabitOutbox().catch(() => {});
     const [items, values] = await Promise.all([
       gas.pullHabitItems(),
       gas.pullHabitDay(state.date),
     ]);
-    if (Array.isArray(items) && items.length > 0) {
+    const keys = await sync.pendingKeys();
+    if (!keys.has("habit_items") && Array.isArray(items) && items.length > 0) {
       state.items = normalizeItems(items);
       saveItemsLocal(state.items);
     }
-    if (values && typeof values === "object") {
+    if (!keys.has("habit_day:" + state.date) && pendingDay !== state.date && values && typeof values === "object") {
       state.values = values;
       saveDayLocal(state.date, values);
     }
     paint();
-    toast("最新化しました", "success");
+    toast("最新化しました" + (await sync.pendingNote()), "success");
   } catch (e) {
     console.error(e);
     toast("取得に失敗しました: " + e.message, "error");

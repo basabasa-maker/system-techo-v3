@@ -2046,3 +2046,23 @@ textarea.memo-detail-text {
 }
 .hist-d { flex: 0 0 84px; font-weight: 600; }
 .hist-v { font-size: 12px; color: var(--muted); }
+
+.habit-ranges {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px 0;
+}
+.habit-range {
+  flex: 1;
+  min-height: 32px;
+  border-radius: 16px;
+  border: 1px solid rgb(var(--ov) / 0.2);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+.habit-range.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}

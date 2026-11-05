@@ -13,6 +13,7 @@
 import * as store from "./store.js";
 import * as gas from "./gas-client.js";
 import * as outbox from "./outbox.js";
+import * as sync from "./sync.js";
 import { toast, showSpinner, hideSpinner } from "./toast.js";
 import { todayYmd, nowJst, addDaysYmd } from "./date-util.js";
 import { enableLongPressReorder, justDragged } from "./reorder.js";
@@ -39,8 +40,8 @@ async function syncQuietly() {
   try {
     // 送信待ちが送れなくても、取得は続ける
     await flushOutbox().catch(() => {});
-    const res = await gas.pullMemoAll(addDaysYmd(todayYmd(), -365), 1000);
-    store.saveMemoAll(res.entries || []);
+    const res = await gas.pullMemoAll("2000-01-01", 2000);
+    await applyPulledMemos(res.entries || []);
     if (rootEl && state.view === "list" && rootEl.querySelector("#memo-body")) {
       paintBody();
     }
@@ -914,13 +915,12 @@ export async function pullAndRender() {
   if (detailPersist) await detailPersist();
   showSpinner();
   try {
-    await flushOutbox();
-    const sinceYmd = addDaysYmd(todayYmd(), -365);
-    const res = await gas.pullMemoAll(sinceYmd, 1000);
-    store.saveMemoAll(res.entries || []);
+    await flushOutbox().catch(() => {});
+    const res = await gas.pullMemoAll("2000-01-01", 2000);
+    await applyPulledMemos(res.entries || []);
     if (state.view === "list") paintBody();
     else paintRoot();
-    toast("最新化しました", "success");
+    toast("最新化しました" + (await sync.pendingNote()), "success");
   } catch (e) {
     console.error(e);
     toast("取得に失敗しました: " + e.message, "error");
@@ -930,21 +930,20 @@ export async function pullAndRender() {
 }
 
 async function flushOutbox() {
-  const items = await outbox.listAll();
-  for (const item of items) {
-    try {
-      if (item.op.type === "memo_upsert") {
-        await gas.pushMemoUpsert(item.op.payload);
-      } else if (item.op.type === "memo_delete") {
-        await gas.pushMemoDelete(item.op.payload.id);
-      } else {
-        continue;
-      }
-      await outbox.remove(item.id);
-    } catch (e) {
-      throw e;
-    }
+  return sync.flushAll();
+}
+
+// 取得した一覧で手元の一覧を置き換える。ただし、まだ送っていないメモは手元の版を残す
+async function applyPulledMemos(entries) {
+  const keys = await sync.pendingKeys();
+  if (keys.size === 0) {
+    store.saveMemoAll(entries);
+    return;
   }
+  const local = store.loadMemoAll();
+  const keep = local.filter((e) => keys.has("memo:" + e.id));
+  const keepIds = new Set(keep.map((e) => e.id));
+  store.saveMemoAll([...keep, ...entries.filter((e) => !keepIds.has(e.id))]);
 }
 
 // ---------- helpers ----------

@@ -6,6 +6,7 @@
 // - FAB で Journal 追加モーダル（時刻スロット・本文）
 
 import * as store from "./store.js";
+import * as sync from "./sync.js";
 import * as gas from "./gas-client.js";
 import * as outbox from "./outbox.js";
 import { CALENDAR_DEFS, calendarColorFor } from "./config.js";
@@ -18,6 +19,7 @@ import {
   formatYmdLong,
   nowQuarter,
   pad2,
+  daysAgoYmd,
 } from "./date-util.js";
 
 const HOUR_HEIGHT = 48; // px per hour
@@ -29,9 +31,9 @@ const state = {
 
 let rootEl = null;
 
-export function renderDailyTab(container) {
+export function renderDailyTab(container, keepDate) {
   rootEl = container;
-  state.date = todayYmd();
+  if (!keepDate) state.date = todayYmd();
   container.innerHTML = `
     <div class="daily-tab">
       <div class="daily-datenav">
@@ -48,7 +50,7 @@ export function renderDailyTab(container) {
         </div>
       </div>
       <div class="daily-related">
-        <h3>この日のタスク</h3>
+        <h3>今日のタスク</h3>
         <ul class="daily-task-list" id="daily-task-list"></ul>
       </div>
     </div>
@@ -73,7 +75,7 @@ export function renderDailyTab(container) {
 
 function reRender() {
   if (!rootEl) return;
-  renderDailyTab(rootEl);
+  renderDailyTab(rootEl, true); // 日付を移動したときは、その日のまま描き直す
 }
 
 function renderHourGrid() {
@@ -189,7 +191,7 @@ function paintTasks() {
   );
 
   if (todayTasks.length === 0 && overdueTasks.length === 0) {
-    listEl.innerHTML = `<li class="empty-hint-sm">この日のタスクはありません</li>`;
+    listEl.innerHTML = `<li class="empty-hint-sm">今日のタスクはありません</li>`;
     return;
   }
   let h = "";
@@ -369,18 +371,24 @@ async function deleteJournal(id) {
 export async function pullAndRender(quiet = false) {
   if (!quiet) showSpinner();
   try {
-    await flushOutbox();
-    const [events, entries] = await Promise.all([
+    await flushOutbox().catch(() => {}); // 送信待ちが詰まっていても、取得は続ける
+    // 予定・ジャーナル・タスクを別々に取り、取れたものだけ反映する
+    const [ev, jn, tk] = await Promise.allSettled([
       gas.pullCalendar(state.date),
       gas.pullMemoJournal(state.date),
+      gas.pullTasks(""),
     ]);
-    store.saveCalendar(state.date, events);
-    store.saveJournal(state.date, entries);
+    if (ev.status === "fulfilled") store.saveCalendar(state.date, ev.value);
+    if (jn.status === "fulfilled") store.saveJournal(state.date, jn.value);
+    if (tk.status === "fulfilled") store.mergeTasks(tk.value, await sync.pendingKeys());
+    const failedAll = [ev, jn, tk].every((r) => r.status === "rejected");
+    if (failedAll) throw ev.reason;
     if (rootEl) {
       paintEvents();
       paintTasks();
     }
-    if (!quiet) toast("最新化しました", "success");
+    const partial = [ev, jn, tk].some((r) => r.status === "rejected");
+    if (!quiet) toast((partial ? "一部だけ最新化しました" : "最新化しました") + (await sync.pendingNote()), partial ? "warn" : "success");
   } catch (e) {
     console.error(e);
     if (!quiet) toast("取得に失敗しました: " + e.message, "error");
@@ -390,26 +398,7 @@ export async function pullAndRender(quiet = false) {
 }
 
 async function flushOutbox() {
-  const items = await outbox.listAll();
-  for (const item of items) {
-    try {
-      if (item.op.type === "task_upsert") {
-        await gas.pushTaskUpsert(item.op.payload);
-      } else if (item.op.type === "task_delete") {
-        await gas.pushTaskDelete(item.op.payload.id);
-      } else if (item.op.type === "memo_upsert") {
-        await gas.pushMemoUpsert(item.op.payload);
-      } else if (item.op.type === "memo_delete") {
-        await gas.pushMemoDelete(item.op.payload.id);
-      } else {
-        // 習慣・食事の送信待ちは、そのタブ側で送る。ここでは消さない
-        continue;
-      }
-      await outbox.remove(item.id);
-    } catch (e) {
-      throw e;
-    }
-  }
+  return sync.flushAll();
 }
 
 // ---------- utils ----------
