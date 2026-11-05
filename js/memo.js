@@ -639,20 +639,28 @@ function bindKeyboardFit(...fields) {
     shell.style.bottom = "auto";
     shell.style.height = Math.max(240, h) + "px";
   };
+  let baseH = 0; // キーボードが無いときの画面の高さ
   const fit = () => {
-    const real = window.innerHeight - vv.height;
+    const real = baseH - vv.height;
     if (real > 200) {
       kbH = real;
       try {
         localStorage.setItem(KB_KEY, String(Math.round(real)));
       } catch (_) {}
     }
-    apply(real > 200 ? vv.height : window.innerHeight - kbH);
+    apply(real > 200 ? vv.height : baseH - kbH);
     window.scrollTo(0, 0);
+  };
+  // iPhoneは、キーボードが出るとき画面（文書）自体を上へずらす。
+  // ずれた瞬間に元へ戻し、一瞬でも別の位置が描かれないようにする
+  const snapBack = () => {
+    if (window.scrollY || window.scrollX || document.documentElement.scrollTop) window.scrollTo(0, 0);
   };
   const start = () => {
     if (on) return;
     on = true;
+    baseH = window.innerHeight;
+    window.addEventListener("scroll", snapBack, { passive: true });
     vv.addEventListener("resize", fit);
     vv.addEventListener("scroll", fit);
     fit();
@@ -660,6 +668,7 @@ function bindKeyboardFit(...fields) {
   const release = () => {
     if (!on) return;
     on = false;
+    window.removeEventListener("scroll", snapBack);
     vv.removeEventListener("resize", fit);
     vv.removeEventListener("scroll", fit);
     shell.style.top = "";
