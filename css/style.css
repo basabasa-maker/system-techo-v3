@@ -55,11 +55,8 @@
 :root[data-theme="lavender"] { --bg: #e6e0f7; }
 /* 明るい背景では、色付き文字を濃くして読めるようにする */
 :root[data-kind="light"] .task-status-doing { color: #0b6b5c; }
-:root[data-kind="light"] .task-status-adjusting {
-  background: rgba(183, 139, 230, 0.25);
-  color: #d8b8ff;
-}
-.task-status-done { color: #1f55b8; }
+:root[data-kind="light"] .task-status-adjusting { color: #6a35a8; }
+:root[data-kind="light"] .task-status-done { color: #1f55b8; }
 :root[data-kind="light"] .habit-value.filled { color: #1b6e4c; background: rgba(27, 110, 76, 0.14); }
 :root[data-kind="light"] .task-today h2 { color: #a35f00; }
 :root[data-kind="light"] .task-item.is-done .task-title { color: var(--muted); }
@@ -367,6 +364,10 @@ textarea {
 .task-status-doing {
   background: rgba(47, 181, 160, 0.25);
   color: #5fe0cb;
+}
+.task-status-adjusting {
+  background: rgba(183, 139, 230, 0.25);
+  color: #d8b8ff;
 }
 .task-status-done {
   background: rgba(77, 144, 254, 0.25);
