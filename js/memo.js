@@ -611,50 +611,84 @@ function bindDetail() {
     });
   }
   paintAtts();
-  bindKeyboardFit(ta, titleEl);
-  if (!en0.body && !en0.title) setTimeout(() => ta.focus(), 50);
+  const kbStart = bindKeyboardFit(ta, titleEl);
+  if (!en0.body && !en0.title) {
+    kbStart();
+    setTimeout(() => ta.focus(), 50);
+  }
 }
 
 // キーボードが出ても、画面全体が上へずれないようにする。
 // アプリの枠を「キーボードを除いた見える範囲」に合わせて縮め、
-// 見出しと入力欄を同じ位置に保つ（入力欄の中だけがスクロールする）
+// 見出しと入力欄を同じ位置に保つ（入力欄の中だけがスクロールする）。
+// タップした瞬間に、前回のキーボードの高さで先に縮めておく。
+// 先に縮めると、iPhoneが画面を持ち上げる動き（せり上がり）が起きない
+const KB_KEY = "techo-kb-h";
 function bindKeyboardFit(...fields) {
   const vv = window.visualViewport;
   const shell = document.getElementById("app-shell");
-  if (!vv || !shell) return;
+  if (!vv || !shell) return () => {};
   let on = false;
-  const fit = () => {
+  let kbH = 0;
+  try {
+    kbH = Number(localStorage.getItem(KB_KEY)) || 0;
+  } catch (_) {}
+  if (kbH < 200 || kbH > 600) kbH = 340;
+  const apply = (h) => {
     shell.style.top = vv.offsetTop + "px";
     shell.style.bottom = "auto";
-    shell.style.height = vv.height + "px";
+    shell.style.height = Math.max(240, h) + "px";
+  };
+  const fit = () => {
+    const real = window.innerHeight - vv.height;
+    if (real > 200) {
+      kbH = real;
+      try {
+        localStorage.setItem(KB_KEY, String(Math.round(real)));
+      } catch (_) {}
+    }
+    apply(real > 200 ? vv.height : window.innerHeight - kbH);
     window.scrollTo(0, 0);
   };
   const start = () => {
     if (on) return;
     on = true;
-    shell.classList.add("kb-fit");
     vv.addEventListener("resize", fit);
     vv.addEventListener("scroll", fit);
     fit();
+  };
+  const release = () => {
+    if (!on) return;
+    on = false;
+    vv.removeEventListener("resize", fit);
+    vv.removeEventListener("scroll", fit);
+    shell.style.top = "";
+    shell.style.bottom = "";
+    shell.style.height = "";
   };
   const stop = () => {
     setTimeout(() => {
       const a = document.activeElement;
       if (a && fields.includes(a)) return; // タイトル⇔本文の移動では戻さない
-      if (!on) return;
-      on = false;
-      shell.classList.remove("kb-fit");
-      vv.removeEventListener("resize", fit);
-      vv.removeEventListener("scroll", fit);
-      shell.style.top = "";
-      shell.style.bottom = "";
-      shell.style.height = "";
+      release();
     }, 80);
   };
   fields.filter(Boolean).forEach((f) => {
     f.addEventListener("focus", start);
     f.addEventListener("blur", stop);
+    // 触れた瞬間に先に縮める。入力欄に入らなかった（スクロールなど）ときは戻す
+    f.addEventListener(
+      "touchstart",
+      () => {
+        start();
+        setTimeout(() => {
+          if (!fields.includes(document.activeElement)) release();
+        }, 600);
+      },
+      { passive: true }
+    );
   });
+  return start;
 }
 
 let detailPersist = null;
@@ -666,7 +700,6 @@ function backToList() {
   detailPersist = null;
   const shell = document.getElementById("app-shell");
   if (shell) {
-    shell.classList.remove("kb-fit");
     shell.style.top = "";
     shell.style.bottom = "";
     shell.style.height = "";
