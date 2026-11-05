@@ -2081,3 +2081,25 @@ textarea.memo-detail-text {
 .habit-cum:empty {
   display: none;
 }
+
+.memo-wrap {
+  position: relative;
+}
+.memo-strike {
+  position: absolute;
+  inset: 0;
+  padding: 0 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  pointer-events: none;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  font: 16px/32px -apple-system, "Hiragino Sans", sans-serif;
+  color: transparent;
+}
+.memo-strike .done {
+  text-decoration: line-through;
+  text-decoration-color: var(--paper-ink);
+  text-decoration-thickness: 1.5px;
+}

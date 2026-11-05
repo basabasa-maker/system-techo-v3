@@ -418,7 +418,7 @@ function renderDetail() {
         <input type="file" id="d-file" multiple hidden />
       </div>
       ${en.title ? `<input type="text" id="d-title" class="memo-detail-title-input" value="${escapeAttr(en.title)}" autocomplete="off" placeholder="タイトル" />` : ""}
-      <textarea id="d-text" class="memo-paper memo-paper-input memo-detail-text" placeholder="ここにメモ" spellcheck="false">${escapeHtml(text)}</textarea>
+      <div class="memo-wrap"><textarea id="d-text" class="memo-paper memo-paper-input memo-detail-text" placeholder="ここにメモ" spellcheck="false">${escapeHtml(text)}</textarea><div id="d-strike" class="memo-strike" aria-hidden="true"></div></div>
       <div id="d-atts" class="memo-atts"></div>
       <div class="memo-detail-footer">
         <button class="btn-danger" id="d-delete">削除</button>
@@ -440,9 +440,19 @@ function bindDetail() {
   let saveTimer = null;
   let lastSaved = en0.body || "";
 
+  const strikeEl = rootEl.querySelector("#d-strike");
+  // チェック済み（☑）の行に取り消し線を引く。文字は透明で、線だけが入力欄に重なる
+  const paintStrike = () => {
+    if (!strikeEl) return;
+    strikeEl.innerHTML = ta.value
+      .split("\n")
+      .map((ln) => (ln.startsWith("☑") ? `<span class="done">${escapeHtml(ln)}</span>` : escapeHtml(ln)))
+      .join("\n");
+  };
   const fit = () => {
     ta.style.height = "auto";
     ta.style.height = Math.max(ta.scrollHeight, Math.round(window.innerHeight * 0.45)) + "px";
+    paintStrike();
   };
   const compose = () => joinBody(ta.value, atts);
   const persist = async () => {
