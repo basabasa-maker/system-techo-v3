@@ -28,11 +28,24 @@ let pushTimer = null;
 // ---------- 保存（表示キャッシュ） ----------
 
 // 旧い保存データの種類を、いまの種類へそろえる（フォロワー等は累積）
-const CUMULATIVE_IDS = ["tabelogFollowers", "tabelogReactions", "instaFollowers"];
+// 初期設定の入力ルール。保存済みの項目にも、ここで決めたルールをそのまま当てる
+const RULE_BY_ID = {
+  nap: "integer",
+  weight: "decimal",
+  bodyFat: "decimal",
+  kcal: "integer",
+  steps: "integer",
+  water: "integer",
+  tabelogFollowers: "cumulative",
+  tabelogReactions: "cumulative",
+  instaFollowers: "cumulative",
+};
 function normalizeItems(arr) {
-  return arr.map((it) =>
-    CUMULATIVE_IDS.includes(it.id) && it.type === "number" ? { ...it, type: "cumulative" } : it,
-  );
+  return arr.map((it) => {
+    const rule = RULE_BY_ID[it.id];
+    // 古い保存データの「数値」だけを、初期ルールに置き換える（自分で変えた種類は残す）
+    return rule && it.type === "number" ? { ...it, type: rule } : it;
+  });
 }
 
 function loadItems() {
@@ -145,18 +158,19 @@ function itemHtml(item) {
   const input =
     item.type === "time"
       ? `<input type="time" class="habit-value habit-value-input ${filled ? "filled" : ""}" value="${escapeHtml(toHhMm(v))}" />`
-      : `<input type="number" inputmode="${isInt ? "numeric" : "decimal"}" step="${isInt ? "1" : "any"}" placeholder="${isCum ? "合計" : "入力"}" class="habit-value habit-value-input ${filled ? "filled" : ""}" value="${filled ? escapeHtml(v) : ""}" />`;
+      : `<input type="number" inputmode="${isInt ? "numeric" : "decimal"}" step="${isInt ? "1" : "any"}" placeholder="${isCum ? "＋加算" : "入力"}" class="habit-value habit-value-input ${isCum ? "" : filled ? "filled" : ""}" value="${isCum ? "" : filled ? escapeHtml(v) : ""}" />`;
   // 単位欄は空でも幅を確保し、入力欄の左右位置を全項目でそろえる
   const unit = `<span class="habit-unit-out">${item.type !== "time" && item.unit ? escapeHtml(item.unit) : ""}</span>`;
-  // 累積の項目は、×の代わりに「＋」（加算）を置く。消すときは欄を空にする
-  const tail = isCum
-    ? `<button class="habit-plus" aria-label="加算">＋</button>`
-    : `<button class="habit-clear" aria-label="消す" ${filled ? "" : "hidden"}>×</button>`;
+  // 累積の項目：欄に入れた数が、そのまま合計に足される。合計は項目名の下に出す
+  const tail = `<button class="habit-clear" aria-label="${isCum ? "合計を0に戻す" : "消す"}" ${filled ? "" : "hidden"}>×</button>`;
+  const total = isCum
+    ? `<small class="habit-total">合計 ${filled ? escapeHtml(v) : 0}${escapeHtml(item.unit || "")}</small>`
+    : "";
   return `
     <li class="habit-item" data-id="${escapeHtml(item.id)}">
       ${del}
       ${icon}
-      <span class="habit-label">${escapeHtml(item.label)}</span>
+      <span class="habit-label">${escapeHtml(item.label)}${total}</span>
       ${input}${unit}
       ${tail}
     </li>`;
@@ -223,9 +237,16 @@ function bind() {
     } else {
       const inp = li.querySelector(".habit-value-input");
       const clr = li.querySelector(".habit-clear");
-      const plus = li.querySelector(".habit-plus");
       const commit = () => {
         const raw = inp.value;
+        if (item.type === "cumulative") {
+          // 入れた数を、いまの合計に足す（マイナスで引くことも可）
+          inp.value = "";
+          const n = Math.round(Number(raw));
+          if (raw === "" || !Number.isFinite(n) || n === 0) return;
+          setValue(id, (Number(state.values[id]) || 0) + n);
+          return;
+        }
         let val = "";
         if (item.type === "time") val = raw ? toHhMm(raw) : "";
         else if (raw !== "") {
@@ -244,13 +265,15 @@ function bind() {
       inp.addEventListener("keydown", (e) => {
         if (e.key === "Enter") inp.blur();
       });
-      if (clr) {
-        clr.addEventListener("click", () => {
-          inp.value = "";
-          commit();
-        });
-      }
-      if (plus) plus.addEventListener("click", () => openAddAmount(item));
+      clr.addEventListener("click", () => {
+        if (item.type === "cumulative") {
+          if (!confirm(`「${item.label}」の合計を消しますか？`)) return;
+          setValue(id, "");
+          return;
+        }
+        inp.value = "";
+        commit();
+      });
     }
     if (state.editMode) {
       li.querySelector(".habit-label").addEventListener("click", (e) => {
@@ -267,7 +290,7 @@ function bind() {
   enableLongPressReorder(listEl, {
     itemSelector: ".habit-item",
     onReorder: onReorderItems,
-    ignoreSelector: ".habit-value-input, .habit-clear, .habit-plus",
+    ignoreSelector: ".habit-value-input, .habit-clear",
   });
 }
 
@@ -377,7 +400,7 @@ function openItemEditor(id) {
           <select id="e-type">
             <option value="integer">整数（0, 1, 2 …）</option>
             <option value="decimal">小数（体重など）</option>
-            <option value="cumulative">累積（入力した数を足していく）</option>
+            <option value="cumulative">累積（欄に入れた数を合計に足す）</option>
             <option value="check">チェック</option>
             <option value="time">時刻</option>
           </select>
@@ -431,45 +454,6 @@ function openItemEditor(id) {
     pushItems(state.items);
   });
   if (!item) setTimeout(() => modal.querySelector("#e-label").focus(), 50);
-}
-
-// 累積の項目：入力した数を今の合計に足す
-function openAddAmount(item) {
-  const cur = Number(state.values[item.id]) || 0;
-  const modal = document.createElement("div");
-  modal.className = "modal-backdrop";
-  modal.innerHTML = `
-    <div class="modal">
-      <header>${escapeHtml(item.label)}（＋加算）</header>
-      <div class="modal-body">
-        <p class="habit-hint" style="text-align:left">いまの合計：${cur}${escapeHtml(item.unit || "")}</p>
-        <label>足す数
-          <input type="number" id="p-input" inputmode="numeric" step="1" placeholder="例：3" />
-        </label>
-      </div>
-      <footer>
-        <div style="flex:1"></div>
-        <button class="btn-ghost" id="p-cancel">キャンセル</button>
-        <button class="btn-primary" id="p-save">足す</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(modal);
-  const close = () => modal.remove();
-  modal.querySelector("#p-cancel").addEventListener("click", close);
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) close();
-  });
-  const save = () => {
-    const n = Math.round(Number(modal.querySelector("#p-input").value));
-    close();
-    if (!Number.isFinite(n) || n === 0) return;
-    setValue(item.id, cur + n);
-  };
-  modal.querySelector("#p-save").addEventListener("click", save);
-  modal.querySelector("#p-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") save();
-  });
-  setTimeout(() => modal.querySelector("#p-input").focus(), 50);
 }
 
 // ---------- 値の入力モーダル ----------
