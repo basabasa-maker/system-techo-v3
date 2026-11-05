@@ -170,7 +170,7 @@ function itemHtml(item) {
     <li class="habit-item" data-id="${escapeHtml(item.id)}">
       ${del}
       ${icon}
-      <span class="habit-label">${escapeHtml(item.label)}</span>
+      <span class="habit-label">${escapeHtml(item.label)}${isCum ? `<small class="habit-cum">${filled ? "計 " + escapeHtml(v) : ""}</small>` : ""}</span>
       ${input}${unit}
       ${tail}
     </li>`;
@@ -301,12 +301,22 @@ function bind() {
         if (clr) clr.hidden = val === "";
       };
       if (item.type === "cumulative") {
-        // 欄が合計を表す。押すと空になり（薄い字で今の合計が見える）、入れた数が足される
-        inp.addEventListener("focus", () => {
+        // 欄が合計を表す。押すと前の数字が消え、入れた数が足される。前の合計は項目名の下に小さく残る
+        const cum = li.querySelector(".habit-cum");
+        const showCum = () => {
+          if (cum) cum.textContent = state.values[id] != null ? "計 " + state.values[id] : "";
+        };
+        const wipe = () => {
           const cur = Number(state.values[id]) || 0;
           inp.placeholder = String(cur);
           inp.value = "";
+        };
+        inp.addEventListener("focus", () => {
+          wipe();
+          setTimeout(wipe, 0); // iPhoneで前の数字が戻る場合の念押し
+          setTimeout(wipe, 120);
         });
+        inp.addEventListener("pointerup", wipe);
         inp.addEventListener("blur", () => {
           const cur = Number(state.values[id]) || 0;
           const raw = inp.value;
@@ -316,9 +326,11 @@ function bind() {
             total = cur + n;
             setValue(id, total, true);
           }
+          inp.placeholder = "0";
           inp.value = total || (state.values[id] != null ? String(total) : "");
           inp.classList.toggle("filled", state.values[id] != null);
           clr.hidden = state.values[id] == null;
+          showCum();
         });
       } else {
         inp.addEventListener("change", commit);
@@ -372,7 +384,8 @@ function reloadDay() {
 
 function setValue(id, value, quiet) {
   const next = { ...state.values };
-  if (value === "" || value == null || value === false) delete next[id];
+  const erase = value === "" || value == null || value === false;
+  if (erase) delete next[id];
   else next[id] = value;
   state.values = next;
   saveDayLocal(state.date, next);
@@ -383,7 +396,7 @@ function setValue(id, value, quiet) {
   } else {
     paint();
   }
-  schedulePush(state.date, next);
+  schedulePush(state.date, erase ? { [id]: undefined } : { [id]: value }, erase);
 }
 
 function toggleCheck(id) {
@@ -391,20 +404,40 @@ function toggleCheck(id) {
 }
 
 let pendingDay = null; // 入力してから送るまでの短い待ち時間にある日付
-function schedulePush(ymd, values) {
+let pendingPatch = null; // 待ち時間中にたまった「変えた項目」 { date, set, del }
+function schedulePush(ymd, change, erase) {
+  if (!pendingPatch || pendingPatch.date !== ymd) {
+    if (pendingPatch) flushPatchNow(); // 別の日に移る前に、前の日の分を先に送る
+    pendingPatch = { date: ymd, set: {}, del: [] };
+  }
+  const id = Object.keys(change)[0];
+  if (erase) {
+    delete pendingPatch.set[id];
+    if (!pendingPatch.del.includes(id)) pendingPatch.del.push(id);
+  } else {
+    pendingPatch.set[id] = change[id];
+    pendingPatch.del = pendingPatch.del.filter((k) => k !== id);
+  }
   pendingDay = ymd;
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => pushDay(ymd, values), 600);
+  pushTimer = setTimeout(flushPatchNow, 600);
 }
 
-async function pushDay(ymd, values) {
-  if (pendingDay === ymd) pendingDay = null;
+function flushPatchNow() {
+  clearTimeout(pushTimer);
+  const patch = pendingPatch;
+  pendingPatch = null;
+  if (patch) pushDay(patch.date, { set: patch.set, del: patch.del });
+}
+
+async function pushDay(ymd, patch) {
+  if (pendingDay === ymd && !pendingPatch) pendingDay = null;
   try {
-    await gas.pushHabitDay(ymd, values);
+    await gas.pushHabitDay(ymd, patch);
   } catch (e) {
     await outbox.enqueue({
       type: "habit_day_upsert",
-      payload: { date: ymd, values: values },
+      payload: { date: ymd, set: patch.set, del: patch.del },
     });
     toast("オフライン：送信キューに追加", "warn");
   }

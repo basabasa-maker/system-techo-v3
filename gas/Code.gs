@@ -218,7 +218,7 @@ function doPost(e) {
     if (type === "habit_day_upsert") {
       return jsonResponse({
         ok: true,
-        data: habitDayUpsert(body.date || "", body.values),
+        data: habitDayUpsert(body.date || "", body.values, body.set, body.del),
       });
     }
     if (type === "meal_day_upsert") {
@@ -379,10 +379,26 @@ function pullHabitRange(from, to) {
   return out;
 }
 
-function habitDayUpsert(dateStr, values) {
+// 変えた項目だけ受け取って、保存済みの内容に重ねる（その日をまるごと上書きしない）
+// set: {項目ID: 値}　del: [項目ID]　旧形式の values は「追加・更新だけ」として扱い、消さない
+function habitDayUpsert(dateStr, values, set, del) {
   if (!isYmd(dateStr)) throw new Error("date must be yyyy-MM-dd");
-  if (!values || typeof values !== "object") throw new Error("values required");
-  return upsertJsonRow(HABIT_DAYS_SHEET, HABIT_DAYS_HEADERS, dateStr, values);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const cur = readJsonRow(HABIT_DAYS_SHEET, HABIT_DAYS_HEADERS, dateStr);
+    const next = cur && typeof cur === "object" && !Array.isArray(cur) ? cur : {};
+    const add = set && typeof set === "object" ? set : values && typeof values === "object" ? values : {};
+    Object.keys(add).forEach(function (k) {
+      next[k] = add[k];
+    });
+    (Array.isArray(del) ? del : []).forEach(function (k) {
+      delete next[k];
+    });
+    return upsertJsonRow(HABIT_DAYS_SHEET, HABIT_DAYS_HEADERS, dateStr, next);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function pullMealMonth(monthStr) {

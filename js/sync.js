@@ -30,6 +30,26 @@ function keyOf(op) {
   }
 }
 
+// 習慣の「変えた項目」の形にそろえる（旧形式の values は追加・更新のみ扱い）
+function toPatch(p) {
+  return { set: p.set || p.values || {}, del: p.del || [] };
+}
+
+// 2つの変更を1つにまとめる（あとの変更が勝つ）
+export function mergePatch(a, b) {
+  const set = { ...a.set };
+  let del = new Set(a.del);
+  for (const k of b.del) {
+    delete set[k];
+    del.add(k);
+  }
+  for (const k of Object.keys(b.set)) {
+    set[k] = b.set[k];
+    del.delete(k);
+  }
+  return { set, del: [...del] };
+}
+
 async function send(op) {
   const p = op.payload || {};
   switch (op.type) {
@@ -42,7 +62,7 @@ async function send(op) {
     case "memo_delete":
       return gas.pushMemoDelete(p.id);
     case "habit_day_upsert":
-      return gas.pushHabitDay(p.date, p.values);
+      return gas.pushHabitDay(p.date, toPatch(p));
     case "habit_items_upsert":
       return gas.pushHabitItems(p.items);
     case "meal_day_upsert":
@@ -59,25 +79,35 @@ export function flushAll() {
   if (running) return running;
   running = (async () => {
     const items = (await outbox.listAll()).sort((a, b) => a.id - b.id);
-    // 同じ対象は、いちばん新しい1件だけ残す
-    const latest = new Map();
-    for (const it of items) {
-      const k = keyOf(it.op);
-      if (k) latest.set(k, it.id);
-    }
-    let failed = 0;
+    // 同じ対象は、いちばん新しい1件だけ残す。習慣の日だけは、変えた項目を1つにまとめる
+    const groups = new Map();
     for (const it of items) {
       const k = keyOf(it.op);
       if (!k) continue; // 知らない種類は触らない
-      if (latest.get(k) !== it.id) {
-        await outbox.remove(it.id); // 古い分は不要
-        continue;
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(it);
+    }
+    let failed = 0;
+    for (const [k, list] of groups) {
+      let op = list[list.length - 1].op;
+      if (op.type === "habit_day_upsert") {
+        let merged = { set: {}, del: [] };
+        for (const it of list) merged = mergePatch(merged, toPatch(it.op.payload || {}));
+        op = { type: op.type, payload: { date: op.payload.date, set: merged.set, del: merged.del } };
       }
       try {
-        await send(it.op);
-        await outbox.remove(it.id);
+        await send(op);
+        for (const it of list) await outbox.remove(it.id);
       } catch (e) {
         failed++;
+        // 送れなかった習慣の変更は、まとめた1件にして残す
+        if (op.type === "habit_day_upsert" && list.length > 1) {
+          for (const it of list.slice(0, -1)) await outbox.remove(it.id);
+          await outbox.remove(list[list.length - 1].id);
+          await outbox.enqueue(op);
+        } else {
+          for (const it of list.slice(0, -1)) await outbox.remove(it.id);
+        }
       }
     }
     return failed;

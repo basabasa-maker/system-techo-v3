@@ -2071,3 +2071,13 @@ textarea.memo-detail-text {
   color: var(--accent);
   font-weight: 600;
 }
+
+.habit-cum {
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--muted);
+}
+.habit-cum:empty {
+  display: none;
+}

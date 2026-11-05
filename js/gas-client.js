@@ -216,14 +216,16 @@ export async function pullHabitRange(fromYmd, toYmd) {
   return body.data.days || {};
 }
 
-export async function pushHabitDay(dateYmd, values) {
+// patch = { set: {項目ID: 値}, del: [項目ID] }（変えた項目だけ送る）
+export async function pushHabitDay(dateYmd, patch) {
   const body = await fetchJson(GAS_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({
       type: "habit_day_upsert",
       date: dateYmd,
-      values: values,
+      set: (patch && patch.set) || {},
+      del: (patch && patch.del) || [],
     }),
   });
   if (!body.ok) throw new Error(body.error || "habit_day_upsert failed");
