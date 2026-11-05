@@ -449,11 +449,16 @@ function bindDetail() {
       .map((ln) => (ln.startsWith("☑") ? `<span class="done">${escapeHtml(ln)}</span>` : escapeHtml(ln)))
       .join("\n");
   };
+  // 入力欄は画面の残りいっぱいに広げ、長いメモは入力欄の中だけでスクロールさせる。
+  // （入力欄の下端がキーボードに隠れると、iPhoneが画面ごと持ち上げてしまうため）
   const fit = () => {
-    ta.style.height = "auto";
-    ta.style.height = Math.max(ta.scrollHeight, Math.round(window.innerHeight * 0.45)) + "px";
     paintStrike();
+    syncStrike();
   };
+  const syncStrike = () => {
+    if (strikeEl) strikeEl.scrollTop = ta.scrollTop;
+  };
+  ta.addEventListener("scroll", syncStrike, { passive: true });
   const compose = () => joinBody(ta.value, atts);
   const persist = async () => {
     clearTimeout(saveTimer);
@@ -659,6 +664,7 @@ function bindKeyboardFit(...fields) {
   const start = () => {
     if (on) return;
     on = true;
+    shell.classList.add("kb-on");
     baseH = window.innerHeight;
     window.addEventListener("scroll", snapBack, { passive: true });
     vv.addEventListener("resize", fit);
@@ -668,6 +674,7 @@ function bindKeyboardFit(...fields) {
   const release = () => {
     if (!on) return;
     on = false;
+    shell.classList.remove("kb-on");
     window.removeEventListener("scroll", snapBack);
     vv.removeEventListener("resize", fit);
     vv.removeEventListener("scroll", fit);
@@ -709,6 +716,7 @@ function backToList() {
   detailPersist = null;
   const shell = document.getElementById("app-shell");
   if (shell) {
+    shell.classList.remove("kb-on");
     shell.style.top = "";
     shell.style.bottom = "";
     shell.style.height = "";

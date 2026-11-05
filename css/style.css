@@ -2103,3 +2103,51 @@ textarea.memo-detail-text {
   text-decoration-color: var(--paper-ink);
   text-decoration-thickness: 1.5px;
 }
+
+/* メモ詳細：入力欄を画面の残りいっぱいに。入力欄の中だけがスクロールする */
+#scroll-container:has(.memo-detail) {
+  overflow: hidden;
+}
+.memo-detail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.memo-detail > * {
+  flex: 0 0 auto;
+}
+.memo-detail .memo-tools {
+  position: static;
+}
+.memo-detail .memo-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.memo-detail textarea.memo-detail-text {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.memo-detail .memo-strike {
+  overflow: hidden;
+}
+.memo-detail .memo-atts {
+  max-height: 30%;
+  overflow-y: auto;
+}
+/* キーボードが出ている間は、削除ボタンを隠す（誤タップ防止） */
+#app-shell.kb-on .memo-detail-footer {
+  display: none;
+}
+/* 入力中は上の見出しとタブを隠し、書く場所を広げる */
+#app-shell.kb-on #app-header,
+#app-shell.kb-on #tab-bar {
+  display: none;
+}
+#app-shell.kb-on .memo-detail-header {
+  padding-top: calc(env(safe-area-inset-top) + 8px);
+}
