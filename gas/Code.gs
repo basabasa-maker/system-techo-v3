@@ -224,7 +224,7 @@ function doPost(e) {
     if (type === "meal_day_upsert") {
       return jsonResponse({
         ok: true,
-        data: mealDayUpsert(body.date || "", body.slots),
+        data: mealDayUpsert(body.date || "", body.slots, body.set),
       });
     }
     if (type === "share_add") {
@@ -420,10 +420,33 @@ function pullMealMonth(monthStr) {
   return out;
 }
 
-function mealDayUpsert(dateStr, slots) {
+// 変えた区分だけ受け取って、保存済みの内容に重ねる（その日をまるごと上書きしない）
+// set: {区分: {time, text}}　旧形式の slots も、入っている区分だけを重ねる
+function mealDayUpsert(dateStr, slots, set) {
   if (!isYmd(dateStr)) throw new Error("date must be yyyy-MM-dd");
-  if (!slots || typeof slots !== "object") throw new Error("slots required");
-  return upsertJsonRow(MEAL_SHEET, MEAL_HEADERS, dateStr, slots);
+  const add = set && typeof set === "object" ? set : slots && typeof slots === "object" ? slots : null;
+  if (!add) throw new Error("set required");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sheet = getSheet(MEAL_SHEET, MEAL_HEADERS);
+    const rowIdx = findRowIndexById(sheet, dateStr);
+    let cur = null;
+    if (rowIdx > 0) {
+      try {
+        cur = JSON.parse(String(readRowAt(sheet, rowIdx, MEAL_HEADERS).json || "null"));
+      } catch (err) {
+        cur = null;
+      }
+    }
+    const next = cur && typeof cur === "object" && !Array.isArray(cur) ? cur : {};
+    Object.keys(add).forEach(function (k) {
+      next[k] = add[k];
+    });
+    return upsertJsonRow(MEAL_SHEET, MEAL_HEADERS, dateStr, next);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ---------- Memo operations ----------

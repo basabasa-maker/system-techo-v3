@@ -202,7 +202,7 @@ function paintDay() {
     const commit = () => {
       state.slots[slot].time = inp.value || "";
       clr.hidden = !inp.value;
-      onChanged();
+      onChanged(slot);
     };
     inp.addEventListener("change", commit);
     clr.addEventListener("click", () => {
@@ -213,19 +213,21 @@ function paintDay() {
   rootEl.querySelectorAll(".meal-text").forEach((ta) => {
     ta.addEventListener("input", () => {
       state.slots[ta.dataset.slot].text = ta.value;
-      onChanged();
+      onChanged(ta.dataset.slot);
     });
   });
 }
 
 // ---------- 保存 ----------
 
-function onChanged() {
+// 変えた区分だけを送る（その日をまるごと上書きしない）
+function onChanged(slot) {
   saveDayLocal(state.date, state.slots);
   clearTimeout(pushTimer);
   const ymd = state.date;
-  const slots = JSON.parse(JSON.stringify(state.slots));
-  pendingPush = { ymd, slots };
+  if (pendingPush && pendingPush.ymd !== ymd) flushPendingPush(); // 別の日に移る前に、前の日の分を先に送る
+  if (!pendingPush) pendingPush = { ymd, set: {} };
+  pendingPush.set[slot] = { time: state.slots[slot].time, text: state.slots[slot].text };
   pushTimer = setTimeout(flushPendingPush, 800);
 }
 
@@ -234,18 +236,18 @@ let pendingPush = null;
 function flushPendingPush() {
   clearTimeout(pushTimer);
   if (!pendingPush) return;
-  const { ymd, slots } = pendingPush;
+  const { ymd, set } = pendingPush;
   pendingPush = null;
-  pushDay(ymd, slots);
+  pushDay(ymd, set);
 }
 
-async function pushDay(ymd, slots) {
+async function pushDay(ymd, set) {
   try {
-    await gas.pushMealDay(ymd, slots);
+    await gas.pushMealDay(ymd, set);
   } catch (e) {
     await outbox.enqueue({
       type: "meal_day_upsert",
-      payload: { date: ymd, slots: slots },
+      payload: { date: ymd, set: set },
     });
     toast("オフライン：送信キューに追加", "warn");
   }

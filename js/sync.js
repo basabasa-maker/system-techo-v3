@@ -35,6 +35,11 @@ function toPatch(p) {
   return { set: p.set || p.values || {}, del: p.del || [] };
 }
 
+// 食事の「変えた区分」の形にそろえる（旧形式の slots も、入っている区分を追加・更新として扱う）
+function mealSet(p) {
+  return p.set || p.slots || {};
+}
+
 // 2つの変更を1つにまとめる（あとの変更が勝つ）
 export function mergePatch(a, b) {
   const set = { ...a.set };
@@ -66,7 +71,7 @@ async function send(op) {
     case "habit_items_upsert":
       return gas.pushHabitItems(p.items);
     case "meal_day_upsert":
-      return gas.pushMealDay(p.date, p.slots);
+      return gas.pushMealDay(p.date, mealSet(p));
     default:
       return null;
   }
@@ -90,7 +95,11 @@ export function flushAll() {
     let failed = 0;
     for (const [k, list] of groups) {
       let op = list[list.length - 1].op;
-      if (op.type === "habit_day_upsert") {
+      if (op.type === "meal_day_upsert") {
+        let set = {};
+        for (const it of list) set = { ...set, ...mealSet(it.op.payload || {}) };
+        op = { type: op.type, payload: { date: op.payload.date, set } };
+      } else if (op.type === "habit_day_upsert") {
         let merged = { set: {}, del: [] };
         for (const it of list) merged = mergePatch(merged, toPatch(it.op.payload || {}));
         op = { type: op.type, payload: { date: op.payload.date, set: merged.set, del: merged.del } };
@@ -101,7 +110,7 @@ export function flushAll() {
       } catch (e) {
         failed++;
         // 送れなかった習慣の変更は、まとめた1件にして残す
-        if (op.type === "habit_day_upsert" && list.length > 1) {
+        if ((op.type === "habit_day_upsert" || op.type === "meal_day_upsert") && list.length > 1) {
           for (const it of list.slice(0, -1)) await outbox.remove(it.id);
           await outbox.remove(list[list.length - 1].id);
           await outbox.enqueue(op);

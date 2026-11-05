@@ -243,14 +243,15 @@ export async function pullMealMonth(monthYm) {
   return body.data.days || {};
 }
 
-export async function pushMealDay(dateYmd, slots) {
+// set = { 区分: {time, text} }（変えた区分だけ送る）
+export async function pushMealDay(dateYmd, set) {
   const body = await fetchJson(GAS_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({
       type: "meal_day_upsert",
       date: dateYmd,
-      slots: slots,
+      set: set,
     }),
   });
   if (!body.ok) throw new Error(body.error || "meal_day_upsert failed");
