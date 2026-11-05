@@ -4,7 +4,7 @@
 // - CSS/JS/静的アセット: Network First（毎回更新を確認。オフライン時のみ保存分を使う）
 // - キャッシュ名はビルド時刻バージョンを含め、デプロイ時に自動更新する
 
-const BUILD_VERSION = "20261106-000107";
+const BUILD_VERSION = "20261106-000923";
 const CACHE_NAME = `system-techo-v3-${BUILD_VERSION}`;
 
 const PRECACHE_URLS = [
