@@ -206,6 +206,16 @@ export async function pullHabitDay(dateYmd) {
   return body.data.values || null;
 }
 
+export async function pullHabitRange(fromYmd, toYmd) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "habit_range");
+  url.searchParams.set("from", fromYmd);
+  url.searchParams.set("to", toYmd);
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullHabitRange failed");
+  return body.data.days || {};
+}
+
 export async function pushHabitDay(dateYmd, values) {
   const body = await fetchJson(GAS_URL, {
     method: "POST",

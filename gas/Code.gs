@@ -162,6 +162,11 @@ function doGet(e) {
       const date = (e.parameter && e.parameter.date) || "";
       return jsonResponse({ ok: true, data: { values: pullHabitDay(date) } });
     }
+    if (type === "habit_range") {
+      const from = (e.parameter && e.parameter.from) || "";
+      const to = (e.parameter && e.parameter.to) || "";
+      return jsonResponse({ ok: true, data: { days: pullHabitRange(from, to) } });
+    }
     if (type === "meal_month") {
       const month = (e.parameter && e.parameter.month) || "";
       return jsonResponse({ ok: true, data: { days: pullMealMonth(month) } });
@@ -353,6 +358,25 @@ function pullHabitDay(dateStr) {
   if (!isYmd(dateStr)) throw new Error("date must be yyyy-MM-dd");
   const v = readJsonRow(HABIT_DAYS_SHEET, HABIT_DAYS_HEADERS, dateStr);
   return v && typeof v === "object" ? v : null;
+}
+
+// from〜to（両端を含む）の日ごとの記録をまとめて返す。グラフ・履歴用
+function pullHabitRange(from, to) {
+  if (!isYmd(from) || !isYmd(to)) throw new Error("from/to must be yyyy-MM-dd");
+  const sheet = getSheet(HABIT_DAYS_SHEET, HABIT_DAYS_HEADERS);
+  const rows = readAllRows(sheet, HABIT_DAYS_HEADERS);
+  const out = {};
+  for (let i = 0; i < rows.length; i++) {
+    const d = formatDateCell(rows[i].date, "yyyy-MM-dd");
+    if (d < from || d > to) continue;
+    try {
+      const v = JSON.parse(String(rows[i].json || "null"));
+      if (v && typeof v === "object") out[d] = v;
+    } catch (err) {
+      /* 壊れた行は飛ばす */
+    }
+  }
+  return out;
 }
 
 function habitDayUpsert(dateStr, values) {

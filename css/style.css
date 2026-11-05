@@ -1991,3 +1991,58 @@ textarea.memo-detail-text {
   font-weight: 400;
   margin-top: 1px;
 }
+
+/* 習慣：入力・グラフ・履歴の切り替え */
+.habit-subtabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px 0;
+}
+.habit-sub {
+  flex: 1;
+  min-height: 38px;
+  border-radius: 19px;
+  border: 1px solid rgb(var(--ov) / 0.2);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+}
+.habit-sub.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0d1b2a;
+  font-weight: 600;
+}
+.habit-stats { padding: 12px; }
+.chart-c {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.chart-t { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.chart-c canvas { display: block; width: 100%; height: 160px; }
+.chart-s {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.chart-s span { color: var(--fg); font-weight: 600; margin-left: 2px; }
+.hist-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  border: none;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg);
+}
+.hist-d { flex: 0 0 84px; font-weight: 600; }
+.hist-v { font-size: 12px; color: var(--muted); }

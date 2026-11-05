@@ -14,12 +14,14 @@ import {
 import { toast, showSpinner, hideSpinner } from "./toast.js";
 import { todayYmd, addDaysYmd, parseYmd, pad2 } from "./date-util.js";
 import { enableLongPressReorder, justDragged } from "./reorder.js";
+import { loadRange, renderCharts, renderHistory } from "./habit-stats.js";
 
 const state = {
   date: todayYmd(),
   items: [],
   values: {},
   editMode: false,
+  sub: "input", // input | chart | hist
 };
 
 let rootEl = null;
@@ -176,10 +178,49 @@ function itemHtml(item) {
     </li>`;
 }
 
+function subTabsHtml() {
+  const t = (id, label) => `<button class="habit-sub ${state.sub === id ? "on" : ""}" data-sub="${id}">${label}</button>`;
+  return `<div class="habit-subtabs">${t("input", "入力")}${t("chart", "グラフ")}${t("hist", "履歴")}</div>`;
+}
+
+function bindSubTabs() {
+  rootEl.querySelectorAll(".habit-sub").forEach((b) => {
+    b.addEventListener("click", () => {
+      state.sub = b.dataset.sub;
+      state.editMode = false;
+      paint();
+    });
+  });
+}
+
+async function paintStats() {
+  rootEl.innerHTML = `<div class="habit-tab">${subTabsHtml()}<div id="habit-stats" class="habit-stats"><p class="empty-hint">読み込み中…</p></div></div>`;
+  bindSubTabs();
+  const sub = state.sub;
+  const data = await loadRange();
+  const box = rootEl && rootEl.querySelector("#habit-stats");
+  if (!box || state.sub !== sub) return;
+  if (sub === "chart") renderCharts(box, state.items, data);
+  else {
+    renderHistory(box, state.items, data, (ymd) => {
+      state.date = ymd;
+      state.sub = "input";
+      state.values = loadDay(ymd);
+      paint();
+      syncFromServer();
+    });
+  }
+}
+
 function paint() {
   if (!rootEl) return;
+  if (state.sub !== "input") {
+    paintStats();
+    return;
+  }
   rootEl.innerHTML = `
     <div class="habit-tab">
+      ${subTabsHtml()}
       <div class="habit-nav">
         <button id="h-prev" class="habit-nav-btn" aria-label="前の日">‹</button>
         <div class="habit-date">${dateTitle(state.date)}</div>
@@ -208,6 +249,7 @@ function paint() {
 }
 
 function bind() {
+  bindSubTabs();
   rootEl.querySelector("#h-prev").addEventListener("click", () => moveDate(-1));
   rootEl.querySelector("#h-next").addEventListener("click", () => moveDate(1));
   rootEl.querySelector("#h-today").addEventListener("click", () => {
