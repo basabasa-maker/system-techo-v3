@@ -611,7 +611,48 @@ function bindDetail() {
     });
   }
   paintAtts();
+  bindKeyboardFit(ta, titleEl);
   if (!en0.body && !en0.title) setTimeout(() => ta.focus(), 50);
+}
+
+// キーボードが出ても、画面全体が上へずれないようにする。
+// アプリの枠を「キーボードを除いた見える範囲」に合わせて縮め、
+// 見出しと入力欄を同じ位置に保つ（入力欄の中だけがスクロールする）
+function bindKeyboardFit(...fields) {
+  const vv = window.visualViewport;
+  const shell = document.getElementById("app-shell");
+  if (!vv || !shell) return;
+  let on = false;
+  const fit = () => {
+    shell.style.top = vv.offsetTop + "px";
+    shell.style.bottom = "auto";
+    shell.style.height = vv.height + "px";
+    window.scrollTo(0, 0);
+  };
+  const start = () => {
+    if (on) return;
+    on = true;
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+    fit();
+  };
+  const stop = () => {
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (a && fields.includes(a)) return; // タイトル⇔本文の移動では戻さない
+      if (!on) return;
+      on = false;
+      vv.removeEventListener("resize", fit);
+      vv.removeEventListener("scroll", fit);
+      shell.style.top = "";
+      shell.style.bottom = "";
+      shell.style.height = "";
+    }, 80);
+  };
+  fields.filter(Boolean).forEach((f) => {
+    f.addEventListener("focus", start);
+    f.addEventListener("blur", stop);
+  });
 }
 
 let detailPersist = null;
@@ -621,6 +662,12 @@ function backToList() {
   state.detailId = null;
   state.draft = null;
   detailPersist = null;
+  const shell = document.getElementById("app-shell");
+  if (shell) {
+    shell.style.top = "";
+    shell.style.bottom = "";
+    shell.style.height = "";
+  }
   paintRoot();
 }
 
