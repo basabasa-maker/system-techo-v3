@@ -117,6 +117,12 @@ function doGet(e) {
         },
       });
     }
+    if (type === "memo_attach_get") {
+      return jsonResponse({
+        ok: true,
+        data: memoAttachGet((e.parameter && e.parameter.id) || ""),
+      });
+    }
     if (type === "tasks") {
       const since = (e.parameter && e.parameter.since) || "";
       return jsonResponse({ ok: true, data: { tasks: pullTasks(since) } });
@@ -188,6 +194,12 @@ function doPost(e) {
     }
     if (type === "memo_url_fetch") {
       return jsonResponse({ ok: true, data: memoUrlFetch(body.url || "") });
+    }
+    if (type === "memo_attach") {
+      return jsonResponse({
+        ok: true,
+        data: memoAttachSave(body.name || "", body.mime || "", body.data || ""),
+      });
     }
     if (type === "memo_inbox_write") {
       return jsonResponse({
@@ -428,7 +440,7 @@ function memoUpsert(entry) {
       : now,
     updated_at: now,
     deleted: entry.deleted ? 1 : 0,
-    claude_taken: isDeletedTruthy(base.claude_taken) ? 1 : 0,
+    claude_taken: takenValue(base.claude_taken),
     pinned:
       entry.pinned != null
         ? (isDeletedTruthy(entry.pinned) ? 1 : 0)
@@ -615,7 +627,7 @@ function memoInboxWrite(entryId, dateStr) {
   let driveWrittenCount = 0;
   for (let i = 0; i < targets.length; i++) {
     const t = targets[i];
-    t.row.claude_taken = 1;
+    t.row.claude_taken = now;
     t.row.updated_at = now;
     const values = MEMO_HEADERS.map((h) => (t.row[h] != null ? t.row[h] : ""));
     sheet.getRange(t.idx, 1, 1, MEMO_HEADERS.length).setValues([values]);
@@ -864,7 +876,7 @@ function normalizeMemoOut(row) {
     created_at: formatDateCell(row.created_at, "yyyy-MM-dd HH:mm"),
     updated_at: formatDateCell(row.updated_at, "yyyy-MM-dd HH:mm"),
     deleted: isDeletedTruthy(row.deleted) ? 1 : 0,
-    claude_taken: isDeletedTruthy(row.claude_taken) ? 1 : 0,
+    claude_taken: takenValue(row.claude_taken),
     pinned: isDeletedTruthy(row.pinned) ? 1 : 0,
     sort_order: Number(row.sort_order) || 0,
   };
@@ -975,4 +987,61 @@ function jsonResponse(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
     ContentService.MimeType.JSON,
   );
+}
+
+
+// 取込済の値。日時が入っていればその文字列、旧データの1は1のまま、未取込は0
+function takenValue(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, "Asia/Tokyo", "yyyy-MM-dd HH:mm");
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v.trim())) return v.trim();
+  return isDeletedTruthy(v) ? 1 : 0;
+}
+
+// ---------- メモの添付ファイル ----------
+// 追加の許可が要らないよう、手帳のスプレッドシートの専用シートに保存する。
+// 1つのセルは5万字までなので、base64を4万字ずつに割って複数行に入れる。
+const ATTACH_SHEET = "メモ添付";
+const ATTACH_HEADERS = ["id", "name", "mime", "idx", "data"];
+const ATTACH_CHUNK = 40000;
+
+function memoAttachSave(name, mime, b64) {
+  if (!b64) throw new Error("data is empty");
+  const sheet = getSheet(ATTACH_SHEET, ATTACH_HEADERS);
+  const id = "a" + Utilities.getUuid().replace(/-/g, "").slice(0, 16);
+  const rows = [];
+  for (let i = 0, n = 0; i < b64.length; i += ATTACH_CHUNK, n++) {
+    rows.push([id, name || "file", mime || "application/octet-stream", n, b64.slice(i, i + ATTACH_CHUNK)]);
+  }
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, ATTACH_HEADERS.length).setValues(rows);
+  return { id: id, name: name || "file", mime: mime || "application/octet-stream" };
+}
+
+function memoAttachGet(id) {
+  if (!id) throw new Error("id is empty");
+  const sheet = getSheet(ATTACH_SHEET, ATTACH_HEADERS);
+  const last = sheet.getLastRow();
+  if (last < 2) throw new Error("not found");
+  const values = sheet.getRange(2, 1, last - 1, ATTACH_HEADERS.length).getValues();
+  const parts = values.filter((r) => String(r[0]) === String(id));
+  if (parts.length === 0) throw new Error("not found");
+  parts.sort((x, y) => Number(x[3]) - Number(y[3]));
+  return {
+    id: id,
+    name: String(parts[0][1]),
+    mime: String(parts[0][2]),
+    data: parts.map((r) => String(r[4])).join(""),
+  };
+}
+
+function memoAttachTest() {
+  const src = Utilities.base64Encode("hello".repeat(20000)); // 複数行に割れる大きさ
+  const up = memoAttachSave("test.txt", "text/plain", src);
+  const got = memoAttachGet(up.id);
+  // 試験行を消す
+  const sheet = getSheet(ATTACH_SHEET, ATTACH_HEADERS);
+  const vals = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 1), 1).getValues();
+  for (let i = vals.length - 1; i >= 0; i--) {
+    if (String(vals[i][0]) === up.id) sheet.deleteRow(i + 2);
+  }
+  return { same: got.data === src, len: got.data.length };
 }

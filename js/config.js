@@ -43,9 +43,9 @@ export const HABIT_DEFAULT_ITEMS = [
   { id: "finasteride", label: "フィン服用", icon: "💊", type: "check", unit: "" },
   { id: "suppPrep", label: "明日のサプリの準備", icon: "💪", type: "check", unit: "" },
   { id: "walk8000", label: "8000歩以上歩いた", icon: "🔥", type: "check", unit: "" },
-  { id: "tabelogFollowers", label: "食べログ フォロワー", icon: "⭐", type: "number", unit: "人" },
-  { id: "tabelogReactions", label: "食べログ リアクション", icon: "📊", type: "number", unit: "件" },
-  { id: "instaFollowers", label: "Instagram フォロワー", icon: "📸", type: "number", unit: "人" },
+  { id: "tabelogFollowers", label: "食べログ フォロワー", icon: "⭐", type: "cumulative", unit: "人" },
+  { id: "tabelogReactions", label: "食べログ リアクション", icon: "📊", type: "cumulative", unit: "件" },
+  { id: "instaFollowers", label: "Instagram フォロワー", icon: "📸", type: "cumulative", unit: "人" },
 ];
 
 // 食事タブの区分と時刻プルダウンの刻み（分）

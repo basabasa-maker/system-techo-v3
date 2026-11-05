@@ -366,8 +366,8 @@ async function deleteJournal(id) {
 
 // ---------- Pull（更新ボタンから呼ばれる） ----------
 
-export async function pullAndRender() {
-  showSpinner();
+export async function pullAndRender(quiet = false) {
+  if (!quiet) showSpinner();
   try {
     await flushOutbox();
     const [events, entries] = await Promise.all([
@@ -380,12 +380,12 @@ export async function pullAndRender() {
       paintEvents();
       paintTasks();
     }
-    toast("最新化しました", "success");
+    if (!quiet) toast("最新化しました", "success");
   } catch (e) {
     console.error(e);
-    toast("取得に失敗しました: " + e.message, "error");
+    if (!quiet) toast("取得に失敗しました: " + e.message, "error");
   } finally {
-    hideSpinner();
+    if (!quiet) hideSpinner();
   }
 }
 

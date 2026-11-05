@@ -53,7 +53,47 @@ function switchTab(tab) {
   } else if (tab === "meal") {
     renderMealTab(content);
   }
+  quietSync(tab);
 }
+
+// 開いたとき・タブを切り替えたときに、画面を止めずに最新へ入れ替える
+// （習慣・食事・メモは各タブ側で取得済み）
+function quietSync(tab) {
+  if (tab === "task") pullTask(daysAgoYmd(30), true);
+  else if (tab === "daily") pullDaily(true);
+}
+
+// 入力を終えたとき、キーボードで生じた画面のずれ（横振れ）を元に戻す
+function resetScrollOffset() {
+  window.scrollTo(0, 0);
+  const sc = document.getElementById("scroll-container");
+  if (sc) sc.scrollLeft = 0;
+  const shell = document.getElementById("app-shell");
+  if (shell) shell.scrollLeft = 0;
+}
+document.addEventListener("focusout", () => {
+  setTimeout(() => {
+    const t = document.activeElement && document.activeElement.tagName;
+    if (!/^(INPUT|TEXTAREA|SELECT)$/.test(t || "")) resetScrollOffset();
+  }, 120);
+});
+window.addEventListener("pageshow", resetScrollOffset);
+
+// アプリに戻ってきたとき、20秒以上離れていれば最新にする
+// 入力中・ダイアログ表示中は画面を作り直さない
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    hiddenAt = Date.now();
+    return;
+  }
+  if (!hiddenAt || Date.now() - hiddenAt < 20000) return;
+  hiddenAt = 0;
+  const a = document.activeElement;
+  const typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+  if (typing || document.querySelector(".modal-backdrop")) return;
+  switchTab(appState.activeTab);
+});
 
 async function onRefresh() {
   if (appState.activeTab === "task") {

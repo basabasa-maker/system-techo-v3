@@ -144,6 +144,25 @@ export async function fetchUrlTitle(url) {
   return body.data;
 }
 
+export async function pushMemoAttach(name, mime, b64) {
+  const body = await fetchJson(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ type: "memo_attach", name, mime, data: b64 }),
+  });
+  if (!body.ok) throw new Error(body.error || "memo_attach failed");
+  return body.data;
+}
+
+export async function pullMemoAttach(id) {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "memo_attach_get");
+  url.searchParams.set("id", id);
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "memo_attach_get failed");
+  return body.data;
+}
+
 export async function pushMemoInboxWrite(entryId, dateYmd) {
   const payload = { type: "memo_inbox_write" };
   if (entryId) payload.entry_id = entryId;

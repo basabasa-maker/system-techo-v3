@@ -55,7 +55,11 @@
 :root[data-theme="lavender"] { --bg: #e6e0f7; }
 /* 明るい背景では、色付き文字を濃くして読めるようにする */
 :root[data-kind="light"] .task-status-doing { color: #0b6b5c; }
-:root[data-kind="light"] .task-status-done { color: #1f55b8; }
+:root[data-kind="light"] .task-status-adjusting {
+  background: rgba(183, 139, 230, 0.25);
+  color: #d8b8ff;
+}
+.task-status-done { color: #1f55b8; }
 :root[data-kind="light"] .habit-value.filled { color: #1b6e4c; background: rgba(27, 110, 76, 0.14); }
 :root[data-kind="light"] .task-today h2 { color: #a35f00; }
 :root[data-kind="light"] .task-item.is-done .task-title { color: var(--muted); }
@@ -339,6 +343,9 @@ textarea {
 /* ステータス表示: 左の帯と小さな札 */
 .task-item-wrap.st-doing .task-item {
   box-shadow: inset 4px 0 0 #2fb5a0;
+}
+.task-item-wrap.st-adjusting .task-item {
+  box-shadow: inset 4px 0 0 #b78be6;
 }
 .task-item-wrap.st-todo .task-item {
   box-shadow: inset 4px 0 0 #566b89;
@@ -1774,4 +1781,190 @@ input.habit-value {
   background: var(--paper-input, #fff);
   border: 1px solid var(--paper-line);
   color: var(--paper-ink);
+}
+
+/* 習慣：加算ボタン・項目編集 */
+.habit-plus {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 20px;
+  font-weight: 700;
+}
+.ed-label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.icon-opt {
+  height: 38px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: var(--field);
+  font-size: 20px;
+  padding: 0;
+}
+.icon-opt.sel { border-color: var(--accent); }
+
+/* 入力欄は16px以上にする（iPhoneは小さい文字の欄を押すと画面を拡大し、横にずれたままになる） */
+input,
+select,
+textarea {
+  font-size: 16px !important;
+}
+
+/* ---------- メモ：一覧（すべて左端をそろえる） ---------- */
+.memo-row-inner {
+  padding: 10px 14px;
+  gap: 2px;
+}
+.memo-row-head {
+  gap: 6px;
+}
+.memo-row-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.memo-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.memo-row-time {
+  min-width: 0;
+  font-size: 12px;
+}
+.memo-pin-icon {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+/* ---------- メモ：詳細（開いてすぐ書ける） ---------- */
+.memo-tools {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--paper-line);
+  background: var(--paper);
+  position: sticky;
+  top: 61px;
+  z-index: 4;
+}
+.memo-tool {
+  flex: 1;
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--paper-line);
+  background: var(--paper-btn, #efeadb);
+  color: var(--paper-ink);
+  font-size: 13px;
+  padding: 0 4px;
+}
+.memo-detail-title-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  border-bottom: 1px solid var(--paper-line);
+  background: var(--paper);
+  color: var(--paper-ink);
+  padding: 8px 16px;
+  font-weight: 700;
+  border-radius: 0;
+}
+textarea.memo-detail-text {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 16px;
+  border: none;
+  border-radius: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  font: 16px/32px -apple-system, "Hiragino Sans", sans-serif;
+  color: var(--paper-ink);
+  background-color: var(--paper);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    var(--paper-line) 31px,
+    var(--paper-line) 32px
+  );
+  background-origin: padding-box;
+  background-position: 0 0;
+  background-attachment: scroll;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.memo-atts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+}
+.memo-att {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.memo-att-img {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: 8px;
+  border: 1px solid var(--paper-line);
+}
+.memo-att-file {
+  flex: 1;
+  text-align: left;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--paper-line);
+  background: var(--paper-btn, #efeadb);
+  color: var(--paper-ink);
+  padding: 0 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.memo-att-rm {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 14px;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+}
+.memo-att-file + .memo-att-rm {
+  position: static;
+  flex: 0 0 auto;
+}
+.memo-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.memo-viewer img {
+  max-width: 100%;
+  max-height: 100%;
 }

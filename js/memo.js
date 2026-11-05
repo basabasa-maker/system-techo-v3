@@ -22,6 +22,7 @@ const state = {
   sortDesc: true,
   view: "list", // list | detail
   detailId: null,
+  draft: null, // まだ保存していない新規メモ
 };
 
 let rootEl = null;
@@ -90,7 +91,13 @@ function bindList() {
   });
   rootEl
     .querySelector("#btn-new-memo")
-    .addEventListener("click", () => openEditor(newEntry()));
+    .addEventListener("click", () => {
+      const en = newEntry();
+      state.draft = en;
+      state.view = "detail";
+      state.detailId = en.id;
+      paintRoot();
+    });
 }
 
 // ---------- List body ----------
@@ -205,22 +212,12 @@ async function onReorderMemos(ids) {
 }
 
 function memoRowHtml(en) {
-  const hhmm = extractHhMmFromCreated(en.created_at);
-  const title = en.title || firstLine(en.body) || "(無題)";
-  // タイトルが無いときは本文の1行目が見出しになる。その場合の下段は2行目以降を出す
-  const preview = en.title
-    ? firstLine(en.body || "", 80)
-    : firstLine(
-        String(en.body || "")
-          .split(/\r?\n/)
-          .slice(1)
-          .join(" "),
-        80,
-      );
-  const pinIcon = en.pinned ? `<span class="memo-pin-icon">📌</span>` : "";
-  const claudeBadge = isClaudeTaken(en)
-    ? `<span class="memo-claude-badge" title="Claude取込み済み">✓Claude</span>`
-    : "";
+  // 1行目＝タイトル（無ければ本文の1行目）。2行目＝日時（＋取込済）。本文は出さない
+  const text = splitBody(en.body).text;
+  const title = en.title || firstLine(text) || "(無題)";
+  const when = `${en.date || extractDateFromCreated(en.created_at)} ${extractHhMmFromCreated(en.created_at)}`.trim();
+  const taken = takenLabel(en);
+  const pin = en.pinned ? `<span class="memo-pin-icon">📌</span>` : "";
   return `
     <div class="memo-row-wrap" data-id="${escapeAttr(en.id)}">
       <div class="memo-row-action memo-row-pin" data-action="pin">${en.pinned ? "ピン解除" : "ピン留め"}</div>
@@ -228,12 +225,13 @@ function memoRowHtml(en) {
       <div class="memo-row" data-id="${escapeAttr(en.id)}">
         <div class="memo-row-inner">
           <div class="memo-row-head">
-            ${pinIcon}
-            <span class="memo-row-time">${escapeHtml(hhmm)}</span>
             <span class="memo-row-title">${escapeHtml(title)}</span>
-            ${claudeBadge}
+            ${pin}
           </div>
-          ${preview && preview !== title ? `<div class="memo-row-preview">${escapeHtml(preview)}</div>` : ""}
+          <div class="memo-row-sub">
+            <span class="memo-row-time">${escapeHtml(when)}</span>
+            ${taken ? `<span class="memo-claude-badge">${escapeHtml(taken)}</span>` : ""}
+          </div>
         </div>
       </div>
     </div>
@@ -245,9 +243,16 @@ function isClaudeTaken(en) {
   if (v === 1 || v === true) return true;
   if (typeof v === "string") {
     const s = v.trim().toLowerCase();
-    return s === "1" || s === "true";
+    return s === "1" || s === "true" || /^\d{4}-\d{2}-\d{2}/.test(s);
   }
   return false;
+}
+
+// 「取込済」＋取り込んだ日時（日時が分かるときだけ）
+function takenLabel(en) {
+  if (!isClaudeTaken(en)) return "";
+  const m = String(en.claude_taken).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  return m ? `取込済 ${m[2]}/${m[3]} ${m[4]}:${m[5]}` : "取込済";
 }
 
 function bindRowEvents(bodyEl) {
@@ -364,31 +369,57 @@ function resetAllSwipes(exceptWrap) {
   });
 }
 
-// ---------- Detail view ----------
+// ---------- Detail view（開いたらすぐ書ける） ----------
+
+const ATT_RE = /^\[\[att:([^|\]]+)\|([^|\]]*)\|([^\]]*)\]\]\s*$/;
+
+// 本文を「文字」と「添付」に分ける（添付は本文の末尾に1行ずつ記録している）
+function splitBody(body) {
+  const lines = String(body || "").split(/\r?\n/);
+  const atts = [];
+  const text = [];
+  for (const ln of lines) {
+    const m = ln.match(ATT_RE);
+    if (m) atts.push({ id: m[1], name: m[2], mime: m[3] });
+    else text.push(ln);
+  }
+  return { text: text.join("\n").replace(/\s+$/, ""), atts };
+}
+
+function joinBody(text, atts) {
+  const tokens = atts.map((a) => `[[att:${a.id}|${a.name.replace(/[|\]\n]/g, "_")}|${a.mime}]]`);
+  return [text.replace(/\s+$/, ""), ...tokens].filter((x, i) => i === 0 || x).join("\n");
+}
+
+function currentEntry() {
+  return findEntry(state.detailId) || (state.draft && state.draft.id === state.detailId ? state.draft : null);
+}
 
 function renderDetail() {
-  const en = findEntry(state.detailId);
+  const en = currentEntry();
   if (!en) {
     return `<div class="memo-detail"><p class="empty-hint">見つかりませんでした。</p><button class="btn-ghost" id="d-back">← 戻る</button></div>`;
   }
-  const bodyHtml = linkifyBody(en.body || "");
   const hhmm = extractHhMmFromCreated(en.created_at);
-  const claudeBadgeDetail = isClaudeTaken(en)
-    ? `<span class="memo-detail-claude-badge" title="Claude取込み済み">✓Claude取込済</span>`
-    : "";
+  const taken = takenLabel(en);
+  const { text } = splitBody(en.body);
   return `
     <div class="memo-detail">
       <div class="memo-detail-header">
         <button class="btn-back" id="d-back">← 戻る</button>
-        <span class="memo-detail-time">${escapeHtml(en.date || "")} ${escapeHtml(hhmm)}</span>
-        ${claudeBadgeDetail}
-        <button class="btn-take-sm" id="d-take">取込む</button>
+        <span class="memo-detail-time">${escapeHtml(en.date || "")} ${escapeHtml(hhmm)}${taken ? ` ・ ${escapeHtml(taken)}` : ""}</span>
       </div>
-      ${en.title ? `<h2 class="memo-detail-title">${escapeHtml(en.title)}</h2>` : ""}
-      ${en.tags ? `<div class="memo-detail-tags">${escapeHtml(en.tags)}</div>` : ""}
-      <div class="memo-detail-body memo-paper">${bodyHtml}</div>
+      <div class="memo-tools">
+        <button class="memo-tool" id="d-check">☑ チェック</button>
+        <button class="memo-tool" id="d-attach">📎 添付</button>
+        <button class="memo-tool" id="d-copy">コピー</button>
+        <button class="memo-tool" id="d-take">取込む</button>
+        <input type="file" id="d-file" multiple hidden />
+      </div>
+      ${en.title ? `<input type="text" id="d-title" class="memo-detail-title-input" value="${escapeAttr(en.title)}" autocomplete="off" placeholder="タイトル" />` : ""}
+      <textarea id="d-text" class="memo-paper memo-paper-input memo-detail-text" placeholder="ここにメモ" spellcheck="false">${escapeHtml(text)}</textarea>
+      <div id="d-atts" class="memo-atts"></div>
       <div class="memo-detail-footer">
-        <button class="btn-ghost" id="d-edit">編集</button>
         <button class="btn-danger" id="d-delete">削除</button>
       </div>
     </div>
@@ -396,32 +427,308 @@ function renderDetail() {
 }
 
 function bindDetail() {
-  const back = rootEl.querySelector("#d-back");
-  if (back) back.addEventListener("click", backToList);
-  const edit = rootEl.querySelector("#d-edit");
-  if (edit) {
-    edit.addEventListener("click", () => {
-      const en = findEntry(state.detailId);
-      if (en) openEditor(en);
+  const en0 = currentEntry();
+  if (!en0) {
+    const back = rootEl.querySelector("#d-back");
+    if (back) back.addEventListener("click", backToList);
+    return;
+  }
+  const ta = rootEl.querySelector("#d-text");
+  const titleEl = rootEl.querySelector("#d-title");
+  let atts = splitBody(en0.body).atts;
+  let saveTimer = null;
+  let lastSaved = en0.body || "";
+
+  const fit = () => {
+    ta.style.height = "auto";
+    ta.style.height = Math.max(ta.scrollHeight, Math.round(window.innerHeight * 0.45)) + "px";
+  };
+  const compose = () => joinBody(ta.value, atts);
+  const persist = async () => {
+    clearTimeout(saveTimer);
+    const cur = currentEntry();
+    if (!cur) return;
+    const body = compose();
+    const title = titleEl ? titleEl.value.trim() : cur.title || "";
+    if (body === lastSaved && title === (cur.title || "")) return;
+    if (!title && !splitBody(body).text && atts.length === 0 && !findEntry(cur.id)) return; // 空の新規は作らない
+    lastSaved = body;
+    const next = { ...cur, title, body, updated_at: nowJst(), deleted: 0 };
+    delete next._isNew;
+    state.draft = next;
+    await saveQuiet(next);
+  };
+  const schedule = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(persist, 700);
+  };
+  detailPersist = persist;
+
+  ta.addEventListener("input", () => {
+    fit();
+    schedule();
+  });
+  if (titleEl) titleEl.addEventListener("input", schedule);
+  fit();
+
+  // 空の行をタップしたら、その行まで改行を足してカーソルを置く／チェック欄のタップで切り替え
+  bindPaperTap(ta, fit, schedule);
+
+  // Enterでチェックを引き継ぐ
+  ta.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.isComposing) return;
+    const pos = ta.selectionStart;
+    const ls = ta.value.lastIndexOf("\n", pos - 1) + 1;
+    const line = ta.value.slice(ls, pos);
+    const m = line.match(/^([☐☑]) (.*)$/);
+    if (!m || ta.selectionEnd !== pos) return;
+    e.preventDefault();
+    if (!m[2]) {
+      // 中身が空のチェック行でEnter → チェックを外す
+      ta.value = ta.value.slice(0, ls) + ta.value.slice(pos);
+      ta.setSelectionRange(ls, ls);
+    } else {
+      ta.setRangeText("\n☐ ", pos, pos, "end");
+    }
+    fit();
+    schedule();
+  });
+
+  rootEl.querySelector("#d-back").addEventListener("click", async () => {
+    await persist();
+    backToList();
+  });
+  rootEl.querySelector("#d-delete").addEventListener("click", () => confirmDelete(state.detailId));
+  rootEl.querySelector("#d-take").addEventListener("click", async () => {
+    await persist();
+    inboxEntry(state.detailId);
+  });
+  rootEl.querySelector("#d-copy").addEventListener("click", () => copyText(ta.value));
+  rootEl.querySelector("#d-check").addEventListener("click", () => {
+    const pos = ta.selectionStart;
+    const ls = ta.value.lastIndexOf("\n", pos - 1) + 1;
+    const head = ta.value.slice(ls, ls + 2);
+    if (head === "☐ " || head === "☑ ") {
+      ta.setRangeText("", ls, ls + 2, "preserve");
+      ta.setSelectionRange(Math.max(ls, pos - 2), Math.max(ls, pos - 2));
+    } else {
+      ta.setRangeText("☐ ", ls, ls, "preserve");
+      ta.setSelectionRange(pos + 2, pos + 2);
+    }
+    ta.focus();
+    fit();
+    schedule();
+  });
+
+  // 添付
+  const fileEl = rootEl.querySelector("#d-file");
+  rootEl.querySelector("#d-attach").addEventListener("click", () => fileEl.click());
+  fileEl.addEventListener("change", async () => {
+    const files = Array.from(fileEl.files || []);
+    fileEl.value = "";
+    await addFiles(files);
+  });
+  ta.addEventListener("paste", (e) => {
+    const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
+    if (files.length === 0) return; // 文字の貼り付けはそのまま
+    e.preventDefault();
+    addFiles(files);
+  });
+  async function addFiles(files) {
+    for (const f of files) {
+      try {
+        showSpinner();
+        const up = await uploadFile(f);
+        atts = [...atts, up];
+        paintAtts();
+        await persist();
+      } catch (err) {
+        toast("添付に失敗：" + err.message, "error");
+      } finally {
+        hideSpinner();
+      }
+    }
+  }
+  function paintAtts() {
+    const box = rootEl.querySelector("#d-atts");
+    if (!box) return;
+    box.innerHTML = "";
+    atts.forEach((a, i) => {
+      const item = document.createElement("div");
+      item.className = "memo-att";
+      const rm = document.createElement("button");
+      rm.className = "memo-att-rm";
+      rm.textContent = "×";
+      rm.setAttribute("aria-label", "添付を外す");
+      rm.addEventListener("click", () => {
+        if (!confirm(`「${a.name}」を外しますか？`)) return;
+        atts = atts.filter((_, j) => j !== i);
+        paintAtts();
+        persist();
+      });
+      if (/^image\//.test(a.mime)) {
+        const img = document.createElement("img");
+        img.alt = a.name;
+        img.className = "memo-att-img";
+        item.appendChild(img);
+        loadAttachment(a).then((url) => {
+          img.src = url;
+          img.addEventListener("click", () => openViewer(url));
+        }).catch(() => {
+          item.insertBefore(Object.assign(document.createElement("span"), { textContent: "画像を読めません：" + a.name }), rm);
+          img.remove();
+        });
+      } else {
+        const b = document.createElement("button");
+        b.className = "memo-att-file";
+        b.textContent = "📎 " + a.name;
+        b.addEventListener("click", async () => {
+          try {
+            const url = await loadAttachment(a);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = a.name;
+            link.click();
+          } catch (err) {
+            toast("開けません：" + err.message, "error");
+          }
+        });
+        item.appendChild(b);
+      }
+      item.appendChild(rm);
+      box.appendChild(item);
     });
   }
-  const del = rootEl.querySelector("#d-delete");
-  if (del) {
-    del.addEventListener("click", () => confirmDelete(state.detailId));
-  }
-  const take = rootEl.querySelector("#d-take");
-  if (take) {
-    take.addEventListener("click", () => inboxEntry(state.detailId));
-  }
+  paintAtts();
+  if (!en0.body && !en0.title) setTimeout(() => ta.focus(), 50);
 }
+
+let detailPersist = null;
 
 function backToList() {
   state.view = "list";
   state.detailId = null;
+  state.draft = null;
+  detailPersist = null;
   paintRoot();
 }
 
-// ---------- FAB / Type picker / Editor ----------
+// ---------- 添付ファイル ----------
+
+const attMem = new Map();
+
+async function uploadFile(file) {
+  let blob = file;
+  let name = file.name || "file";
+  let mime = file.type || "application/octet-stream";
+  if (/^image\//.test(mime) && mime !== "image/gif") {
+    blob = await downscaleImage(file, 1280, 0.72);
+    mime = "image/jpeg";
+    if (!/\.jpe?g$/i.test(name)) name = name.replace(/\.[^.]*$/, "") + ".jpg";
+    if (!name || name === ".jpg") name = "image.jpg";
+  }
+  if (blob.size > 3 * 1024 * 1024) throw new Error("大きすぎます（3MBまで）");
+  const b64 = await blobToBase64(blob);
+  const res = await gas.pushMemoAttach(name, mime, b64);
+  attMem.set(res.id, URL.createObjectURL(blob));
+  return { id: res.id, name: res.name || name, mime: res.mime || mime };
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] || "");
+    r.onerror = () => reject(new Error("読み込めません"));
+    r.readAsDataURL(blob);
+  });
+}
+
+function downscaleImage(file, maxSide, quality) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error("画像を変換できません"))), "image/jpeg", quality);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("画像を読めません"));
+    };
+    img.src = url;
+  });
+}
+
+// 一度読んだ添付は端末にも控える（次回から通信しない）
+async function loadAttachment(a) {
+  if (attMem.has(a.id)) return attMem.get(a.id);
+  const key = "/_att/" + a.id;
+  try {
+    if (window.caches) {
+      const cache = await caches.open("sth-att");
+      const hit = await cache.match(key);
+      if (hit) {
+        const url = URL.createObjectURL(await hit.blob());
+        attMem.set(a.id, url);
+        return url;
+      }
+    }
+  } catch (e) {
+    /* 控えが使えなくても続ける */
+  }
+  const data = await gas.pullMemoAttach(a.id);
+  const bin = atob(data.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: data.mime || a.mime });
+  try {
+    if (window.caches) {
+      const cache = await caches.open("sth-att");
+      await cache.put(key, new Response(blob, { headers: { "Content-Type": blob.type } }));
+    }
+  } catch (e) {
+    /* ignore */
+  }
+  const url = URL.createObjectURL(blob);
+  attMem.set(a.id, url);
+  return url;
+}
+
+function openViewer(url) {
+  const v = document.createElement("div");
+  v.className = "memo-viewer";
+  v.innerHTML = `<img src="${url}" alt="" />`;
+  v.addEventListener("click", () => v.remove());
+  document.body.appendChild(v);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("コピーしました", "success");
+  } catch (e) {
+    const t = document.createElement("textarea");
+    t.value = text;
+    t.style.cssText = "position:fixed;left:-9999px;top:0;font-size:16px";
+    document.body.appendChild(t);
+    t.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch (e2) {
+      /* ignore */
+    }
+    t.remove();
+    toast(ok ? "コピーしました" : "コピーできませんでした", ok ? "success" : "error");
+  }
+}
+
+// ---------- FAB / 新規 ----------
 
 function newEntry() {
   const today = todayYmd();
@@ -444,9 +751,11 @@ function newEntry() {
   };
 }
 
-// 罫線の空き行をタップしたら、その行まで改行を足してカーソルを置く
-function bindPaperTap(ta) {
+// 罫線の空き行をタップしたら、その行まで改行を足してカーソルを置く。
+// 行頭のチェック欄（☐/☑）をタップしたら、チェックを切り替える
+function bindPaperTap(ta, fit, schedule) {
   const LINE = 32;
+  const PAD = 16;
   const mirror = document.createElement("div");
   const renderedHeight = () => {
     const cs = getComputedStyle(ta);
@@ -462,91 +771,41 @@ function bindPaperTap(ta) {
   };
   ta.addEventListener("click", (e) => {
     const rect = ta.getBoundingClientRect();
+    const x = e.clientX - rect.left;
     const y = e.clientY - rect.top + ta.scrollTop;
+    const pos = ta.selectionStart;
+    const ls = ta.value.lastIndexOf("\n", pos - 1) + 1;
+    const mark = ta.value.slice(ls, ls + 2);
+    if ((mark === "☐ " || mark === "☑ ") && x < PAD + 30 && pos <= ls + 2) {
+      ta.setRangeText(mark === "☐ " ? "☑ " : "☐ ", ls, ls + 2, "preserve");
+      schedule();
+      return;
+    }
     const usedLines = Math.max(1, Math.round(renderedHeight() / LINE));
     const tapLine = Math.floor(y / LINE);
     if (tapLine < usedLines) return; // 文字がある行は、ふつうに位置が決まる
     const add = tapLine - usedLines + 1;
-    // 最終行が空でなければ、そこから改行して目的の行へ
     ta.value = ta.value + "\n".repeat(add);
     const end = ta.value.length;
     ta.setSelectionRange(end, end);
     ta.focus();
-  });
-  setTimeout(() => ta.focus(), 50);
-}
-
-function openEditor(existing) {
-  const en = { ...existing };
-  const isNew = !!en._isNew;
-
-  // メモは本文1つだけ。ロディア風の罫線入り用紙に書く。
-  // 過去メモにタイトルが付いている場合だけ、消えないようにタイトル欄も出す
-  const titleHtml = en.title
-    ? `<input type="text" id="m-title" class="memo-title-input" value="${escapeAttr(en.title)}" autocomplete="off" placeholder="タイトル" />`
-    : "";
-
-  const modal = document.createElement("div");
-  modal.className = "modal-backdrop memo-backdrop";
-  modal.innerHTML = `
-    <div class="modal memo-modal">
-      <header>${isNew ? "新しいメモ" : "メモを編集"}</header>
-      <div class="modal-body memo-modal-body">
-        ${titleHtml}
-        <textarea id="m-body" class="memo-paper memo-paper-input" rows="9" placeholder="ここにメモ">${escapeHtml(en.body || "")}</textarea>
-      </div>
-      <footer>
-        <div style="flex:1"></div>
-        <button class="btn-ghost" id="m-cancel">キャンセル</button>
-        <button class="btn-primary" id="m-save">保存</button>
-      </footer>
-    </div>`;
-  document.body.appendChild(modal);
-  bindPaperTap(modal.querySelector("#m-body"));
-  // キーボードで隠れないよう、見えている高さに合わせる
-  const vv = window.visualViewport;
-  const fit = () => {
-    if (!vv) return;
-    modal.style.setProperty("--memo-h", vv.height + "px");
-    modal.firstElementChild.style.marginTop = vv.offsetTop + "px";
-  };
-  if (vv) {
-    vv.addEventListener("resize", fit);
-    vv.addEventListener("scroll", fit);
     fit();
-  }
-  const close = () => {
-    if (vv) {
-      vv.removeEventListener("resize", fit);
-      vv.removeEventListener("scroll", fit);
-    }
-    modal.remove();
-  };
-  modal.querySelector("#m-cancel").addEventListener("click", close);
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) close();
-  });
-
-  modal.querySelector("#m-save").addEventListener("click", async () => {
-    const updated = { ...en };
-    delete updated._isNew;
-    const body = modal.querySelector("#m-body").value.trim();
-    const titleEl = modal.querySelector("#m-title");
-    const title = titleEl ? titleEl.value.trim() : en.title || "";
-    if (!title && !body) {
-      toast("メモを入力してください", "error");
-      return;
-    }
-    updated.title = title;
-    updated.body = body;
-    updated.updated_at = nowJst();
-    updated.deleted = 0;
-    close();
-    await saveEntry(updated);
+    schedule();
   });
 }
 
 // ---------- Save / Delete / Pin / Inbox ----------
+
+// 書いている最中の自動保存（画面は作り直さない・音も出さない）
+async function saveQuiet(entry) {
+  store.upsertMemoAllLocal(entry);
+  try {
+    const saved = await gas.pushMemoUpsert(entry);
+    store.upsertMemoAllLocal({ ...saved, body: entry.body, title: entry.title });
+  } catch (e) {
+    await outbox.enqueue({ type: "memo_upsert", payload: entry });
+  }
+}
 
 async function saveEntry(entry) {
   store.upsertMemoAllLocal(entry);
@@ -636,7 +895,7 @@ async function inboxEntry(id) {
     const res = await gas.pushMemoInboxWrite(id, "");
     const en = findEntry(id);
     if (en) {
-      en.claude_taken = 1;
+      en.claude_taken = nowJst();
       store.upsertMemoAllLocal(en);
     }
     if (state.view === "list") paintBody();
@@ -652,6 +911,7 @@ async function inboxEntry(id) {
 // ---------- Pull ----------
 
 export async function pullAndRender() {
+  if (detailPersist) await detailPersist();
   showSpinner();
   try {
     await flushOutbox();

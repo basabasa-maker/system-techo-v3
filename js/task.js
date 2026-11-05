@@ -17,6 +17,7 @@ const PRIORITY_ORDER = { high: 0, mid: 1, low: 2 };
 const STATUS_LABEL = {
   todo: "未着手",
   doing: "進行中",
+  adjusting: "調整中",
   done: "完了",
   archived: "アーカイブ",
 };
@@ -382,6 +383,7 @@ function escapeHtml(s) {
 const STATUS_VIEW = {
   todo: "○ 未着手",
   doing: "◐ 進行中",
+  adjusting: "◔ 調整中",
   done: "● 完了",
   archived: "▣ 保管",
 };
@@ -458,6 +460,7 @@ function openEditor(existing) {
           <select id="m-status">
             <option value="todo">未着手</option>
             <option value="doing">進行中</option>
+            <option value="adjusting">調整中</option>
             <option value="done">完了</option>
             <option value="archived">アーカイブ</option>
           </select>
@@ -570,20 +573,20 @@ async function toggleDone(id) {
 
 // ---------- Pull（更新ボタンから呼ばれる） ----------
 
-export async function pullAndRender(sinceYmd) {
-  showSpinner();
+export async function pullAndRender(sinceYmd, quiet = false) {
+  if (!quiet) showSpinner();
   try {
     // outbox を先に flush
     await flushOutbox();
     const tasks = await gas.pullTasks(sinceYmd);
     store.mergeTasks(tasks);
     renderList();
-    toast("最新化しました", "success");
+    if (!quiet) toast("最新化しました", "success");
   } catch (e) {
     console.error(e);
-    toast("取得に失敗しました: " + e.message, "error");
+    if (!quiet) toast("取得に失敗しました: " + e.message, "error");
   } finally {
-    hideSpinner();
+    if (!quiet) hideSpinner();
   }
 }
 
