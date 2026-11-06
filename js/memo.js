@@ -446,7 +446,7 @@ function bindDetail() {
     if (!strikeEl) return;
     strikeEl.innerHTML = ta.value
       .split("\n")
-      .map((ln) => (ln.startsWith("☑") ? `<span class="done">${escapeHtml(ln)}</span>` : escapeHtml(ln)))
+      .map((ln) => (ln.startsWith("☑") ? `${escapeHtml(ln.slice(0, 2))}<span class="done">${escapeHtml(ln.slice(2))}</span>` : escapeHtml(ln)))
       .join("\n");
   };
   // 入力欄は画面の残りいっぱいに広げ、長いメモは入力欄の中だけでスクロールさせる。
@@ -627,6 +627,7 @@ function bindDetail() {
 // タップしてもキーボードが出ても、画面の大きさや位置は変わらない（せり上がりが起きない）。
 // キーボードの高さは、前回の実測値を覚えて使う
 const KB_KEY = "techo-kb-h";
+const ACC_H = 64;
 function bindKeyboardFit(...fields) {
   const vv = window.visualViewport;
   const wrap = rootEl.querySelector(".memo-detail .memo-wrap");
@@ -638,7 +639,8 @@ function bindKeyboardFit(...fields) {
   if (kbH < 200 || kbH > 600) kbH = 340;
   const sizeWrap = () => {
     const top = wrap.getBoundingClientRect().top;
-    wrap.style.height = Math.max(120, Math.round(window.innerHeight - top - kbH)) + "px";
+    // キーボードの上には、iPhoneが出す入力補助バー（約60px）も載る。書く欄はその上端より上に収める
+    wrap.style.height = Math.max(120, Math.round(window.innerHeight - top - kbH - ACC_H)) + "px";
   };
   sizeWrap();
   const baseH = window.innerHeight;

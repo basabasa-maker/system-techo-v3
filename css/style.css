@@ -2225,7 +2225,7 @@ textarea.memo-detail-text {
   font-family: "TechoCheck";
   src: local("Apple Symbols"), local("Hiragino Sans"), local("Arial Unicode MS");
   unicode-range: U+2610-2611;
-  size-adjust: 150%;
+  size-adjust: 165%;
 }
 textarea.memo-detail-text,
 .memo-strike {
