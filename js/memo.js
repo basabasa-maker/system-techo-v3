@@ -658,7 +658,27 @@ function bindKeyboardFit(...fields) {
     if (window.scrollY || window.scrollX || document.documentElement.scrollTop) window.scrollTo(0, 0);
   };
   window.addEventListener("scroll", snapBack, { passive: true });
-  if (vv) vv.addEventListener("resize", learn);
+  // iPhoneのホーム画面アプリは、キーボードが出ると「見える範囲」だけを上へずらす（window.scrollToでは戻らない）。
+  // そのずれの分だけ書く画面を下げ、見える範囲の高さに合わせて、いつも画面の一番上から全部が見えるようにする
+  const detail = rootEl.querySelector(".memo-detail");
+  const initialH = wrap.style.height;
+  const follow = () => {
+    if (!vv || !detail) return;
+    const kbUp = baseH - vv.height > 150;
+    detail.style.transform = vv.offsetTop > 0.5 ? "translateY(" + vv.offsetTop + "px)" : "";
+    detail.style.height = kbUp ? vv.height + "px" : "";
+    if (kbUp) {
+      const top = wrap.getBoundingClientRect().top - (vv.offsetTop > 0.5 ? vv.offsetTop : 0);
+      wrap.style.height = Math.max(120, Math.round(vv.height - top - 8)) + "px";
+    } else {
+      wrap.style.height = initialH;
+    }
+  };
+  if (vv) {
+    vv.addEventListener("resize", learn);
+    vv.addEventListener("resize", follow);
+    vv.addEventListener("scroll", follow);
+  }
   fields.filter(Boolean).forEach((f) => {
     f.addEventListener("blur", () => setTimeout(() => window.scrollTo(0, 0), 80));
   });
