@@ -622,88 +622,45 @@ function bindDetail() {
   bindKeyboardFit(ta, titleEl);
 }
 
-// キーボードが出ても、画面全体が上へずれないようにする。
-// アプリの枠を「キーボードを除いた見える範囲」に合わせて縮め、
-// 見出しと入力欄を同じ位置に保つ（入力欄の中だけがスクロールする）。
-// タップした瞬間に、前回のキーボードの高さで先に縮めておく。
-// 先に縮めると、iPhoneが画面を持ち上げる動き（せり上がり）が起きない
+// 入力欄を、キーボードが出ても動かない大きさにしておく。
+// 書く欄の下端を「キーボードの上端」に合わせて最初から決めるので、
+// タップしてもキーボードが出ても、画面の大きさや位置は変わらない（せり上がりが起きない）。
+// キーボードの高さは、前回の実測値を覚えて使う
 const KB_KEY = "techo-kb-h";
 function bindKeyboardFit(...fields) {
   const vv = window.visualViewport;
-  const shell = document.getElementById("app-shell");
-  if (!vv || !shell) return () => {};
-  let on = false;
+  const wrap = rootEl.querySelector(".memo-detail .memo-wrap");
+  if (!wrap) return () => {};
   let kbH = 0;
   try {
     kbH = Number(localStorage.getItem(KB_KEY)) || 0;
   } catch (_) {}
   if (kbH < 200 || kbH > 600) kbH = 340;
-  const apply = (h) => {
-    shell.style.top = "0px";
-    shell.style.bottom = "auto";
-    shell.style.height = Math.max(240, h) + "px";
+  const sizeWrap = () => {
+    const top = wrap.getBoundingClientRect().top;
+    wrap.style.height = Math.max(120, Math.round(window.innerHeight - top - kbH)) + "px";
   };
-  let baseH = 0; // キーボードが無いときの画面の高さ
-  const fit = () => {
+  sizeWrap();
+  const baseH = window.innerHeight;
+  // キーボードの実際の高さを覚える（次回から使う。今の画面は動かさない）
+  const learn = () => {
     const real = baseH - vv.height;
-    if (real > 200) {
-      kbH = real;
+    if (real > 200 && real < 600) {
       try {
         localStorage.setItem(KB_KEY, String(Math.round(real)));
       } catch (_) {}
     }
-    apply(real > 200 ? vv.height : baseH - kbH);
-    window.scrollTo(0, 0);
   };
-  // iPhoneは、キーボードが出るとき画面（文書）自体を上へずらす。
-  // ずれた瞬間に元へ戻し、一瞬でも別の位置が描かれないようにする
+  // 万一iPhoneが画面をずらしたら、すぐ元の位置へ戻す
   const snapBack = () => {
     if (window.scrollY || window.scrollX || document.documentElement.scrollTop) window.scrollTo(0, 0);
   };
-  const start = () => {
-    if (on) return;
-    on = true;
-    shell.classList.add("kb-on");
-    baseH = window.innerHeight;
-    window.addEventListener("scroll", snapBack, { passive: true });
-    vv.addEventListener("resize", fit);
-    vv.addEventListener("scroll", fit);
-    fit();
-  };
-  const release = () => {
-    if (!on) return;
-    on = false;
-    shell.classList.remove("kb-on");
-    window.removeEventListener("scroll", snapBack);
-    vv.removeEventListener("resize", fit);
-    vv.removeEventListener("scroll", fit);
-    shell.style.top = "";
-    shell.style.bottom = "";
-    shell.style.height = "";
-  };
-  const stop = () => {
-    setTimeout(() => {
-      const a = document.activeElement;
-      if (a && fields.includes(a)) return; // タイトル⇔本文の移動では戻さない
-      release();
-    }, 80);
-  };
+  window.addEventListener("scroll", snapBack, { passive: true });
+  if (vv) vv.addEventListener("resize", learn);
   fields.filter(Boolean).forEach((f) => {
-    f.addEventListener("focus", start);
-    f.addEventListener("blur", stop);
-    // 触れた瞬間に先に縮める。入力欄に入らなかった（スクロールなど）ときは戻す
-    f.addEventListener(
-      "touchstart",
-      () => {
-        start();
-        setTimeout(() => {
-          if (!fields.includes(document.activeElement)) release();
-        }, 600);
-      },
-      { passive: true }
-    );
+    f.addEventListener("blur", () => setTimeout(() => window.scrollTo(0, 0), 80));
   });
-  return start;
+  return sizeWrap;
 }
 
 let detailPersist = null;
@@ -886,7 +843,7 @@ function bindPaperTap(ta, fit, schedule) {
     const pos = ta.selectionStart;
     const ls = ta.value.lastIndexOf("\n", pos - 1) + 1;
     const mark = ta.value.slice(ls, ls + 2);
-    if ((mark === "☐ " || mark === "☑ ") && x < PAD + 30 && pos <= ls + 2) {
+    if ((mark === "☐ " || mark === "☑ ") && x < PAD + 44 && pos <= ls + 2) {
       ta.setRangeText(mark === "☐ " ? "☑ " : "☐ ", ls, ls + 2, "preserve");
       schedule();
       return;

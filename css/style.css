@@ -2181,3 +2181,53 @@ textarea.memo-detail-text {
 #app-shell.kb-on .memo-detail {
   padding-bottom: 0;
 }
+
+/* ===== メモ詳細：画面いっぱいの書く画面 =====
+   上の見出しとタブを隠し、メモだけを全面に出す。
+   書く欄の高さは最初から「キーボードの上端まで」に決めてあり、キーボードが出ても動かない */
+.memo-detail {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  overflow: hidden;
+}
+.memo-detail .memo-detail-header {
+  padding: calc(env(safe-area-inset-top) + 6px) 12px 6px;
+}
+.memo-detail .memo-detail-header .btn-back {
+  min-height: 40px;
+  font-size: 16px;
+}
+.memo-detail .memo-tools {
+  padding: 6px 12px;
+  gap: 8px;
+}
+.memo-detail .memo-tool {
+  min-height: 40px;
+  font-size: 15px;
+}
+.memo-detail .memo-wrap {
+  flex: 0 0 auto;
+}
+.memo-detail .memo-atts,
+.memo-detail .memo-detail-footer {
+  flex: 0 0 auto;
+}
+.memo-detail .memo-detail-footer {
+  padding: 12px 16px;
+}
+
+/* チェック欄（☐ ☑）だけを大きく表示する。他の文字は変えない */
+@font-face {
+  font-family: "TechoCheck";
+  src: local("Apple Symbols"), local("Hiragino Sans"), local("Arial Unicode MS");
+  unicode-range: U+2610-2611;
+  size-adjust: 150%;
+}
+textarea.memo-detail-text,
+.memo-strike {
+  font-family: "TechoCheck", -apple-system, "Hiragino Sans", sans-serif;
+}
