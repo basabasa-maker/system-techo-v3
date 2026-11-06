@@ -409,6 +409,7 @@ function renderDetail() {
       <div class="memo-detail-header">
         <button class="btn-back" id="d-back">← 戻る</button>
         <span class="memo-detail-time">${escapeHtml(en.date || "")} ${escapeHtml(hhmm)}${taken ? ` ・ ${escapeHtml(taken)}` : ""}</span>
+        <span id="d-dbg" class="memo-dbg"></span>
       </div>
       <div class="memo-tools">
         <button class="memo-tool" id="d-check">☑ チェック</button>
@@ -670,7 +671,6 @@ function bindKeyboardFit(...fields) {
   const follow = () => {
     if (!vv || !detail) return;
     const kbUp = baseH - vv.height > 150;
-    detail.style.transform = vv.offsetTop > 0.5 ? "translateY(" + vv.offsetTop + "px)" : "";
     detail.style.height = kbUp ? Math.max(200, vv.height - topPx) + "px" : "";
     if (kbUp) {
       const top = wrap.getBoundingClientRect().top - (vv.offsetTop > 0.5 ? vv.offsetTop : 0);
@@ -684,8 +684,71 @@ function bindKeyboardFit(...fields) {
     vv.addEventListener("resize", follow);
     vv.addEventListener("scroll", follow);
   }
+  // キーボードが出る間、iPhoneは見える範囲を一時的に上へずらし、あとで戻す（これが「せり上がり」）。
+  // 見出し・タブ・書く画面を含む画面全体を、そのずれと同じだけ毎コマ動かし、見た目の位置を固定する
+  const appShell = document.getElementById("app-shell");
+  let tracking = false;
+  const track = () => {
+    if (!tracking) return;
+    if (!document.contains(wrap)) {
+      tracking = false;
+      if (appShell) appShell.style.transform = "";
+      return;
+    }
+    const off = vv ? vv.offsetTop : 0;
+    if (appShell) appShell.style.transform = off > 0.5 ? "translateY(" + off + "px)" : "";
+    requestAnimationFrame(track);
+  };
+  const startTrack = () => {
+    if (!vv || tracking) return;
+    tracking = true;
+    requestAnimationFrame(track);
+  };
+  const stopTrack = () => {
+    tracking = false;
+    if (appShell) appShell.style.transform = "";
+  };
+
+  // ---- 診断（一時）：タップから2秒間、画面の位置を毎コマ測り、見出しの横に最小・最大を出す ----
+  const dbgEl = rootEl.querySelector("#d-dbg");
+  let sampling = false;
+  const startSample = () => {
+    if (!dbgEl || sampling || !vv) return;
+    sampling = true;
+    const t0 = performance.now();
+    const M = {};
+    const put = (k, v) => {
+      const m = M[k] || (M[k] = { f: v, lo: v, hi: v });
+      m.lo = Math.min(m.lo, v);
+      m.hi = Math.max(m.hi, v);
+      m.l = v;
+    };
+    let n = 0;
+    const tick = () => {
+      n++;
+      put("innerH", window.innerHeight);
+      put("vvH", vv.height);
+      put("vvTop", vv.offsetTop);
+      put("scrY", window.scrollY);
+      put("detVis", detail.getBoundingClientRect().top - vv.offsetTop);
+      put("hdrVis", document.getElementById("app-header").getBoundingClientRect().top - vv.offsetTop);
+      put("wrapH", wrap.getBoundingClientRect().height);
+      put("shellH", document.getElementById("app-shell").getBoundingClientRect().height);
+      if (performance.now() - t0 < 2000) return requestAnimationFrame(tick);
+      sampling = false;
+      const r = (x) => Math.round(x);
+      dbgEl.textContent =
+        "n=" + n + "\n" +
+        Object.keys(M)
+          .map((k) => k + " " + r(M[k].f) + (M[k].lo !== M[k].hi ? ">" + r(M[k].lo) + "~" + r(M[k].hi) + ">" : ">") + r(M[k].l))
+          .join("\n");
+    };
+    requestAnimationFrame(tick);
+  };
   fields.filter(Boolean).forEach((f) => {
-    f.addEventListener("blur", () => setTimeout(() => window.scrollTo(0, 0), 80));
+    f.addEventListener("touchstart", () => { startTrack(); startSample(); }, { passive: true });
+    f.addEventListener("focus", () => { startTrack(); startSample(); });
+    f.addEventListener("blur", () => setTimeout(() => { if (!fields.includes(document.activeElement)) stopTrack(); window.scrollTo(0, 0); }, 80));
   });
   return sizeWrap;
 }
@@ -700,6 +763,7 @@ function backToList() {
   const shell = document.getElementById("app-shell");
   if (shell) {
     shell.classList.remove("kb-on");
+    shell.style.transform = "";
     shell.style.top = "";
     shell.style.bottom = "";
     shell.style.height = "";

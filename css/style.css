@@ -2234,3 +2234,16 @@ textarea.memo-detail-text,
 .memo-strike {
   font-family: "TechoCheck", -apple-system, "Hiragino Sans", sans-serif;
 }
+
+/* 診断表示（一時） */
+.memo-detail .memo-detail-header { position: relative; }
+.memo-dbg {
+  position: absolute;
+  right: 6px;
+  top: 2px;
+  font: 9px/10px ui-monospace, Menlo, monospace;
+  color: #c00;
+  white-space: pre;
+  pointer-events: none;
+  text-align: left;
+}
