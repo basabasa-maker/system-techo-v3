@@ -445,9 +445,38 @@ function bindDetail() {
   // チェック済み（☑）の行に取り消し線を引く。文字は透明で、線だけが入力欄に重なる
   const paintStrike = () => {
     if (!strikeEl) return;
+    // カーソル位置（文字を選んでいない、入力中のときだけ描く）
+    const pos = document.activeElement === ta && ta.selectionStart === ta.selectionEnd ? ta.selectionStart : -1;
+    let off = 0;
     strikeEl.innerHTML = ta.value
       .split("\n")
-      .map((ln) => (ln.startsWith("☑") ? `${escapeHtml(ln.slice(0, 2))}<span class="done">${escapeHtml(ln.slice(2))}</span>` : escapeHtml(ln)))
+      .map((ln) => {
+        const start = off;
+        off += ln.length + 1;
+        const at = pos >= start && pos <= start + ln.length ? pos - start : -1;
+        // ☑の行は、チェック印（2文字）のあとの文字だけに取り消し線を引く
+        const parts = ln.startsWith("☑")
+          ? [{ t: ln.slice(0, 2), done: false }, { t: ln.slice(2), done: true }]
+          : [{ t: ln, done: false }];
+        let idx = 0;
+        let placed = false;
+        return parts
+          .map((pt) => {
+            let h = "";
+            const end = idx + pt.t.length;
+            let body;
+            if (at >= 0 && !placed && at >= idx && at <= end) {
+              placed = true;
+              body = escapeHtml(pt.t.slice(0, at - idx)) + '<span class="caret"></span>' + escapeHtml(pt.t.slice(at - idx));
+            } else {
+              body = escapeHtml(pt.t);
+            }
+            h = pt.done ? '<span class="done">' + body + "</span>" : body;
+            idx = end;
+            return h;
+          })
+          .join("");
+      })
       .join("\n");
   };
   // 入力欄は画面の残りいっぱいに広げ、長いメモは入力欄の中だけでスクロールさせる。
@@ -461,6 +490,16 @@ function bindDetail() {
     if (ta.parentElement) ta.parentElement.style.setProperty("--paper-scroll", -ta.scrollTop + "px");
   };
   ta.addEventListener("scroll", syncStrike, { passive: true });
+  const repaintCaret = () => {
+    paintStrike();
+    syncStrike();
+  };
+  const onSelChange = () => {
+    if (!document.contains(ta)) return document.removeEventListener("selectionchange", onSelChange);
+    if (document.activeElement === ta) repaintCaret();
+  };
+  document.addEventListener("selectionchange", onSelChange);
+  ["focus", "blur", "keyup", "click", "touchend"].forEach((ev) => ta.addEventListener(ev, () => setTimeout(repaintCaret, 0)));
   const compose = () => joinBody(ta.value, atts);
   const persist = async () => {
     clearTimeout(saveTimer);
@@ -645,8 +684,8 @@ function bindKeyboardFit(...fields) {
   if (detailEl && sc) detailEl.style.top = topPx + "px";
   const sizeWrap = () => {
     const top = wrap.getBoundingClientRect().top;
-    // キーボードの上には、iPhoneが出す入力補助バー（約60px）も載る。書く欄はその上端より上に収める
-    wrap.style.height = Math.max(120, Math.round(window.innerHeight - top - kbH - ACC_H)) + "px";
+    // キーボードの高さ（入力補助バーを含む実測値）の上に収める。一度決めたら、タップ中は変えない
+    wrap.style.height = Math.max(120, Math.round(window.innerHeight - top - kbH - 8)) + "px";
   };
   sizeWrap();
   const baseH = window.innerHeight;
@@ -664,26 +703,8 @@ function bindKeyboardFit(...fields) {
     if (window.scrollY || window.scrollX || document.documentElement.scrollTop) window.scrollTo(0, 0);
   };
   window.addEventListener("scroll", snapBack, { passive: true });
-  // iPhoneのホーム画面アプリは、キーボードが出ると「見える範囲」だけを上へずらす（window.scrollToでは戻らない）。
-  // そのずれの分だけ書く画面を下げ、見える範囲の高さに合わせて、いつも画面の一番上から全部が見えるようにする
   const detail = rootEl.querySelector(".memo-detail");
-  const initialH = wrap.style.height;
-  const follow = () => {
-    if (!vv || !detail) return;
-    const kbUp = baseH - vv.height > 150;
-    detail.style.height = kbUp ? Math.max(200, vv.height - topPx) + "px" : "";
-    if (kbUp) {
-      const top = wrap.getBoundingClientRect().top - (vv.offsetTop > 0.5 ? vv.offsetTop : 0);
-      wrap.style.height = Math.max(120, Math.round(vv.height - top - 8)) + "px";
-    } else {
-      wrap.style.height = initialH;
-    }
-  };
-  if (vv) {
-    vv.addEventListener("resize", learn);
-    vv.addEventListener("resize", follow);
-    vv.addEventListener("scroll", follow);
-  }
+  if (vv) vv.addEventListener("resize", learn);
   // キーボードが出る間、iPhoneは見える範囲を一時的に上へずらし、あとで戻す（これが「せり上がり」）。
   // 見出し・タブ・書く画面を含む画面全体を、そのずれと同じだけ毎コマ動かし、見た目の位置を固定する
   const appShell = document.getElementById("app-shell");
@@ -700,7 +721,8 @@ function bindKeyboardFit(...fields) {
     requestAnimationFrame(track);
   };
   const startTrack = () => {
-    if (!vv || tracking) return;
+    // 画面全体の補正は、シミュレータの録画で逆に画面を下へずらすと分かったため、通常は使わない（?track=1 のときだけ試せる）
+    if (!vv || tracking || !location.search.includes("track=1")) return;
     tracking = true;
     requestAnimationFrame(track);
   };

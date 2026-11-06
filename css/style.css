@@ -2234,6 +2234,32 @@ textarea.memo-detail-text,
 .memo-strike {
   font-family: "TechoCheck", -apple-system, "Hiragino Sans", sans-serif;
 }
+/* カーソル（青い棒）：iPhone標準は高さが罫線と合わないため隠し、罫線の幅（32px）ぴったりの棒を自前で描く */
+textarea.memo-detail-text {
+  caret-color: transparent;
+}
+.memo-strike .caret {
+  display: inline-block;
+  position: relative;
+  width: 0;
+  height: 32px;
+  vertical-align: top;
+}
+.memo-strike .caret::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 0;
+  width: 2px;
+  height: 32px;
+  background: #1a7aff;
+  animation: techo-caret 1.1s step-end infinite;
+}
+@keyframes techo-caret {
+  50% {
+    opacity: 0;
+  }
+}
 
 /* 診断表示（一時） */
 .memo-detail .memo-detail-header { position: relative; }
