@@ -2193,9 +2193,12 @@ textarea.memo-detail-text {
   flex-direction: column;
   background: var(--paper);
   overflow: hidden;
+  /* ステータスバー（時刻・電池）の下から始める。オレンジの線がその下に見える */
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top);
 }
 .memo-detail .memo-detail-header {
-  padding: calc(env(safe-area-inset-top) + 6px) 12px 6px;
+  padding: 6px 12px;
 }
 .memo-detail .memo-detail-header .btn-back {
   min-height: 40px;
