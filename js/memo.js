@@ -637,6 +637,11 @@ function bindKeyboardFit(...fields) {
     kbH = Number(localStorage.getItem(KB_KEY)) || 0;
   } catch (_) {}
   if (kbH < 200 || kbH > 600) kbH = 340;
+  // 書く画面の上端は、一覧のオレンジの線と同じ位置（見出しとタブの真下）にそろえる
+  const sc = document.getElementById("scroll-container");
+  const detailEl = rootEl.querySelector(".memo-detail");
+  const topPx = sc ? Math.round(sc.getBoundingClientRect().top) : 0;
+  if (detailEl && sc) detailEl.style.top = topPx + "px";
   const sizeWrap = () => {
     const top = wrap.getBoundingClientRect().top;
     // キーボードの上には、iPhoneが出す入力補助バー（約60px）も載る。書く欄はその上端より上に収める
@@ -666,7 +671,7 @@ function bindKeyboardFit(...fields) {
     if (!vv || !detail) return;
     const kbUp = baseH - vv.height > 150;
     detail.style.transform = vv.offsetTop > 0.5 ? "translateY(" + vv.offsetTop + "px)" : "";
-    detail.style.height = kbUp ? vv.height + "px" : "";
+    detail.style.height = kbUp ? Math.max(200, vv.height - topPx) + "px" : "";
     if (kbUp) {
       const top = wrap.getBoundingClientRect().top - (vv.offsetTop > 0.5 ? vv.offsetTop : 0);
       wrap.style.height = Math.max(120, Math.round(vv.height - top - 8)) + "px";

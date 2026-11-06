@@ -2193,9 +2193,9 @@ textarea.memo-detail-text {
   flex-direction: column;
   background: var(--paper);
   overflow: hidden;
-  /* ステータスバー（時刻・電池）の下から始める。オレンジの線がその下に見える */
+  /* 上の位置は、一覧のオレンジの線と同じ高さ（見出しとタブの下）。JSが測って入れる */
+  top: 190px;
   box-sizing: border-box;
-  padding-top: env(safe-area-inset-top);
 }
 .memo-detail .memo-detail-header {
   padding: 6px 12px;
