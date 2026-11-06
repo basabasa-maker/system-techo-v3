@@ -529,7 +529,19 @@ function bindDetail() {
   fit();
 
   // 空の行をタップしたら、その行まで改行を足してカーソルを置く／チェック欄のタップで切り替え
-  bindPaperTap(ta, fit, schedule);
+  const tapAt = bindPaperTap(ta, fit, schedule);
+  bindFocusWithoutScroll(ta, (cx, cy) => {
+    const idx = caretIndexAt(ta, cx, cy);
+    ta.setSelectionRange(idx, idx);
+    tapAt(cx, cy);
+    fit();
+  });
+  if (titleEl) {
+    bindFocusWithoutScroll(titleEl, () => {
+      const n = titleEl.value.length;
+      titleEl.setSelectionRange(n, n);
+    });
+  }
 
   // Enterでチェックを引き継ぐ
   ta.addEventListener("keydown", (e) => {
@@ -572,7 +584,7 @@ function bindDetail() {
       ta.setRangeText("☐ ", ls, ls, "preserve");
       ta.setSelectionRange(pos + 2, pos + 2);
     }
-    ta.focus();
+    ta.focus({ preventScroll: true });
     fit();
     schedule();
   });
@@ -685,7 +697,8 @@ function bindKeyboardFit(...fields) {
   const sizeWrap = () => {
     const top = wrap.getBoundingClientRect().top;
     // キーボードの高さ（入力補助バーを含む実測値）の上に収める。一度決めたら、タップ中は変えない
-    wrap.style.height = Math.max(120, Math.round(window.innerHeight - top - kbH - 8)) + "px";
+    const wh = Number((location.search.match(/[?&]wh=(\d+)/) || [])[1]); // 試験用：高さを直接指定
+    wrap.style.height = (wh || Math.max(120, Math.round(window.innerHeight - top - kbH - 8))) + "px";
   };
   sizeWrap();
   const baseH = window.innerHeight;
@@ -702,7 +715,7 @@ function bindKeyboardFit(...fields) {
   const snapBack = () => {
     if (window.scrollY || window.scrollX || document.documentElement.scrollTop) window.scrollTo(0, 0);
   };
-  window.addEventListener("scroll", snapBack, { passive: true });
+  if (!location.search.includes("nosnap")) window.addEventListener("scroll", snapBack, { passive: true });
   const detail = rootEl.querySelector(".memo-detail");
   if (vv) vv.addEventListener("resize", learn);
   // キーボードが出る間、iPhoneは見える範囲を一時的に上へずらし、あとで戻す（これが「せり上がり」）。
@@ -770,7 +783,7 @@ function bindKeyboardFit(...fields) {
   fields.filter(Boolean).forEach((f) => {
     f.addEventListener("touchstart", () => { startTrack(); startSample(); }, { passive: true });
     f.addEventListener("focus", () => { startTrack(); startSample(); });
-    f.addEventListener("blur", () => setTimeout(() => { if (!fields.includes(document.activeElement)) stopTrack(); window.scrollTo(0, 0); }, 80));
+    f.addEventListener("blur", () => setTimeout(() => { if (!fields.includes(document.activeElement)) stopTrack(); if (!location.search.includes("nosnap")) window.scrollTo(0, 0); }, 80));
   });
   return sizeWrap;
 }
@@ -949,15 +962,16 @@ function bindPaperTap(ta, fit, schedule) {
     mirror.remove();
     return h;
   };
-  ta.addEventListener("click", (e) => {
+  const tapAt = (clientX, clientY) => {
     const rect = ta.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top + ta.scrollTop;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top + ta.scrollTop;
     const pos = ta.selectionStart;
     const ls = ta.value.lastIndexOf("\n", pos - 1) + 1;
     const mark = ta.value.slice(ls, ls + 2);
     if ((mark === "☐ " || mark === "☑ ") && x < PAD + 44 && pos <= ls + 2) {
       ta.setRangeText(mark === "☐ " ? "☑ " : "☐ ", ls, ls + 2, "preserve");
+      fit();
       schedule();
       return;
     }
@@ -968,10 +982,75 @@ function bindPaperTap(ta, fit, schedule) {
     ta.value = ta.value + "\n".repeat(add);
     const end = ta.value.length;
     ta.setSelectionRange(end, end);
-    ta.focus();
+    ta.focus({ preventScroll: true });
     fit();
     schedule();
-  });
+  };
+  ta.addEventListener("click", (e) => tapAt(e.clientX, e.clientY));
+  return tapAt;
+}
+
+// タップした位置の文字の境目を求める（標準の選択を使わず、自分でカーソルを置くため）
+function caretIndexAt(ta, cx, cy) {
+  const rect = ta.getBoundingClientRect();
+  const cs = getComputedStyle(ta);
+  const m = document.createElement("div");
+  m.style.cssText =
+    "position:fixed;left:" + rect.left + "px;top:" + (rect.top - ta.scrollTop) + "px;width:" + ta.clientWidth + "px;" +
+    "padding:" + cs.paddingTop + " " + cs.paddingRight + " " + cs.paddingBottom + " " + cs.paddingLeft + ";" +
+    "box-sizing:border-box;white-space:pre-wrap;overflow-wrap:break-word;word-wrap:break-word;" +
+    "font:" + cs.font + ";line-height:32px;color:transparent;z-index:2147483647;";
+  m.textContent = ta.value || "";
+  document.body.appendChild(m);
+  let idx = ta.value.length;
+  try {
+    const r = document.caretRangeFromPoint(cx, cy);
+    if (r && m.contains(r.startContainer) && r.startContainer.nodeType === 3) idx = r.startOffset;
+  } catch (_) {}
+  m.remove();
+  return Math.min(idx, ta.value.length);
+}
+
+// 入力欄をタップしたとき、iPhoneの標準の動き（画面を持ち上げて、また戻す）を避けるため、
+// 標準の選択をやめて「画面を動かさない選び方」で入力欄を選ぶ。
+// 指を動かした（スクロール・スワイプ）ときや、長押しは、これまでどおり標準に任せる
+function bindFocusWithoutScroll(field, onTap) {
+  let sx = 0;
+  let sy = 0;
+  let t0 = 0;
+  let moved = false;
+  field.addEventListener(
+    "touchstart",
+    (e) => {
+      const t = e.touches[0];
+      if (!t) return;
+      sx = t.clientX;
+      sy = t.clientY;
+      t0 = performance.now();
+      moved = false;
+    },
+    { passive: true }
+  );
+  field.addEventListener(
+    "touchmove",
+    (e) => {
+      const t = e.touches[0];
+      if (t && (Math.abs(t.clientX - sx) > 8 || Math.abs(t.clientY - sy) > 8)) moved = true;
+    },
+    { passive: true }
+  );
+  field.addEventListener(
+    "touchend",
+    (e) => {
+      if (moved || document.activeElement === field || performance.now() - t0 > 400) return;
+      const t = e.changedTouches[0];
+      if (!t) return;
+      e.preventDefault();
+      field.focus({ preventScroll: true });
+      onTap(t.clientX, t.clientY);
+    },
+    { passive: false }
+  );
 }
 
 // ---------- Save / Delete / Pin / Inbox ----------
