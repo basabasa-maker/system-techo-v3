@@ -82,6 +82,7 @@ const MEMO_HEADERS = [
   "claude_taken",
   "pinned",
   "sort_order",
+  "archived",
 ];
 
 const MEMO_ALLOWED_TYPES = ["journal", "note", "read_later"];
@@ -512,6 +513,10 @@ function memoUpsert(entry) {
       entry.sort_order != null
         ? Number(entry.sort_order) || 0
         : Number(base.sort_order) || 0,
+    archived:
+      entry.archived != null
+        ? (isDeletedTruthy(entry.archived) ? 1 : 0)
+        : (isDeletedTruthy(base.archived) ? 1 : 0),
   };
 
   const values = MEMO_HEADERS.map((h) => merged[h]);
@@ -942,6 +947,7 @@ function normalizeMemoOut(row) {
     claude_taken: takenValue(row.claude_taken),
     pinned: isDeletedTruthy(row.pinned) ? 1 : 0,
     sort_order: Number(row.sort_order) || 0,
+    archived: isDeletedTruthy(row.archived) ? 1 : 0,
   };
 }
 

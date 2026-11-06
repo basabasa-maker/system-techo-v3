@@ -21,6 +21,7 @@ import { enableLongPressReorder, justDragged } from "./reorder.js";
 const state = {
   searchQuery: "",
   sortDesc: true,
+  showArchived: false, // true のとき、アーカイブしたメモの一覧
   view: "list", // list | detail
   detailId: null,
   draft: null, // まだ保存していない新規メモ
@@ -65,6 +66,7 @@ function paintRoot() {
         </div>
         <div class="memo-action-row">
           <button class="btn-sort" id="memo-sort">${state.sortDesc ? "新しい順" : "古い順"}</button>
+          <button class="btn-sort" id="memo-arch-toggle">${state.showArchived ? "← メモに戻る" : "アーカイブ"}</button>
         </div>
       </div>
       <div id="memo-body"></div>
@@ -90,9 +92,14 @@ function bindList() {
       : "古い順";
     paintBody();
   });
+  rootEl.querySelector("#memo-arch-toggle").addEventListener("click", () => {
+    state.showArchived = !state.showArchived;
+    paintRoot();
+  });
   rootEl
     .querySelector("#btn-new-memo")
     .addEventListener("click", () => {
+      state.showArchived = false; // 新しいメモは、ふつうの一覧に出る
       const en = newEntry();
       state.draft = en;
       state.view = "detail";
@@ -110,6 +117,8 @@ function paintBody() {
   const needle = state.searchQuery.trim().toLowerCase();
   const filtered = all.filter((e) => {
     if (e.deleted) return false;
+    // アーカイブしたメモは、アーカイブの一覧にだけ出す
+    if (!!e.archived !== state.showArchived) return false;
     // 日記（journal）はDailyタブの内容。Memoタブには出さない
     if (e.entry_type === "journal") return false;
     if (needle) {
@@ -125,7 +134,7 @@ function paintBody() {
     return true;
   });
   if (filtered.length === 0) {
-    bodyEl.innerHTML = `<p class="empty-hint">メモはまだありません。</p>`;
+    bodyEl.innerHTML = `<p class="empty-hint">${state.showArchived ? "アーカイブしたメモはありません。" : "メモはまだありません。"}</p>`;
     return;
   }
   // ピン留めは全日付をまとめて先頭の枠に。それ以外は日付ごとのグループ
@@ -222,6 +231,7 @@ function memoRowHtml(en) {
   return `
     <div class="memo-row-wrap" data-id="${escapeAttr(en.id)}">
       <div class="memo-row-action memo-row-pin" data-action="pin">${en.pinned ? "ピン解除" : "ピン留め"}</div>
+      <div class="memo-row-action memo-row-arch" data-action="arch">${en.archived ? "戻す" : "アーカイブ"}</div>
       <div class="memo-row-action memo-row-del" data-action="del">削除</div>
       <div class="memo-row" data-id="${escapeAttr(en.id)}">
         <div class="memo-row-inner">
@@ -286,6 +296,11 @@ function bindRowEvents(bodyEl) {
       resetAllSwipes();
       togglePin(id);
     });
+    wrap.querySelector(".memo-row-arch").addEventListener("click", (e) => {
+      e.stopPropagation();
+      resetAllSwipes();
+      setArchived(id, !(findEntry(id) || {}).archived);
+    });
     wrap.querySelector(".memo-row-del").addEventListener("click", (e) => {
       e.stopPropagation();
       resetAllSwipes();
@@ -337,7 +352,7 @@ function bindRowEvents(bodyEl) {
         }
         dx = diffX;
         // 最大 ±120px 程度
-        const clamped = Math.max(-140, Math.min(140, dx));
+        const clamped = Math.max(-210, Math.min(140, dx));
         row.style.transform = `translateX(${clamped}px)`;
       },
       { passive: true },
@@ -348,7 +363,7 @@ function bindRowEvents(bodyEl) {
       row.style.transition = "";
       wrap.classList.remove("swiping");
       if (dx <= -THRESHOLD) {
-        row.style.transform = "translateX(-120px)";
+        row.style.transform = "translateX(-188px)";
         wrap.classList.add("swiped-left");
       } else if (dx >= THRESHOLD) {
         row.style.transform = "translateX(120px)";
@@ -421,6 +436,7 @@ function renderDetail() {
       <div class="memo-wrap"><textarea id="d-text" class="memo-paper memo-paper-input memo-detail-text" placeholder="ここにメモ" spellcheck="false">${escapeHtml(text)}</textarea><div id="d-strike" class="memo-strike" aria-hidden="true"></div></div>
       <div id="d-atts" class="memo-atts"></div>
       <div class="memo-detail-footer">
+        ${findEntry(en.id) ? `<button class="btn-ghost" id="d-archive">${en.archived ? "メモに戻す" : "アーカイブ"}</button>` : ""}
         <button class="btn-danger" id="d-delete">削除</button>
       </div>
     </div>
@@ -567,6 +583,16 @@ function bindDetail() {
     backToList();
   });
   rootEl.querySelector("#d-delete").addEventListener("click", () => confirmDelete(state.detailId));
+  const archBtn = rootEl.querySelector("#d-archive");
+  if (archBtn) {
+    archBtn.addEventListener("click", async () => {
+      await persist();
+      const id = state.detailId;
+      const cur = findEntry(id);
+      backToList();
+      if (cur) setArchived(id, !cur.archived);
+    });
+  }
   rootEl.querySelector("#d-take").addEventListener("click", async () => {
     await persist();
     inboxEntry(state.detailId);
@@ -1052,6 +1078,27 @@ async function deleteEntry(id) {
   } catch (e) {
     await outbox.enqueue({ type: "memo_delete", payload: { id } });
     toast("オフライン：削除キューに追加", "warn");
+  } finally {
+    hideSpinner();
+  }
+}
+
+// アーカイブする／戻す。消さずに、一覧から外す（データは残る）
+async function setArchived(id, flag) {
+  const en = findEntry(id);
+  if (!en) return;
+  const updated = { ...en, archived: flag ? 1 : 0, updated_at: nowJst() };
+  store.upsertMemoAllLocal(updated);
+  paintBody();
+  try {
+    showSpinner();
+    const saved = await gas.pushMemoUpsert(updated);
+    store.upsertMemoAllLocal(saved);
+    paintBody();
+    toast(flag ? "アーカイブしました" : "メモに戻しました", "success");
+  } catch (e) {
+    await outbox.enqueue({ type: "memo_upsert", payload: updated });
+    toast("オフライン：送信キューに追加", "warn");
   } finally {
     hideSpinner();
   }

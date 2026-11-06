@@ -2260,3 +2260,20 @@ textarea.memo-detail-text {
     opacity: 0;
   }
 }
+
+/* ===== アーカイブ：左スワイプで「アーカイブ」と「削除」の2つ（削除は端に離して置く） ===== */
+.memo-row-del {
+  width: 88px;
+}
+.memo-row-arch {
+  right: 99px;
+  width: 88px;
+  background: #6b7a90;
+}
+.memo-detail-footer {
+  display: flex;
+  gap: 12px;
+}
+.memo-detail-footer button {
+  flex: 1 1 0;
+}
