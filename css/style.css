@@ -2143,11 +2143,3 @@ textarea.memo-detail-text {
 #app-shell.kb-on .memo-detail-footer {
   display: none;
 }
-/* 入力中は上の見出しとタブを隠し、書く場所を広げる */
-#app-shell.kb-on #app-header,
-#app-shell.kb-on #tab-bar {
-  display: none;
-}
-#app-shell.kb-on .memo-detail-header {
-  padding-top: calc(env(safe-area-inset-top) + 8px);
-}
