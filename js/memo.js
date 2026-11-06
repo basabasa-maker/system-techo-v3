@@ -457,6 +457,7 @@ function bindDetail() {
   };
   const syncStrike = () => {
     if (strikeEl) strikeEl.scrollTop = ta.scrollTop;
+    if (ta.parentElement) ta.parentElement.style.setProperty("--paper-scroll", -ta.scrollTop + "px");
   };
   ta.addEventListener("scroll", syncStrike, { passive: true });
   const compose = () => joinBody(ta.value, atts);
@@ -616,11 +617,9 @@ function bindDetail() {
     });
   }
   paintAtts();
-  const kbStart = bindKeyboardFit(ta, titleEl);
-  if (!en0.body && !en0.title) {
-    kbStart();
-    setTimeout(() => ta.focus(), 50);
-  }
+  // 新規メモも、既存メモと同じ見た目・同じ位置で開く。
+  // （自動で入力欄を選ぶと、キーボードが出ないまま画面だけ縮んでしまうため、タップで始める）
+  bindKeyboardFit(ta, titleEl);
 }
 
 // キーボードが出ても、画面全体が上へずれないようにする。

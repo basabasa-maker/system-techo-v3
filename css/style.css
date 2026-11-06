@@ -2143,3 +2143,41 @@ textarea.memo-detail-text {
 #app-shell.kb-on .memo-detail-footer {
   display: none;
 }
+
+/* 罫線は入力欄の外側の枠に描き、文字のスクロールに合わせて動かす
+   （入力欄の中の背景は、入力中にiPhoneが描き損ねるため） */
+.memo-detail .memo-wrap {
+  background-color: var(--paper);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    var(--paper-line) 31px,
+    var(--paper-line) 32px
+  );
+  background-position: 0 var(--paper-scroll, 0px);
+}
+.memo-detail textarea.memo-detail-text {
+  background: transparent;
+}
+
+/* メモ詳細の上2段を詰めて、書く欄を広げる（キーボードが出ても7行ほど見える） */
+.memo-detail .memo-detail-header {
+  padding: 4px 12px;
+}
+.memo-detail .memo-detail-header .btn-back {
+  min-height: 32px;
+}
+.memo-detail .memo-tools {
+  padding: 4px 12px;
+}
+.memo-detail .memo-tool {
+  min-height: 32px;
+}
+.memo-detail .memo-atts:empty {
+  display: none;
+}
+/* キーボードが出ている間は、下の余白をなくして書く欄に回す */
+#app-shell.kb-on .memo-detail {
+  padding-bottom: 0;
+}
