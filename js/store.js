@@ -68,6 +68,21 @@ export function loadTasks() {
   }
 }
 
+// 手動の並び（長押しで決めた順）の比べ方。タスクとデイリーで同じものを使う。
+// 並べ替えの値（sort_order）が同じ・未設定どうしは、作成の新しい順、最後はidで決める。
+// （同じ値のとき、取得のたびに並びが入れ替わらないようにする）
+export function compareTasksManual(a, b) {
+  const ao = Number(a.sort_order) || 0;
+  const bo = Number(b.sort_order) || 0;
+  if (ao && bo && ao !== bo) return ao - bo;
+  if (ao && !bo) return -1;
+  if (!ao && bo) return 1;
+  const ac = a.created_at || "";
+  const bc = b.created_at || "";
+  if (ac !== bc) return ac < bc ? 1 : -1;
+  return String(a.id) < String(b.id) ? -1 : 1;
+}
+
 export function saveTasks(tasks) {
   localStorage.setItem(LS_KEY_TASKS, JSON.stringify(tasks));
 }

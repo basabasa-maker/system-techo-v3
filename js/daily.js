@@ -184,11 +184,14 @@ function paintTasks() {
   const allTasks = store.loadTasks().filter((t) => !t.deleted);
 
   // この日が期限のタスク
-  const todayTasks = allTasks.filter((t) => t.due_date === state.date);
+  // タスクタブで長押しして決めた並び（手動の並び）をそのまま反映する
+  const todayTasks = allTasks
+    .filter((t) => t.due_date === state.date)
+    .sort(store.compareTasksManual);
   // 期限切れ（due_dateが表示日より前）かつ未完了のタスク
-  const overdueTasks = allTasks.filter(
-    (t) => t.due_date && t.due_date < state.date && t.status !== "done",
-  );
+  const overdueTasks = allTasks
+    .filter((t) => t.due_date && t.due_date < state.date && t.status !== "done")
+    .sort(store.compareTasksManual);
 
   if (todayTasks.length === 0 && overdueTasks.length === 0) {
     listEl.innerHTML = `<li class="empty-hint-sm">今日のタスクはありません</li>`;

@@ -5,6 +5,7 @@ export const GAS_URL =
 
 export const LS_KEY_TASKS = "sth_v3_tasks_cache";
 export const LS_KEY_ACTIVE_TAB = "sth_v3_active_tab";
+export const LS_KEY_TASK_SORT = "sth_v3_task_sort"; // タスクの並び方（手動を含む）を覚える
 export const LS_KEY_CACHE_SCHEMA = "sth_v3_cache_schema";
 export const LS_KEY_CAL_PREFIX = "sth_v3_cal_"; // + YYYY-MM-DD
 export const LS_KEY_JOURNAL_PREFIX = "sth_v3_journal_"; // + YYYY-MM-DD

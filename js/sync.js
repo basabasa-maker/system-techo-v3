@@ -78,11 +78,30 @@ async function send(op) {
 }
 
 let running = null;
+let again = false;
 
-// すべての送信待ちを送る。送れなかった件数を返す
+// すべての送信待ちを送る。送れなかった件数を返す。
+// 送っている最中に新しい送信待ちが入ったときは、終わったあとにもう一度送る
 export function flushAll() {
-  if (running) return running;
+  if (running) {
+    again = true;
+    return running;
+  }
   running = (async () => {
+    let failed = 0;
+    do {
+      again = false;
+      failed = await flushOnce();
+    } while (again);
+    return failed;
+  })().finally(() => {
+    running = null;
+  });
+  return running;
+}
+
+async function flushOnce() {
+  {
     const items = (await outbox.listAll()).sort((a, b) => a.id - b.id);
     // 同じ対象は、いちばん新しい1件だけ残す。習慣の日だけは、変えた項目を1つにまとめる
     const groups = new Map();
@@ -120,10 +139,7 @@ export function flushAll() {
       }
     }
     return failed;
-  })().finally(() => {
-    running = null;
-  });
-  return running;
+  }
 }
 
 // いま送信待ちの対象キーの集まり

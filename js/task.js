@@ -12,6 +12,7 @@ import * as outbox from "./outbox.js";
 import { toast, showSpinner, hideSpinner } from "./toast.js";
 import { nowJst, todayYmd, dueLabel } from "./date-util.js";
 import { enableLongPressReorder, justDragged } from "./reorder.js";
+import { LS_KEY_TASK_SORT } from "./config.js";
 
 const PRIORITY_LABEL = { high: "高", mid: "中", low: "低" };
 const PRIORITY_ORDER = { high: 0, mid: 1, low: 2 };
@@ -23,10 +24,24 @@ const STATUS_LABEL = {
   archived: "アーカイブ",
 };
 
+// 並び方は端末に覚えておく（アプリを開き直したとき、手動の並びが期限順に戻らないように）
+function loadSortBy() {
+  try {
+    const v = localStorage.getItem(LS_KEY_TASK_SORT);
+    if (["due", "priority", "created", "manual"].includes(v)) return v;
+  } catch (_) {}
+  return "due";
+}
+function saveSortBy(v) {
+  try {
+    localStorage.setItem(LS_KEY_TASK_SORT, v);
+  } catch (_) {}
+}
+
 const state = {
   filterStatus: "all", // all | active | done
   filterPriority: "all", // all | high | mid | low
-  sortBy: "due", // due | priority | created
+  sortBy: loadSortBy(), // due | priority | created | manual
   doneCollapsed: true,
 };
 
@@ -82,6 +97,7 @@ export function renderTaskTab(container) {
   });
   container.querySelector("#f-sort").addEventListener("change", (e) => {
     state.sortBy = e.target.value;
+    saveSortBy(state.sortBy);
     renderList();
   });
   container
@@ -227,10 +243,15 @@ async function onReorderTasks(ids) {
     }
   });
   state.sortBy = "manual";
+  saveSortBy("manual");
   const sel = rootEl && rootEl.querySelector("#f-sort");
   if (sel) sel.value = "manual";
   renderList();
-  for (const t of changed) await pushTask(t);
+  // 送信は、まず送信待ちに入れてから送る。
+  // 送っている途中で更新が走っても、アプリを閉じても、手元の並びが古い値に巻き戻らない
+  for (const t of changed) await outbox.enqueue({ type: "task_upsert", payload: t });
+  const failed = await sync.flushAll();
+  if (failed > 0) toast("オフライン：送信待ちに入れました", "warn");
 }
 
 async function togglePin(id) {
@@ -360,14 +381,7 @@ function sortInPlace(arr) {
     },
     created: (a, b) => ((a.created_at || "") < (b.created_at || "") ? 1 : -1),
     // 手動: 長押しで決めた順。未設定のものは末尾（作成の新しい順）
-    manual: (a, b) => {
-      const ao = Number(a.sort_order) || 0;
-      const bo = Number(b.sort_order) || 0;
-      if (ao && bo) return ao - bo;
-      if (ao) return -1;
-      if (bo) return 1;
-      return (a.created_at || "") < (b.created_at || "") ? 1 : -1;
-    },
+    manual: store.compareTasksManual,
   }[state.sortBy];
   arr.sort(cmp);
 }
