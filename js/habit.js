@@ -5,7 +5,6 @@
 // - 旧アプリの過去データは取り込まない（白紙から開始）
 
 import * as gas from "./gas-client.js";
-import * as outbox from "./outbox.js";
 import * as sync from "./sync.js";
 import {
   HABIT_DEFAULT_ITEMS,
@@ -26,7 +25,7 @@ const state = {
 };
 
 let rootEl = null;
-let pushTimer = null;
+
 
 // ---------- 保存（表示キャッシュ） ----------
 
@@ -191,7 +190,10 @@ function bindSubTabs() {
   });
 }
 
+let statsSeq = 0;
 async function paintStats() {
+  const seq = ++statsSeq;
+  const view = rootEl;
   const rangeHtml = `<div class="habit-ranges">${RANGES.map((r) => `<button class="habit-range ${getRangeDays() === r.days ? "on" : ""}" data-days="${r.days}">${r.label}</button>`).join("")}</div>`;
   rootEl.innerHTML = `<div class="habit-tab">${subTabsHtml()}${rangeHtml}<div id="habit-stats" class="habit-stats"><p class="empty-hint">読み込み中…</p></div></div>`;
   bindSubTabs();
@@ -204,7 +206,7 @@ async function paintStats() {
   const sub = state.sub;
   const data = await loadRange();
   const box = rootEl && rootEl.querySelector("#habit-stats");
-  if (!box || state.sub !== sub) return;
+  if (!box || seq !== statsSeq || view !== rootEl || !view.isConnected || state.sub !== sub) return;
   if (sub === "chart") renderCharts(box, state.items, data);
   else {
     renderHistory(box, state.items, data, (ymd) => {
@@ -218,7 +220,7 @@ async function paintStats() {
 }
 
 function paint() {
-  if (!rootEl) return;
+  if (!rootEl?.isConnected) return;
   if (state.sub !== "input") {
     paintStats();
     return;
@@ -313,10 +315,7 @@ function bind() {
         };
         inp.addEventListener("focus", () => {
           wipe();
-          setTimeout(wipe, 0); // iPhoneで前の数字が戻る場合の念押し
-          setTimeout(wipe, 120);
         });
-        inp.addEventListener("pointerup", wipe);
         inp.addEventListener("blur", () => {
           const cur = Number(state.values[id]) || 0;
           const raw = inp.value;
@@ -403,53 +402,17 @@ function toggleCheck(id) {
   setValue(id, state.values[id] === true ? false : true);
 }
 
-let pendingDay = null; // 入力してから送るまでの短い待ち時間にある日付
-let pendingPatch = null; // 待ち時間中にたまった「変えた項目」 { date, set, del }
+// 入力確定後すぐ永続キューへ。送信中も pendingKeys で保護する。
 function schedulePush(ymd, change, erase) {
-  if (!pendingPatch || pendingPatch.date !== ymd) {
-    if (pendingPatch) flushPatchNow(); // 別の日に移る前に、前の日の分を先に送る
-    pendingPatch = { date: ymd, set: {}, del: [] };
-  }
   const id = Object.keys(change)[0];
-  if (erase) {
-    delete pendingPatch.set[id];
-    if (!pendingPatch.del.includes(id)) pendingPatch.del.push(id);
-  } else {
-    pendingPatch.set[id] = change[id];
-    pendingPatch.del = pendingPatch.del.filter((k) => k !== id);
-  }
-  pendingDay = ymd;
-  clearTimeout(pushTimer);
-  pushTimer = setTimeout(flushPatchNow, 600);
+  sync.queue({ type: "habit_day_upsert", payload: {
+    date: ymd, set: erase ? {} : change, del: erase ? [id] : [],
+  }}).catch(() => toast("端末への保存に失敗しました。画面を閉じずに再試行してください", "error"));
 }
 
-function flushPatchNow() {
-  clearTimeout(pushTimer);
-  const patch = pendingPatch;
-  pendingPatch = null;
-  if (patch) pushDay(patch.date, { set: patch.set, del: patch.del });
-}
-
-async function pushDay(ymd, patch) {
-  if (pendingDay === ymd && !pendingPatch) pendingDay = null;
-  try {
-    await gas.pushHabitDay(ymd, patch);
-  } catch (e) {
-    await outbox.enqueue({
-      type: "habit_day_upsert",
-      payload: { date: ymd, set: patch.set, del: patch.del },
-    });
-    toast("オフライン：送信キューに追加", "warn");
-  }
-}
-
-async function pushItems(items) {
-  try {
-    await gas.pushHabitItems(items);
-  } catch (e) {
-    await outbox.enqueue({ type: "habit_items_upsert", payload: { items } });
-    toast("オフライン：送信キューに追加", "warn");
-  }
+function pushItems(items) {
+  return sync.queue({ type: "habit_items_upsert", payload: { items } })
+    .catch(() => toast("項目の保存に失敗しました", "error"));
 }
 
 // ---------- 項目の並べ替え・追加・削除 ----------
@@ -550,7 +513,7 @@ function openItemEditor(id) {
     paint();
     pushItems(state.items);
   });
-  if (!item) setTimeout(() => modal.querySelector("#e-label").focus(), 50);
+  if (!item) setTimeout(() => modal.querySelector("#e-label").focus({ preventScroll: true }), 50);
 }
 
 // ---------- 値の入力モーダル ----------
@@ -603,7 +566,7 @@ function openValueModal(item) {
       setValue(item.id, n);
     }
   });
-  setTimeout(() => modal.querySelector("#v-input").focus(), 50);
+  setTimeout(() => modal.querySelector("#v-input").focus({ preventScroll: true }), 50);
 }
 
 // "2:00" / "02:00" → "02:00"
@@ -616,35 +579,35 @@ function toHhMm(v) {
 
 let syncSeq = 0;
 
-async function syncFromServer() {
+async function syncFromServer(quiet = true) {
   const seq = ++syncSeq;
+  const view = rootEl;
   const ymd = state.date;
   try {
-    // 送信待ちが送れなくても、取得は続ける
     await flushHabitOutbox().catch(() => {});
-    const [items, values] = await Promise.all([
-      gas.pullHabitItems(),
-      gas.pullHabitDay(ymd),
-    ]);
-    if (seq !== syncSeq || !rootEl) return;
+    const dayRevision = sync.revision("habit_day:" + ymd);
+    const itemRevision = sync.revision("habit_items");
+    const [items, values] = await Promise.all([gas.pullHabitItems(), gas.pullHabitDay(ymd)]);
     const keys = await sync.pendingKeys();
-    const holdDay = keys.has("habit_day:" + ymd) || pendingDay === ymd; // 未送信の変更は取得結果で消さない
-    const holdItems = keys.has("habit_items");
+    if (seq !== syncSeq || view !== rootEl || !view?.isConnected || state.date !== ymd) return;
+    // キーボード／時刻ピッカーを開いている間は state と DOM の両方を維持。
+    if (view.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
+        || document.querySelector(".modal-backdrop")) return;
     let changed = false;
-    if (!holdItems && Array.isArray(items) && items.length > 0) {
+    if (!keys.has("habit_items") && itemRevision === sync.revision("habit_items") && Array.isArray(items) && items.length > 0) {
       state.items = normalizeItems(items);
       saveItemsLocal(state.items);
       changed = true;
     }
-    if (!holdDay && values && typeof values === "object") {
+    if (!keys.has("habit_day:" + ymd) && dayRevision === sync.revision("habit_day:" + ymd) && values && typeof values === "object") {
       state.values = values;
       saveDayLocal(ymd, values);
       changed = true;
     }
-    if (changed && !document.querySelector(".modal-backdrop")) paint();
+    if (changed) paint();
   } catch (e) {
-    // オフラインや未デプロイ時は、手元のキャッシュ表示のまま使い続ける
     console.warn("habit sync skipped:", e.message);
+    if (!quiet) throw e;
   }
 }
 
@@ -656,24 +619,9 @@ export async function flushHabitOutbox() {
 export async function pullAndRender() {
   showSpinner();
   try {
-    await flushHabitOutbox().catch(() => {});
-    const [items, values] = await Promise.all([
-      gas.pullHabitItems(),
-      gas.pullHabitDay(state.date),
-    ]);
-    const keys = await sync.pendingKeys();
-    if (!keys.has("habit_items") && Array.isArray(items) && items.length > 0) {
-      state.items = normalizeItems(items);
-      saveItemsLocal(state.items);
-    }
-    if (!keys.has("habit_day:" + state.date) && pendingDay !== state.date && values && typeof values === "object") {
-      state.values = values;
-      saveDayLocal(state.date, values);
-    }
-    paint();
-    toast("最新化しました" + (await sync.pendingNote()), "success");
+    await syncFromServer(false);
+    toast("更新を確認しました" + (await sync.pendingNote()), "success");
   } catch (e) {
-    console.error(e);
     toast("取得に失敗しました: " + e.message, "error");
   } finally {
     hideSpinner();

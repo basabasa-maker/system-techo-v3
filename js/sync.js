@@ -77,6 +77,32 @@ async function send(op) {
   }
 }
 
+// 取得開始後に編集された対象は、送信済みでも古い取得結果を適用しない。
+const revisions = new Map();
+const staging = new Map();
+const sendTimers = new Map();
+export function revision(key) { return revisions.get(key) || 0; }
+export function queue(op, delayMs = 0) {
+  const key = keyOf(op);
+  revisions.set(key, revision(key) + 1);
+  staging.set(key, (staging.get(key) || 0) + 1);
+  return outbox.enqueue(op).then(() => {
+    staging.set(key, staging.get(key) - 1);
+    if (delayMs > 0) {
+      clearTimeout(sendTimers.get(key));
+      sendTimers.set(key, setTimeout(() => {
+        sendTimers.delete(key);
+        flushAll().catch((e) => console.error("queued sync failed", e));
+      }, delayMs));
+      return;
+    }
+    return flushAll();
+  }, (error) => {
+    // 永続化に失敗した場合も取得で手元の値を消さない。
+    throw error;
+  });
+}
+
 let running = null;
 let again = false;
 
@@ -130,9 +156,8 @@ async function flushOnce() {
         failed++;
         // 送れなかった習慣の変更は、まとめた1件にして残す
         if ((op.type === "habit_day_upsert" || op.type === "meal_day_upsert") && list.length > 1) {
+          await outbox.replace(list[list.length - 1].id, op);
           for (const it of list.slice(0, -1)) await outbox.remove(it.id);
-          await outbox.remove(list[list.length - 1].id);
-          await outbox.enqueue(op);
         } else {
           for (const it of list.slice(0, -1)) await outbox.remove(it.id);
         }
@@ -145,7 +170,7 @@ async function flushOnce() {
 // いま送信待ちの対象キーの集まり
 export async function pendingKeys() {
   const items = await outbox.listAll();
-  const set = new Set();
+  const set = new Set([...staging].filter(([, n]) => n > 0).map(([key]) => key));
   for (const it of items) {
     const k = keyOf(it.op);
     if (k) set.add(k);

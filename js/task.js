@@ -108,7 +108,7 @@ export function renderTaskTab(container) {
 }
 
 function renderList() {
-  if (!rootEl) return;
+  if (!rootEl?.isConnected) return;
   const listEl = rootEl.querySelector("#task-list");
   if (!listEl) return;
   const tasks = store.loadTasks().filter((t) => !t.deleted);
@@ -281,7 +281,7 @@ function isSwipedOrSwiping(wrap) {
 }
 
 function resetAllTaskSwipes(exceptWrap) {
-  if (!rootEl) return;
+  if (!rootEl?.isConnected) return;
   rootEl.querySelectorAll(".task-item-wrap").forEach((w) => {
     if (w === exceptWrap) return;
     const r = w.querySelector(".task-item");

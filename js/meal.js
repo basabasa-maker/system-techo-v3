@@ -5,7 +5,6 @@
 // - 保存は日付1件ずつ
 
 import * as gas from "./gas-client.js";
-import * as outbox from "./outbox.js";
 import * as sync from "./sync.js";
 import {
   MEAL_SLOTS,
@@ -24,7 +23,7 @@ const state = {
 };
 
 let rootEl = null;
-let pushTimer = null;
+
 
 // ---------- 表示キャッシュ ----------
 
@@ -82,7 +81,7 @@ export function renderMealTab(container) {
 }
 
 function paint() {
-  if (!rootEl) return;
+  if (!rootEl?.isConnected) return;
   if (state.view === "day") paintDay();
   else paintMonth();
 }
@@ -188,7 +187,6 @@ function paintDay() {
       ${rows}
     </div>`;
   rootEl.querySelector("#m-back").addEventListener("click", () => {
-    flushPendingPush();
     state.view = "month";
     state.year = d.getFullYear();
     state.month = d.getMonth() + 1;
@@ -223,55 +221,40 @@ function paintDay() {
 // 変えた区分だけを送る（その日をまるごと上書きしない）
 function onChanged(slot) {
   saveDayLocal(state.date, state.slots);
-  clearTimeout(pushTimer);
-  const ymd = state.date;
-  if (pendingPush && pendingPush.ymd !== ymd) flushPendingPush(); // 別の日に移る前に、前の日の分を先に送る
-  if (!pendingPush) pendingPush = { ymd, set: {} };
-  pendingPush.set[slot] = { time: state.slots[slot].time, text: state.slots[slot].text };
-  pushTimer = setTimeout(flushPendingPush, 800);
-}
-
-let pendingPush = null;
-
-function flushPendingPush() {
-  clearTimeout(pushTimer);
-  if (!pendingPush) return;
-  const { ymd, set } = pendingPush;
-  pendingPush = null;
-  pushDay(ymd, set);
-}
-
-async function pushDay(ymd, set) {
-  try {
-    await gas.pushMealDay(ymd, set);
-  } catch (e) {
-    await outbox.enqueue({
-      type: "meal_day_upsert",
-      payload: { date: ymd, set: set },
-    });
-    toast("オフライン：送信キューに追加", "warn");
-  }
+  sync.queue({ type: "meal_day_upsert", payload: {
+    date: state.date, set: { [slot]: { ...state.slots[slot] } },
+  }}, 800).catch(() => toast("端末への保存に失敗しました。画面を閉じずに再試行してください", "error"));
 }
 
 // ---------- 同期 ----------
 
-async function syncMonth() {
+let syncSeq = 0;
+async function syncMonth(quiet = true) {
+  const seq = ++syncSeq;
+  const view = rootEl;
   const key = monthKey();
   try {
-    // 送信待ちが送れなくても、取得は続ける
     await flushMealOutbox().catch(() => {});
+    const revisions = new Map();
+    for (let d = 1; d <= 31; d++) {
+      const ymd = `${key}-${pad2(d)}`;
+      revisions.set(ymd, sync.revision("meal:" + ymd));
+    }
     const days = await gas.pullMealMonth(key);
     const keys = await sync.pendingKeys();
-    // 取得した分は、月をすばやく切り替えた後でも必ず手元に保存する（未送信の日は消さない）
+    if (seq !== syncSeq) return;
     for (const ymd of Object.keys(days)) {
-      if (keys.has("meal:" + ymd) || (pendingPush && pendingPush.ymd === ymd)) continue;
+      if (keys.has("meal:" + ymd) || revisions.get(ymd) !== sync.revision("meal:" + ymd)) continue;
       saveDayLocal(ymd, normalizeSlots(days[ymd]));
     }
-    // 画面は、まだその月を見ているときだけ描き直す
-    if (state.view === "month" && monthKey() === key) paint();
+    if (view !== rootEl || !view?.isConnected || monthKey() !== key) return;
+    if (view.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
+        || document.querySelector(".modal-backdrop")) return;
+    if (state.view === "day") state.slots = loadDay(state.date);
+    paint();
   } catch (e) {
-    // オフラインや未デプロイ時は、手元のキャッシュ表示のまま使い続ける
     console.warn("meal sync skipped:", e.message);
+    if (!quiet) throw e;
   }
 }
 
@@ -283,19 +266,9 @@ export async function flushMealOutbox() {
 export async function pullAndRender() {
   showSpinner();
   try {
-    flushPendingPush();
-    await flushMealOutbox().catch(() => {});
-    const days = await gas.pullMealMonth(monthKey());
-    const keys = await sync.pendingKeys();
-    for (const ymd of Object.keys(days)) {
-      if (keys.has("meal:" + ymd)) continue;
-      saveDayLocal(ymd, normalizeSlots(days[ymd]));
-    }
-    if (state.view === "day") state.slots = loadDay(state.date);
-    paint();
-    toast("最新化しました" + (await sync.pendingNote()), "success");
+    await syncMonth(false);
+    toast("更新を確認しました" + (await sync.pendingNote()), "success");
   } catch (e) {
-    console.error(e);
     toast("取得に失敗しました: " + e.message, "error");
   } finally {
     hideSpinner();

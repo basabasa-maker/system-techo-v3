@@ -41,7 +41,11 @@ function switchTab(tab) {
   document.querySelectorAll(".tab-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
-  const content = document.getElementById("tab-content");
+  // タブごとに表示先を分離。前のタブの遅い応答が現在の画面を壊さない。
+  const host = document.getElementById("tab-content");
+  const content = document.createElement("div");
+  content.dataset.tabView = tab;
+  host.replaceChildren(content);
   if (tab === "task") {
     renderTaskTab(content);
   } else if (tab === "daily") {

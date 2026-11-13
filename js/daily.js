@@ -74,7 +74,7 @@ export function renderDailyTab(container, keepDate) {
 }
 
 function reRender() {
-  if (!rootEl) return;
+  if (!rootEl?.isConnected) return;
   renderDailyTab(rootEl, true); // 日付を移動したときは、その日のまま描き直す
 }
 
@@ -372,21 +372,23 @@ async function deleteJournal(id) {
 // ---------- Pull（更新ボタンから呼ばれる） ----------
 
 export async function pullAndRender(quiet = false) {
+  const date = state.date;
+  const view = rootEl;
   if (!quiet) showSpinner();
   try {
     await flushOutbox().catch(() => {}); // 送信待ちが詰まっていても、取得は続ける
     // 予定・ジャーナル・タスクを別々に取り、取れたものだけ反映する
     const [ev, jn, tk] = await Promise.allSettled([
-      gas.pullCalendar(state.date),
-      gas.pullMemoJournal(state.date),
+      gas.pullCalendar(date),
+      gas.pullMemoJournal(date),
       gas.pullTasks(""),
     ]);
-    if (ev.status === "fulfilled") store.saveCalendar(state.date, ev.value);
-    if (jn.status === "fulfilled") store.saveJournal(state.date, jn.value);
+    if (ev.status === "fulfilled") store.saveCalendar(date, ev.value);
+    if (jn.status === "fulfilled") store.saveJournal(date, jn.value);
     if (tk.status === "fulfilled") store.mergeTasks(tk.value, await sync.pendingKeys());
     const failedAll = [ev, jn, tk].every((r) => r.status === "rejected");
     if (failedAll) throw ev.reason;
-    if (rootEl) {
+    if (view === rootEl && view?.isConnected && state.date === date) {
       paintEvents();
       paintTasks();
     }

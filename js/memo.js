@@ -52,7 +52,7 @@ async function syncQuietly() {
 }
 
 function paintRoot() {
-  if (!rootEl) return;
+  if (!rootEl?.isConnected) return;
   if (state.view === "detail") {
     rootEl.innerHTML = renderDetail();
     bindDetail();
@@ -376,7 +376,7 @@ function bindRowEvents(bodyEl) {
 }
 
 function resetAllSwipes(exceptWrap) {
-  if (!rootEl) return;
+  if (!rootEl?.isConnected) return;
   rootEl.querySelectorAll(".memo-row-wrap").forEach((w) => {
     if (w === exceptWrap) return;
     const r = w.querySelector(".memo-row");
@@ -1146,14 +1146,18 @@ async function inboxEntry(id) {
 // ---------- Pull ----------
 
 export async function pullAndRender() {
+  const view = rootEl;
   if (detailPersist) await detailPersist();
   showSpinner();
   try {
     await flushOutbox().catch(() => {});
     const res = await gas.pullMemoAll("2000-01-01", 2000);
     await applyPulledMemos(res.entries || []);
-    if (state.view === "list") paintBody();
-    else paintRoot();
+    const typing = view?.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+    if (view === rootEl && view?.isConnected && !typing && !document.querySelector(".modal-backdrop")) {
+      if (state.view === "list") paintBody();
+      else paintRoot();
+    }
     toast("最新化しました" + (await sync.pendingNote()), "success");
   } catch (e) {
     console.error(e);

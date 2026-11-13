@@ -30,8 +30,9 @@ export async function enqueue(op) {
       op: op, // { type: "task_upsert" | "task_delete" | "memo_upsert" | "memo_delete", payload: {...} }
       enqueued_at: Date.now(),
     });
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve(req.result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("保存が中断されました"));
   });
 }
 
@@ -52,6 +53,18 @@ export async function remove(id) {
     tx.objectStore(STORE).delete(id);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
+  });
+}
+
+// 失敗分をまとめる際も元の順番を保持する。後から来た編集より新しくしない。
+export async function replace(id, op) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).put({ id, op, enqueued_at: Date.now() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("保存が中断されました"));
   });
 }
 
