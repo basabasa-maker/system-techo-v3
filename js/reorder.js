@@ -16,7 +16,7 @@ export function enableLongPressReorder(listEl, opts) {
   const onReorder = opts.onReorder;
   const ignoreSelector = opts.ignoreSelector || "";
   const horizontal = opts.axis === "x";
-  const scroller = document.getElementById("scroll-container");
+  const scroller = horizontal ? listEl : document.getElementById("scroll-container");
 
   let timer = null;
   let startX = 0;
@@ -27,6 +27,7 @@ export function enableLongPressReorder(listEl, opts) {
   let grabOffset = 0;
   let lastPos = 0;
   let scrollTimer = null;
+  let originalOrder = null;
 
   const pos = (x, y) => (horizontal ? x : y);
 
@@ -45,6 +46,7 @@ export function enableLongPressReorder(listEl, opts) {
 
   function begin(el) {
     item = el;
+    if (horizontal) originalOrder = Array.from(listEl.children);
     dragging = true;
     const rect = el.getBoundingClientRect();
     grabOffset = horizontal ? startX - rect.left : startY - rect.top;
@@ -75,7 +77,7 @@ export function enableLongPressReorder(listEl, opts) {
         /* 非対応は無視 */
       }
     }
-    if (!horizontal) scrollTimer = setInterval(autoScroll, 30);
+    scrollTimer = setInterval(autoScroll, 30);
   }
 
   function siblings() {
@@ -113,8 +115,13 @@ export function enableLongPressReorder(listEl, opts) {
   function autoScroll() {
     if (!dragging || !scroller) return;
     const r = scroller.getBoundingClientRect();
-    if (lastPos < r.top + EDGE_PX) scroller.scrollTop -= SCROLL_STEP;
-    else if (lastPos > r.bottom - EDGE_PX) scroller.scrollTop += SCROLL_STEP;
+    if (horizontal) {
+      if (lastPos < r.left + EDGE_PX) scroller.scrollLeft -= SCROLL_STEP;
+      else if (lastPos > r.right - EDGE_PX) scroller.scrollLeft += SCROLL_STEP;
+    } else {
+      if (lastPos < r.top + EDGE_PX) scroller.scrollTop -= SCROLL_STEP;
+      else if (lastPos > r.bottom - EDGE_PX) scroller.scrollTop += SCROLL_STEP;
+    }
     move(lastPos);
   }
 
@@ -176,7 +183,11 @@ export function enableLongPressReorder(listEl, opts) {
     { passive: false },
   );
   listEl.addEventListener("touchend", finish);
-  listEl.addEventListener("touchcancel", cleanup);
+  listEl.addEventListener("touchcancel", () => {
+    if (horizontal && dragging && originalOrder) for (const node of originalOrder) listEl.appendChild(node);
+    originalOrder = null;
+    cleanup();
+  });
   // 長押し後の文字選択・メニューを出さない（iPhoneは長押しで文字選択が始まるため、
   // 押している間は選択の開始そのものを止める）
   listEl.addEventListener("contextmenu", (e) => {

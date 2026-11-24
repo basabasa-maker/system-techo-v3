@@ -107,6 +107,9 @@ const CALENDAR_DEFS = [
 function doGet(e) {
   const type = (e && e.parameter && e.parameter.type) || "";
   try {
+    if (type === "goals") {
+      return jsonResponse({ ok: true, data: pullGoals() });
+    }
     if (type === "meta") {
       return jsonResponse({
         ok: true,
@@ -186,6 +189,15 @@ function doPost(e) {
     }
     const type = body.type || (e && e.parameter && e.parameter.type) || "";
 
+    if (type === "goal_node_upsert") {
+      return jsonResponse({ ok: true, data: goalNodeUpsert(body.node) });
+    }
+    if (type === "goal_board_upsert") {
+      return jsonResponse({ ok: true, data: goalBoardUpsert(body.board) });
+    }
+    if (type === "goal_item_upsert") {
+      return jsonResponse({ ok: true, data: goalItemUpsert(body.item) });
+    }
     if (type === "task_upsert") {
       return jsonResponse({ ok: true, data: taskUpsert(body.task || {}) });
     }
@@ -1113,4 +1125,185 @@ function memoAttachTest() {
     if (String(vals[i][0]) === up.id) sheet.deleteRow(i + 2);
   }
   return { same: got.data === src, len: got.data.length };
+}
+
+
+// ---------- Goals / Vision board ----------
+// New entities are isolated JSON rows. Existing sheets and cache schemas are untouched.
+const GOAL_NODES_SHEET = "goal_nodes";
+const GOAL_BOARDS_SHEET = "goal_boards";
+const GOAL_ITEMS_SHEET = "goal_board_items";
+const GOAL_JSON_HEADERS = ["id", "json", "updated_at"];
+
+function pullGoals() {
+  return {
+    nodes: goalReadRows(GOAL_NODES_SHEET),
+    boards: goalReadRows(GOAL_BOARDS_SHEET),
+    items: goalReadRows(GOAL_ITEMS_SHEET),
+  };
+}
+
+function goalReadRows(sheetName) {
+  const rows = readAllRows(getSheet(sheetName, GOAL_JSON_HEADERS), GOAL_JSON_HEADERS);
+  return rows.filter((row) => row.id !== "" && row.id != null).map((row) => {
+    let value;
+    try { value = JSON.parse(String(row.json)); }
+    catch (err) { throw new Error("Invalid JSON in " + sheetName + ": " + row.id); }
+    if (!value || typeof value !== "object" || Array.isArray(value) || value.id !== String(row.id)) {
+      throw new Error("Invalid record in " + sheetName + ": " + row.id);
+    }
+    return value; // Include tombstones and unknown fields for non-destructive sync.
+  });
+}
+
+function goalWithLock(action) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try { return action(); }
+  finally { lock.releaseLock(); }
+}
+
+function goalInput(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("entity must be an object");
+  return input;
+}
+
+function goalId(value, required) {
+  if (value == null || value === "") {
+    if (required) throw new Error("id required");
+    return "";
+  }
+  if (typeof value !== "string" || !/^[A-Za-z0-9_.:-]{1,200}$/.test(value)) throw new Error("invalid id");
+  return value;
+}
+
+function goalText(value, fallback, limit, label) {
+  const text = value === undefined ? fallback : value;
+  if (typeof text !== "string" || text.length > limit) throw new Error("invalid " + label);
+  return text;
+}
+
+function goalNumber(value, fallback, min, max, label) {
+  if (value === undefined) return fallback;
+  if ((typeof value !== "number" && typeof value !== "string") || String(value).trim() === "") throw new Error("invalid " + label);
+  const n = Number(value);
+  if (!isFinite(n) || n < min || n > max) throw new Error("invalid " + label);
+  return n;
+}
+
+function goalWriteRow(sheetName, record) {
+  const json = JSON.stringify(record);
+  if (json.length > 40000) throw new Error("goal record is too large");
+  const sheet = getSheet(sheetName, GOAL_JSON_HEADERS);
+  const row = findRowIndexById(sheet, record.id);
+  const values = [record.id, json, record.updated_at];
+  if (row > 0) sheet.getRange(row, 1, 1, GOAL_JSON_HEADERS.length).setValues([values]);
+  else sheet.appendRow(values);
+  return record;
+}
+
+function goalNodeUpsert(input) {
+  return goalWithLock(() => {
+    goalInput(input);
+    const id = goalId(input.id, true);
+    const rows = goalReadRows(GOAL_NODES_SHEET);
+    const base = rows.find((row) => row.id === id) || {};
+    const next = { ...base, ...input, id };
+    if (["purpose", "goal", "means"].indexOf(next.kind) < 0) throw new Error("invalid node.kind");
+    if (base.kind && base.kind !== next.kind) throw new Error("node.kind cannot change");
+    next.parent_id = goalId(next.parent_id, false);
+    next.title = goalText(next.title, "", 500, "node.title");
+    if (!next.title.trim()) throw new Error("node.title required");
+    next.description = goalText(next.description, "", 20000, "node.description");
+    next.cover_item_id = goalId(next.cover_item_id, false);
+    next.sort_order = goalNumber(next.sort_order, 0, -1e9, 1e9, "node.sort_order");
+    next.deleted = isDeletedTruthy(next.deleted) ? 1 : 0;
+    if (next.deleted) {
+      if (rows.some((row) => row.parent_id === id && !isDeletedTruthy(row.deleted))) throw new Error("remove or move child nodes first");
+    } else {
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      const seen = new Set([id]);
+      let parentId = next.parent_id;
+      while (parentId) {
+        if (seen.has(parentId)) throw new Error("node parent cycle");
+        seen.add(parentId);
+        const ancestor = byId.get(parentId);
+        if (!ancestor || isDeletedTruthy(ancestor.deleted)) throw new Error("node parent not found");
+        parentId = ancestor.parent_id;
+      }
+      if (next.kind === "purpose") {
+        if (next.parent_id) throw new Error("purpose must not have a parent");
+      } else {
+        const parent = byId.get(next.parent_id);
+        const requiredKind = next.kind === "goal" ? "purpose" : "goal";
+        if (!parent || parent.kind !== requiredKind) throw new Error("invalid parent kind for " + next.kind);
+      }
+      if (next.cover_item_id && next.cover_item_id !== base.cover_item_id) {
+        if (next.kind !== "goal") throw new Error("only goals can have a cover item");
+        const cover = goalReadRows(GOAL_ITEMS_SHEET).find((item) => item.id === next.cover_item_id);
+        if (!cover || isDeletedTruthy(cover.deleted) || cover.goal_id !== id) throw new Error("cover item must belong to this goal");
+      }
+    }
+    const now = nowJstString();
+    next.created_at = base.created_at || (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(String(input.created_at || "")) ? input.created_at : now);
+    next.updated_at = now;
+    return goalWriteRow(GOAL_NODES_SHEET, next);
+  });
+}
+
+function goalBoardUpsert(input) {
+  return goalWithLock(() => {
+    goalInput(input);
+    const id = goalId(input.id, true);
+    const base = goalReadRows(GOAL_BOARDS_SHEET).find((row) => row.id === id) || {};
+    const next = { ...base, ...input, id };
+    next.title = goalText(next.title, "ビジョンボード", 500, "board.title");
+    next.background = next.background === undefined ? "cork" : next.background;
+    if (typeof next.background !== "string" && (!next.background || typeof next.background !== "object" || Array.isArray(next.background))) throw new Error("invalid board.background");
+    next.width = goalNumber(next.width, 1200, 1, 100000, "board.width");
+    next.height = goalNumber(next.height, 1600, 1, 100000, "board.height");
+    next.deleted = isDeletedTruthy(next.deleted) ? 1 : 0;
+    next.updated_at = nowJstString();
+    return goalWriteRow(GOAL_BOARDS_SHEET, next);
+  });
+}
+
+function goalItemUpsert(input) {
+  return goalWithLock(() => {
+    goalInput(input);
+    const id = goalId(input.id, true);
+    const base = goalReadRows(GOAL_ITEMS_SHEET).find((row) => row.id === id) || {};
+    const next = { ...base, ...input, id };
+    next.board_id = goalId(next.board_id, true);
+    next.attachment_id = goalId(next.attachment_id, true);
+    next.name = goalText(next.name, "image.jpg", 500, "item.name");
+    next.mime = goalText(next.mime, "image/jpeg", 100, "item.mime");
+    next.caption = goalText(next.caption, "", 20000, "item.caption");
+    next.goal_id = goalId(next.goal_id, false);
+    next.x = goalNumber(next.x, 0, -100000, 100000, "item.x");
+    next.y = goalNumber(next.y, 0, -100000, 100000, "item.y");
+    next.width = goalNumber(next.width, 220, 1, 100000, "item.width");
+    next.height = goalNumber(next.height, 180, 1, 100000, "item.height");
+    next.rotation = goalNumber(next.rotation, 0, -360, 360, "item.rotation");
+    next.z_index = goalNumber(next.z_index, 0, -1e9, 1e9, "item.z_index");
+    next.deleted = isDeletedTruthy(next.deleted) ? 1 : 0;
+    if (!next.deleted) {
+      // Existing references may point to logical deletions. Preserve those records
+      // while allowing an unrelated caption/position edit; validate new links.
+      if (!base.id || next.board_id !== base.board_id) {
+        const board = goalReadRows(GOAL_BOARDS_SHEET).find((row) => row.id === next.board_id);
+        if (!board || isDeletedTruthy(board.deleted)) throw new Error("item board not found");
+      }
+      if (next.goal_id && (!base.id || next.goal_id !== base.goal_id)) {
+        const goal = goalReadRows(GOAL_NODES_SHEET).find((row) => row.id === next.goal_id);
+        if (!goal || isDeletedTruthy(goal.deleted) || goal.kind !== "goal") throw new Error("item goal not found");
+      }
+      if (base.id && next.goal_id !== base.goal_id) {
+        const usedCover = goalReadRows(GOAL_NODES_SHEET).some((row) => !isDeletedTruthy(row.deleted) && row.cover_item_id === id && row.id !== next.goal_id);
+        if (usedCover) throw new Error("clear the previous goal cover before relinking this item");
+      }
+    }
+    next.updated_at = nowJstString();
+    return goalWriteRow(GOAL_ITEMS_SHEET, next);
+  });
 }

@@ -1,70 +1,50 @@
 // app.js - エントリーポイント
-// Sprint 2: Task / Daily を活性化。Memo はプレースホルダ。
+// 画面の起動と共通イベント。各タブの登録は tabs.js。
 
 import { LS_KEY_ACTIVE_TAB } from "./config.js";
-import { renderTaskTab, pullAndRender as pullTask } from "./task.js";
-import { renderDailyTab, pullAndRender as pullDaily } from "./daily.js";
-import { renderMemoTab, pullAndRender as pullMemo } from "./memo.js";
-import { renderHabitTab, pullAndRender as pullHabit } from "./habit.js";
-import { renderMealTab, pullAndRender as pullMeal } from "./meal.js";
-import { daysAgoYmd } from "./date-util.js";
+import { TAB_DEFINITIONS, DEFAULT_TAB } from "./tabs.js";
 import { toast } from "./toast.js";
 import { initTheme } from "./theme.js";
+import { initTabNavigation, revealActiveTab } from "./tab-navigation.js";
 
-// 上のタブの並びは index.html の順（デイリー・タスク・習慣・食事・メモ）で固定
-const TABS = ["daily", "task", "habit", "meal", "memo"];
+// タブの種類。表示順は tab-navigation.js が端末の設定を復元する。
+const TABS = Object.keys(TAB_DEFINITIONS);
 
 const appState = {
-  activeTab: localStorage.getItem(LS_KEY_ACTIVE_TAB) || "task",
+  activeTab: localStorage.getItem(LS_KEY_ACTIVE_TAB) || DEFAULT_TAB,
 };
 
 function init() {
   // index.html側で app-shell を事前レンダリング済み（起動時のレイアウトブレ対策）
   // ここではイベントバインドとタブ初期化のみ
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.disabled) return;
-      switchTab(btn.dataset.tab);
-    });
-  });
+  initTabNavigation(switchTab);
 
   document.getElementById("btn-refresh").addEventListener("click", onRefresh);
   initTheme();
 
-  if (!TABS.includes(appState.activeTab)) appState.activeTab = "task";
+  if (!TABS.includes(appState.activeTab)) appState.activeTab = DEFAULT_TAB;
   switchTab(appState.activeTab);
 }
 
 function switchTab(tab) {
+  if (!TABS.includes(tab)) return;
+  TAB_DEFINITIONS[appState.activeTab]?.dispose?.();
   appState.activeTab = tab;
   localStorage.setItem(LS_KEY_ACTIVE_TAB, tab);
   document.querySelectorAll(".tab-btn").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
+  revealActiveTab();
   // タブごとに表示先を分離。前のタブの遅い応答が現在の画面を壊さない。
   const host = document.getElementById("tab-content");
   const content = document.createElement("div");
   content.dataset.tabView = tab;
   host.replaceChildren(content);
-  if (tab === "task") {
-    renderTaskTab(content);
-  } else if (tab === "daily") {
-    renderDailyTab(content);
-  } else if (tab === "memo") {
-    renderMemoTab(content);
-  } else if (tab === "habit") {
-    renderHabitTab(content);
-  } else if (tab === "meal") {
-    renderMealTab(content);
+  const definition = TAB_DEFINITIONS[tab];
+  if (definition) {
+    definition.render(content);
+    definition.quietSync?.();
   }
-  quietSync(tab);
-}
-
-// 開いたとき・タブを切り替えたときに、画面を止めずに最新へ入れ替える
-// （習慣・食事・メモは各タブ側で取得済み）
-function quietSync(tab) {
-  if (tab === "task") pullTask(daysAgoYmd(30), true);
-  else if (tab === "daily") pullDaily(true);
 }
 
 // 入力を終えたとき、キーボードで生じた画面のずれ（横振れ）を元に戻す
@@ -100,24 +80,9 @@ document.addEventListener("visibilitychange", () => {
 });
 
 async function onRefresh() {
-  if (appState.activeTab === "task") {
-    await pullTask(daysAgoYmd(30));
-    return;
-  }
-  if (appState.activeTab === "daily") {
-    await pullDaily();
-    return;
-  }
-  if (appState.activeTab === "memo") {
-    await pullMemo();
-    return;
-  }
-  if (appState.activeTab === "habit") {
-    await pullHabit();
-    return;
-  }
-  if (appState.activeTab === "meal") {
-    await pullMeal();
+  const definition = TAB_DEFINITIONS[appState.activeTab];
+  if (definition) {
+    await definition.refresh();
     return;
   }
   toast("このタブは現在のSprintでは対象外です", "info");

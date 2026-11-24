@@ -257,3 +257,36 @@ export async function pushMealDay(dateYmd, set) {
   if (!body.ok) throw new Error(body.error || "meal_day_upsert failed");
   return body.data;
 }
+
+
+// ---- Goals / Vision board ----
+
+export async function pullGoals() {
+  const url = new URL(GAS_URL);
+  url.searchParams.set("type", "goals");
+  const body = await fetchJson(url.toString(), { method: "GET" });
+  if (!body.ok) throw new Error(body.error || "pullGoals failed");
+  return body.data || { nodes: [], boards: [], items: [] };
+}
+
+async function pushGoalEntity(type, key, entity) {
+  const body = await fetchJson(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ type, [key]: entity }),
+  });
+  if (!body.ok) throw new Error(body.error || type + " failed");
+  return body.data;
+}
+
+export function pushGoalNode(node) {
+  return pushGoalEntity("goal_node_upsert", "node", node);
+}
+
+export function pushGoalBoard(board) {
+  return pushGoalEntity("goal_board_upsert", "board", board);
+}
+
+export function pushGoalItem(item) {
+  return pushGoalEntity("goal_item_upsert", "item", item);
+}

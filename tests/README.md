@@ -48,3 +48,41 @@ node tests/races.cjs
 - デイリーの取得日を開始時に固定。メモの手動更新と習慣グラフにも表示先・取得順ガードを追加。
 
 公開が承認された場合は、`build/cache-bust.sh` で HTML/SW の版を更新してから検査・コミット・push を行い、公開されたファイルと期待版を照合してください。
+
+## 構造整理後の互換性試験（2026-11-24）
+
+Node.js 24 で、通信・ブラウザ・追加依存なしの契約試験8件を実行できます。
+
+```sh
+node --test tests/contracts.test.mjs
+```
+
+本文と添付トークンの往復、旧形式を含む習慣・食事の部分更新、削除と復活、0、操作の非破壊的な統合、相対 import の参照先、既存 `sync.mergePatch` の互換性を確認します。
+
+`races.cjs` には、次の4件も追加しています（既存9件と合わせて13件）。データ保持3件は本体の整理前後に実行し、添付の転送・キャッシュは整理後にも確認します。
+
+- schema 4 の既存 localStorage の生文字列と IndexedDB outbox の ID・保存時刻・payload・未知操作を、オフライン再読み込み後に照合。
+- 旧習慣 `values` / 旧食事 `slots` と現行 PATCH を混ぜても、順序・部分更新・削除・復活・0・無関係な値を維持。
+- メモ本文のPDF添付・未知記法・取込日時・ピン・手動順・未知メタデータを、700ms自動保存失敗と取得失敗後にも維持。
+
+- PNGからJPEGへの縮小・転送・本文トークン保存、再取得した添付の端末保存とオフライン再読み込み。
+
+全試験は独立した一時 browser context を使い、終了時に閉じます。外部通信は route で合成または遮断し、Service Worker を無効化します。本番のシート・通常ブラウザ・iPhone 実機を使った試験ではありません。
+
+## 目標・ビジョンボード（2026-11-24）
+
+```sh
+node --test tests/contracts.test.mjs tests/goals-data.test.mjs
+node tests/gas-goals.cjs
+PLAYWRIGHT_PATH=/path/to/playwright node tests/goals.cjs
+```
+
+`goals.cjs` は独立一覧、共通＋メニュー、目的/目標/複数手段の入力、画像共有/表紙/説明/回転、オフライン保持、遅い応答、横タブ並替、写真移動とキャンセル、添付失敗からの再試行、表紙OFF、アップロード中の編集保持、7枚以上の配置を検証する16件。`GOALS_TEST=regression` で追加3件だけ実行可能。`GOALS_SCREENSHOT_DIR=/tmp/goals-screens` で画面を保存できる。
+
+25件のNode契約試験と12群のGAS/client隔離試験も用意した。GASの試験はスプレッドシートをメモリ内で再現し、実際の同期→client→GAS handlerの依存順も確認する。本番Googleサービスは呼ばない。公開条件・既知の範囲は [目標機能の資料](../docs/goals-feature.md)、画面確認は [design-qa.md](../design-qa.md)。
+
+写真操作は短タップのメニュー、450ms長押し移動、長押し前のパン、pointercancel/Escape/pinchの復元、削除取消と論理削除を確認する。今回の変更では影響10項目を成功確認済み。
+
+## 公開候補の最終確認（2026-11-24）
+
+公開候補版 `20261124-233508`。Node契約25件、GAS/client12群、既存ブラウザ13件、新機能ブラウザ16件がすべて成功。全27 JSファイルとGASの構文、`git diff --check` も成功。切り替え項目の固定は390×844のHTTPS試作画面でスクロール前後の座標を照合し、切り替え行が主タブ直下に留まり本文だけが動くことを確認した。実機iPhoneと本番配信は未確認。
