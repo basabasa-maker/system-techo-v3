@@ -646,6 +646,12 @@ export async function flushHabitOutbox() {
 
 // 更新ボタンから呼ばれる
 export async function pullAndRender() {
+  // ボタンを押しても入力欄にフォーカスが残る端末では、先に入力を確定する。
+  // 自動同期や、更新開始後に再び入力した場合の保護はそのまま残す。
+  const focused = document.activeElement;
+  if (rootEl?.contains(focused) && /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName)) {
+    focused.blur();
+  }
   showSpinner();
   try {
     await syncFromServer(false, true);

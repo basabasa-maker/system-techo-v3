@@ -75,6 +75,29 @@ async function scenario(name,fn){
   const shot=process.env.LAST_MEAL_SCREENSHOT;if(shot){fs.mkdirSync(path.dirname(shot),{recursive:true});await page.screenshot({path:shot,fullPage:true});}
   await refresh(page);await delay(200);assert.equal(autoPosts(posts).length,1,'unchanged value does not save twice');
  });
+ await scenario('manual refresh imports an empty lastMeal when Safari retains an unchanged input focus',async({page,values,days,posts})=>{
+  delete values[TODAY].lastMeal;
+  values['2027-01-02']={lastMeal:'19:10',weight:60,future_next:{keep:false}};
+  await page.evaluate(({date,values})=>localStorage.setItem('sth_v3_habitday_'+date,JSON.stringify(values)),{date:TODAY,values:clone(values[TODAY])});
+  await page.locator('[data-tab="task"]').click();await page.locator('[data-tab="habit"]').click();
+  await until(async()=>(await field(page).inputValue())==='','target starts empty');
+  const beforeValues=clone(values),beforeDays=clone(days);
+  // Safari does not focus a clicked button. Reproduce that focus behavior in Chrome.
+  await page.evaluate(()=>{
+   const button=document.querySelector('#btn-refresh');
+   button.addEventListener('mousedown',event=>event.preventDefault());
+   button.addEventListener('click',()=>{window.testSafariRetainedFocus=document.activeElement?.closest('[data-id="weight"]')!=null;},{capture:true});
+  });
+  const weight=page.locator('[data-id="weight"] input');await weight.focus();
+  assert.equal(await weight.inputValue(),'61.5','focused field is unchanged');
+  await refresh(page);
+  assert.equal(await page.evaluate(()=>window.testSafariRetainedFocus),true,'input remains focused at refresh click dispatch as on Safari');
+  await until(()=>Promise.resolve(autoPosts(posts).length===1),'retained but unchanged focus must not skip manual import');
+  assert.equal(await field(page).inputValue(),'22:45');
+  assert.deepEqual(autoPosts(posts)[0],{type:'habit_day_upsert',date:TODAY,set:{lastMeal:'22:45'},del:[]});
+  assert.deepEqual(values,{...beforeValues,[TODAY]:{...beforeValues[TODAY],lastMeal:'22:45'}},'only the selected day and field change');
+  assert.deepEqual(days,beforeDays,'all meal dates remain unchanged');
+ });
  await scenario('ordinary entry and date navigation do not import meals',async({page,gets,posts})=>{
   await page.locator('#h-prev').click();await delay(100);await page.locator('#h-next').click();await delay(100);
   await page.locator('[data-tab="task"]').click();await page.locator('[data-tab="habit"]').click();await delay(150);

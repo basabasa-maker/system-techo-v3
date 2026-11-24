@@ -90,3 +90,5 @@ PLAYWRIGHT_PATH=/path/to/playwright node tests/goals.cjs
 ## 前日の最終食事の自動反映（2026-11-24）
 
 `node --test tests/meal-time.test.mjs` は時刻の大小、0時、正規化、不正値、元記録の非破壊を確認する3件。`PLAYWRIGHT_PATH=/path/to/playwright node tests/last-meal.cjs` は習慣の手動更新だけの反映・年跨ぎ・1項目PATCH・欠測/失敗・手入力・日付/タブ切替・未送信・取得後編集・削除済み項目を確認する14件。すべて合成API・独立ブラウザで、本番へ接続しない。詳しくは [仕様と保持条件](../docs/meal-last-time.md)。
+
+2026-11-25の修正では `last-meal.cjs` に保持フォーカスの再現を追加し、全15件が成功。ボタン押下で入力のfocusが残っても選択日の当該欄だけへ反映し、他日と食事データが不変であることを確認する。内容が空でも時刻がある食事は対象、時刻未入力は無操作。
