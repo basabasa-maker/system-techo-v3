@@ -7,6 +7,9 @@
 import * as gas from "./gas-client.js";
 import * as sync from "./sync.js";
 import { latestMealTime } from "./meal-time.js";
+import { healthBridge, loadHealthSettings, saveHealthSettings, REQUEST_TTL_MS } from "./health/bridge.js";
+import { selectHealthPatch } from "./health/model.js";
+import { showHealthSettings, confirmHealthValues } from "./health/ui.js";
 import {
   HABIT_DEFAULT_ITEMS,
   LS_KEY_HABIT_DAY_PREFIX,
@@ -26,6 +29,12 @@ const state = {
 };
 
 let rootEl = null;
+let healthTimer = null;
+let healthResumePromise = null;
+let healthPollUntil = 0;
+let healthReady = null;
+let healthMessage = "";
+let healthSaving = false;
 
 
 // ---------- 保存（表示キャッシュ） ----------
@@ -91,6 +100,7 @@ export function renderHabitTab(container) {
   state.values = loadDay(state.date);
   paint();
   syncFromServer();
+  resumeHealthSync();
 }
 
 function dateTitle(ymd) {
@@ -236,6 +246,7 @@ function paint() {
         <button id="h-today" class="habit-today">今日</button>
         <button id="h-edit" class="habit-edit-btn">${state.editMode ? "完了" : "編集"}</button>
       </div>
+      ${healthToolsHtml()}
       <section class="habit-card">
         <h2>睡眠</h2>
         <div class="habit-sleep">
@@ -258,6 +269,7 @@ function paint() {
 
 function bind() {
   bindSubTabs();
+  bindHealthTools();
   rootEl.querySelector("#h-prev").addEventListener("click", () => moveDate(-1));
   rootEl.querySelector("#h-next").addEventListener("click", () => moveDate(1));
   rootEl.querySelector("#h-today").addEventListener("click", () => {
@@ -383,6 +395,9 @@ function reloadDay() {
 // ---------- 値の更新 ----------
 
 function setValue(id, value, quiet) {
+  // Keep even an edit later restored to its original value protected from a delayed result.
+  try { healthBridge.markEdited(id, state.date); }
+  catch (_) { healthBridge.cancel(); }
   const next = { ...state.values };
   const erase = value === "" || value == null || value === false;
   if (erase) delete next[id];
@@ -652,6 +667,21 @@ export async function pullAndRender() {
   if (rootEl?.contains(focused) && /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName)) {
     focused.blur();
   }
+  try {
+    if (state.sub === "input" && loadHealthSettings().enabled) {
+      if (healthResumePromise) { toast("ヘルスケアの取り込み処理中です");return; }
+      clearTimeout(healthTimer);
+      healthReady = null;
+      const { url } = healthBridge.prepare(state.date, state.values);
+      healthMessage = "ショートカットで読み取り中です。完了したら元の手帳へ戻ってください。";
+      updateHealthTools();
+      // Must stay synchronous with this user gesture on iPhone.
+      window.location.assign(url);
+      healthPollUntil = Date.now() + 60000;
+      healthTimer = setTimeout(() => resumeHealthSync(true), 1500);
+      return;
+    }
+  } catch (error) { toast(error.message, "error");return; }
   showSpinner();
   try {
     await syncFromServer(false, true);
@@ -661,4 +691,109 @@ export async function pullAndRender() {
   } finally {
     hideSpinner();
   }
+}
+
+
+// ---------- iPhone Health bridge (only an explicitly requested day) ----------
+function healthToolsHtml() {
+  let settings, request, last;
+  try { settings=loadHealthSettings();request=healthBridge.pending();last=healthBridge.lastSync(); }
+  catch (_) { return '<div class="health-tools"><p id="health-status">連携設定を確認してください。</p><button id="h-health-setup">ヘルスケア連携</button></div>'; }
+  const note = (healthSaving ? "読み取り結果を保存しています…" : healthMessage) || (request ? `${request.date} の読み取り待ちです。` : last ? `${last.date}：前回${last.keys.length}項目を取り込みました。` : settings.enabled ? "更新でヘルスケアを読み取ります。" : "iPhoneの体重・体脂肪率・活動分・歩数を連携できます。");
+  return `<div class="health-tools"><p id="health-status" role="status">${escapeHtml(note)}</p><button id="h-health-setup" ${healthSaving ? "disabled" : ""}>ヘルスケア連携</button><button id="h-health-cancel" ${request ? "" : "hidden"} ${healthSaving ? "disabled" : ""}>中止</button></div>`;
+}
+function bindHealthTools() {
+  rootEl?.querySelector("#h-health-setup")?.addEventListener("click",()=>showHealthSettings(()=>{
+    healthMessage="";healthReady=null;clearTimeout(healthTimer);updateHealthTools();
+  }));
+  rootEl?.querySelector("#h-health-cancel")?.addEventListener("click",()=>{
+    healthBridge.cancel();healthReady=null;clearTimeout(healthTimer);healthMessage="取り込みを中止しました。";updateHealthTools();
+  });
+}
+function updateHealthTools() {
+  const tools=rootEl?.querySelector(".health-tools");
+  if (!tools || !rootEl.isConnected) return;
+  tools.outerHTML=healthToolsHtml();bindHealthTools();
+}
+function healthInputBusy() {
+  return rootEl?.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
+    || !!document.querySelector(".modal-backdrop");
+}
+function healthContext(request) {
+  return rootEl?.isConnected && state.sub === "input" && state.date === request.date
+    && document.visibilityState !== "hidden" && healthBridge.pending()?.request_id === request.request_id;
+}
+function scheduleHealth(request, delay=1500) {
+  clearTimeout(healthTimer);
+  if (Date.now() < healthPollUntil && healthContext(request)) healthTimer=setTimeout(()=>resumeHealthSync(true),delay);
+}
+export function resumeHealthSync(internal = false) {
+  let request;
+  try { request=healthBridge.pending(); }
+  catch (error) { healthMessage=error.message;updateHealthTools();return false; }
+  if (!request || !loadHealthSettings().enabled || !rootEl?.isConnected || state.sub !== "input" || document.visibilityState === "hidden") return false;
+  if (request.date !== state.date) {
+    healthBridge.cancel();healthReady=null;healthMessage="表示日が変わったため、取り込んでいません。対象日で更新してください。";updateHealthTools();return false;
+  }
+  if (healthResumePromise) return true;
+  if (!internal) healthPollUntil=Date.now()+60000;
+  healthResumePromise=receiveHealth(request).catch(error=>{
+    if (healthBridge.pending()?.request_id !== request.request_id) return;
+    healthBridge.cancel();healthReady=null;
+    healthMessage=error.message || "読み取り結果を受け取れませんでした。もう一度更新してください。";
+    updateHealthTools();toast(healthMessage,"error");
+  }).finally(()=>{healthResumePromise=null;healthSaving=false;updateHealthTools();});
+  return true;
+}
+async function receiveHealth(request) {
+  if (Date.now()-request.issued_at >= REQUEST_TTL_MS) throw new Error("読み取りが期限切れです。もう一度更新してください。");
+  let values=healthReady?.request_id === request.request_id ? healthReady.values : await healthBridge.read(request);
+  if (!healthContext(request)) return;
+  if (values === null) { scheduleHealth(request);return; }
+  healthReady={request_id:request.request_id,values};
+  if (healthInputBusy()) { scheduleHealth(request,500);return; }
+  let settings=loadHealthSettings();
+  const receivedKeys=Object.keys(values);
+  const needsCheck=receivedKeys.some(key=>!settings.verifiedKeys.includes(key));
+  if (needsCheck) {
+    const accepted=await confirmHealthValues(request.date,values);
+    if (!healthContext(request)) return;
+    if (!accepted) {
+      await healthBridge.finish(request,[],receivedKeys);
+      healthReady=null;healthMessage="ヘルスケアの取り込みを中止しました。記録は変更していません。";updateHealthTools();return;
+    }
+    settings=loadHealthSettings();
+    saveHealthSettings({...settings,verifiedKeys:[...new Set([...settings.verifiedKeys,...receivedKeys])]});
+  }
+  if (Date.now()-request.issued_at >= REQUEST_TTL_MS) throw new Error("読み取りが期限切れです。もう一度更新してください。");
+  // Continue the same manual update after returning, including the existing last-meal import.
+  await syncFromServer(false,true);
+  if (!healthContext(request)) return;
+  if (healthInputBusy()) { scheduleHealth(request,500);return; }
+  const keys=await sync.pendingKeys();
+  if (!healthContext(request) || healthInputBusy()) { scheduleHealth(request,500);return; }
+  // The page may have been suspended during the ordinary network refresh.
+  if (Date.now()-request.issued_at >= REQUEST_TTL_MS) throw new Error("読み取りが期限切れです。もう一度更新してください。");
+  const latest=healthBridge.pending();
+  const untouched=Object.fromEntries(Object.entries(values).filter(([key])=>!latest.editedKeys?.includes(key)));
+  const before=loadDay(request.date);
+  const patch=keys.has("habit_day:"+request.date) ? {} : selectHealthPatch(before,request.baseline,untouched,state.items);
+  const appliedKeys=Object.keys(patch);
+  const skipped=receivedKeys.filter(key=>!appliedKeys.includes(key) && !Object.is(before[key],values[key]));
+  if (appliedKeys.length) {
+    healthSaving=true;updateHealthTools();
+    // Persist to the existing queue before announcing success or discarding the temporary result.
+    await sync.queue({type:"habit_day_upsert",payload:{date:request.date,set:patch,del:[]}},300);
+    const fresh=loadDay(request.date), stillPending=healthBridge.pending();
+    if (stillPending?.request_id !== request.request_id) return;
+    const safePatch=Object.fromEntries(Object.entries(patch).filter(([key])=>!stillPending?.editedKeys?.includes(key) && Object.is(fresh[key],before[key])));
+    const merged={...fresh,...safePatch};
+    saveDayLocal(request.date,merged);
+    if (rootEl?.isConnected && state.date===request.date) { state.values=merged;if(!healthInputBusy())paint(); }
+    await sync.flushAll();
+  }
+  if (!await healthBridge.finish(request,appliedKeys,skipped)) return;
+  healthReady=null;
+  healthMessage=!receivedKeys.length ? "この日のヘルスケアデータはありません。4項目は変更していません。" : skipped.length ? `${appliedKeys.length}項目を取り込み、変更中などの${skipped.length}項目はそのまま残しました。` : appliedKeys.length ? `ヘルスケア${appliedKeys.length}項目を取り込みました。` : "ヘルスケアの値を確認しました。変更はありません。";
+  updateHealthTools();toast(healthMessage + await sync.pendingNote(),"success");
 }

@@ -1,0 +1,21 @@
+/* iPhone Health bridge controls stay in the scrolling body. */
+.health-tools { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:8px 0 4px; }
+.health-tools button { min-height:44px; padding:8px 12px; border:1px solid rgb(var(--ov) / .25); border-radius:18px; background:var(--field); color:var(--fg); font-size:13px; }
+.health-tools p { flex:1; font-size:12px; line-height:1.6; color:var(--muted); }
+.health-tools [hidden] { display:none; }
+.health-modal p,.health-modal li { font-size:14px; line-height:1.7; color:var(--fg); }
+.health-modal .health-small { font-size:12px; color:var(--muted); }
+.health-modal input { font-size:16px; min-width:0; }
+.health-modal label.health-enable { flex-direction:row; align-items:center; gap:10px; min-height:44px; }
+.health-modal #health-enabled { width:22px; min-height:22px; }
+.health-key-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.health-setup-steps { margin:0; padding-left:22px; }
+.health-modal a { color:var(--accent); }
+.health-form-error { color:#ffb7ae; font-size:14px; }
+:root[data-kind="light"] .health-form-error { color:#a31919; }
+.health-preview { display:grid; gap:10px; margin:6px 0; }
+.health-preview div { display:flex; justify-content:space-between; gap:16px; padding:10px 0; border-bottom:1px solid rgb(var(--ov) / .15); }
+.health-preview dt { color:var(--muted); font-size:14px; }
+.health-preview dd { margin:0; font-size:18px; font-weight:600; }
+
+.health-tools button:disabled { opacity:.55; cursor:wait; }

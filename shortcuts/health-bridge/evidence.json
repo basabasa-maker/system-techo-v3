@@ -1,0 +1,41 @@
+{
+  "template_status": "signed prototype; physical iPhone import/execution not verified",
+  "source_observations": {
+    "repository": "https://github.com/viticci/shortcuts-playground-plugin",
+    "commit": "2de03bffe4ce8802e06d184931d9e4ec366a2ef2",
+    "files": [
+      "codex/skills/shortcuts-playground/HEALTHKIT.md",
+      "codex/skills/shortcuts-playground/data/toolkit-v78-first-party-parameter-keys.json",
+      "codex/skills/shortcuts-playground/data/toolkit-v78-first-party-enum-cases.json"
+    ],
+    "kind": "Developer-published observations of anonymized iOS exports and ToolKit metadata; not Apple-supported serialization API"
+  },
+  "local_apple_metadata": {
+    "path": "/System/Library/PrivateFrameworks/ActionKit.framework/Versions/A/Resources/Localizable.loctable",
+    "sha256": "3a22ca6c44e2e268e030f7c215ff52fcfaef83f93e9b41ad359f235eec44e9b7",
+    "confirmed": [
+      "WFHKSampleFilteringGroupBy: Day",
+      "WFHKSampleFilteringUnit",
+      "WFHKSampleFilteringFillMissing"
+    ]
+  },
+  "apple_documentation": [
+    "https://support.apple.com/guide/shortcuts/apd624386f42/ios",
+    "https://support.apple.com/guide/shortcuts/apd43b69f337/ios",
+    "https://support.apple.com/guide/shortcuts-mac/apd455c82f02/mac"
+  ],
+  "remaining_device_checks": [
+    "Import question updates first Text action",
+    "Date parser and range under phone timezone",
+    "Group By Day source priority / deduplication matches Health",
+    "Unit property yields kg/%/kcal/count; bodyFat value is display percent",
+    "Set Dictionary Value retains numeric/nested dictionary types in JSON",
+    "Shortcut return opens Safari or original PWA"
+  ],
+  "type_preservation_structure": {
+    "dynamic_set_dictionary_values": "WFTextTokenAttachment; avoids an explicit WFTextTokenString boundary",
+    "literal_strings": "WFTextTokenString only for literals",
+    "json_serialization": "final Get Text of complete Payload dictionary",
+    "runtime_verified": false
+  }
+}

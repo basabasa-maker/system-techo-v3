@@ -6,6 +6,8 @@ import { TAB_DEFINITIONS, DEFAULT_TAB } from "./tabs.js";
 import { toast } from "./toast.js";
 import { initTheme } from "./theme.js";
 import { initTabNavigation, revealActiveTab } from "./tab-navigation.js";
+import { healthBridge } from "./health/bridge.js";
+import { showHealthReturnNotice } from "./health/ui.js";
 
 // タブの種類。表示順は tab-navigation.js が端末の設定を復元する。
 const TABS = Object.keys(TAB_DEFINITIONS);
@@ -23,7 +25,10 @@ function init() {
   initTheme();
 
   if (!TABS.includes(appState.activeTab)) appState.activeTab = DEFAULT_TAB;
+  const healthReturn = window.location.hash === "#health-return";
+  if (healthReturn) history.replaceState(null,"",window.location.pathname+window.location.search);
   switchTab(appState.activeTab);
+  if (healthReturn && !healthBridge.pending()) showHealthReturnNotice();
 }
 
 function switchTab(tab) {
@@ -71,12 +76,20 @@ document.addEventListener("visibilitychange", () => {
     hiddenAt = Date.now();
     return;
   }
+  if (appState.activeTab === "habit" && TAB_DEFINITIONS.habit.resume?.()) return;
   if (!hiddenAt || Date.now() - hiddenAt < 20000) return;
   hiddenAt = 0;
   const a = document.activeElement;
   const typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
   if (typing || document.querySelector(".modal-backdrop")) return;
   switchTab(appState.activeTab);
+});
+
+window.addEventListener("pageshow", () => {
+  if (appState.activeTab === "habit") TAB_DEFINITIONS.habit.resume?.();
+});
+window.addEventListener("focus", () => {
+  if (appState.activeTab === "habit") TAB_DEFINITIONS.habit.resume?.();
 });
 
 async function onRefresh() {

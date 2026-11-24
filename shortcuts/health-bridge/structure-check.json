@@ -1,0 +1,16 @@
+{
+  "actions": 170,
+  "health_queries": 4,
+  "contains_real_pair_key": false,
+  "writes_health": false,
+  "posts_existing_habits": false,
+  "callback_contains_health_or_credentials": false,
+  "native_variable_values_use_attachment": true,
+  "ios_execution": "not_tested",
+  "signed_with": "Apple shortcuts sign --mode anyone",
+  "signed_bytes": 35730,
+  "signed_sha256": "ebe0fd2939e2cad7e113132b4ce89b58f3a7b62ddf7ad500400a1e6e5ae7ff23",
+  "signature_command_exit": 0,
+  "native_variable_puts": 10,
+  "literal_string_puts": 5
+}

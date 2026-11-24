@@ -1,0 +1,73 @@
+import { HEALTH_METRICS } from "./model.js";
+import { generateHealthKey, loadHealthSettings, saveHealthSettings } from "./bridge.js";
+import { toast } from "../toast.js";
+
+export const HEALTH_LABELS = { weight: "体重", bodyFat: "体脂肪率", kcal: "アクティブエネルギー", steps: "歩数" };
+const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+function dialog(title, body, footer, onClose) {
+  const previous = document.activeElement;
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop health-modal";
+  backdrop.innerHTML = `<form class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><header>${esc(title)}</header><div class="modal-body">${body}<p class="health-form-error" role="alert" hidden></p></div><footer>${footer}</footer></form>`;
+  const close = () => { backdrop.remove(); onClose?.(); if (previous?.isConnected) previous.focus({preventScroll:true}); };
+  backdrop.addEventListener("keydown", event => {
+    if (event.key === "Escape") { event.preventDefault(); close(); }
+    if (event.key !== "Tab") return;
+    const fields = Array.from(backdrop.querySelectorAll("button,input,a[href]")).filter(el => !el.disabled && !el.hidden && el.getClientRects().length);
+    if (event.shiftKey && document.activeElement === fields[0]) { event.preventDefault(); fields.at(-1)?.focus({preventScroll:true}); }
+    else if (!event.shiftKey && document.activeElement === fields.at(-1)) { event.preventDefault(); fields[0]?.focus({preventScroll:true}); }
+  });
+  document.body.appendChild(backdrop);
+  backdrop.querySelector("form").tabIndex = -1;
+  backdrop.querySelector("form").focus({preventScroll:true});
+  return { element:backdrop, close, error(error) { const el=backdrop.querySelector(".health-form-error");el.textContent=error.message;el.hidden=false; } };
+}
+export function showHealthSettings(onSaved) {
+  let settings;
+  try { settings = loadHealthSettings(); } catch (error) { toast(error.message,"error");return; }
+  const key = settings.pairKey || generateHealthKey();
+  // Keep the first key while iPhone leaves this PWA to install the shortcut.
+  // Opening settings never enables automatic reads.
+  if (!settings.pairKey) {
+    try { settings = saveHealthSettings({...settings,enabled:false,pairKey:key}); }
+    catch (error) { toast(error.message,"error");return; }
+  }
+  const modal = dialog("ヘルスケア連携", `
+    <p>iPhoneのショートカットで、表示中の日の4項目を読み取ります。初めて届く項目だけ、値を確認してから保存します。</p>
+    <ol class="health-setup-steps"><li>下の連携キーをコピーします。</li><li><a href="shortcuts/health-bridge/system-techo-health.shortcut" download>ショートカットを追加</a>し、最初の質問にキーを貼り付けます。</li><li>iPhoneで読み取りを許可し、同じ日のヘルスケア値と照合します。</li></ol>
+    <label class="health-enable"><input type="checkbox" id="health-enabled" ${settings.enabled ? "checked" : ""}>入力画面の更新で連携する</label>
+    <label>ショートカット名<input id="health-shortcut-name" value="${esc(settings.shortcutName)}" maxlength="100" /></label>
+    <label>この手帳の連携キー<input type="password" id="health-pair-key" value="${esc(key)}" autocomplete="off" spellcheck="false" /></label>
+    <div class="health-key-actions"><button type="button" id="health-copy-key" class="btn-ghost">キーをコピー</button><button type="button" id="health-renew-key" class="btn-ghost">キーを作り直す</button></div>
+    <p class="health-small">キーを作り直した場合は、ショートカット側にも新しいキーを設定してください。</p>
+    <p class="health-small">測定のない項目は変更しません。Safariが開いた場合は、元の手帳へ戻ってください。</p>`, '<button type="button" class="btn-ghost" id="health-settings-close">キャンセル</button><button type="submit" class="btn-primary" id="health-save">保存</button>');
+  modal.element.querySelector("#health-settings-close").addEventListener("click",modal.close);
+  modal.element.querySelector("#health-renew-key").addEventListener("click",()=>{modal.element.querySelector("#health-pair-key").value=generateHealthKey();});
+  modal.element.querySelector("#health-copy-key").addEventListener("click",async()=>{
+    const input=modal.element.querySelector("#health-pair-key");
+    try { await navigator.clipboard.writeText(input.value);toast("連携キーをコピーしました"); }
+    catch (_) { input.type="text";input.focus({preventScroll:true});input.select();toast("キー欄を長押ししてコピーしてください"); }
+  });
+  modal.element.querySelector("form").addEventListener("submit",event=>{
+    event.preventDefault();
+    try {
+      saveHealthSettings({enabled:modal.element.querySelector("#health-enabled").checked,shortcutName:modal.element.querySelector("#health-shortcut-name").value,pairKey:modal.element.querySelector("#health-pair-key").value.trim(),verifiedKeys:settings.verifiedKeys});
+      modal.close();onSaved?.();toast("ヘルスケア連携の設定を保存しました");
+    } catch (error) { modal.error(error); }
+  });
+}
+export function confirmHealthValues(date, values) {
+  return new Promise(resolve=>{
+    let settled=false;
+    const finish=value=>{if(settled)return;settled=true;modal.close();resolve(value);};
+    const rows=Object.entries(values).map(([key,value])=>`<div><dt>${esc(HEALTH_LABELS[key])}</dt><dd>${esc(value)} ${esc(key === "steps" ? "歩" : HEALTH_METRICS[key].unit)}</dd></div>`).join("");
+    const modal=dialog("ヘルスケアの値を確認",`<p>${esc(date)} の値です。初めて届いた項目があるため、ヘルスケアの同じ日と一致するか確認してください。</p><dl class="health-preview">${rows}</dl><p class="health-small">測定のない項目には値を入れません。体脂肪率と、歩数・活動分の合計が一致することも確認してください。</p>`, '<button type="button" class="btn-ghost" id="health-reject">取り込まない</button><button type="submit" class="btn-primary" id="health-confirm">この値を取り込む</button>',()=>{if(!settled){settled=true;resolve(false);}});
+    modal.element.querySelector("#health-reject").addEventListener("click",()=>finish(false));
+    modal.element.querySelector("form").addEventListener("submit",event=>{event.preventDefault();finish(true);});
+  });
+}
+export function showHealthReturnNotice() {
+  const modal=dialog("元の手帳に戻ってください",'<p>この画面がSafariで開いた場合は、ホーム画面から使っているシステム手帳へ戻ると結果を受け取れます。</p><p>読み取り結果は一時保管され、表示中の日付と照合してから取り込みます。</p>', '<button type="button" class="btn-primary" id="health-return-close">閉じる</button>');
+  modal.element.querySelector("#health-return-close").addEventListener("click",modal.close);
+  modal.element.querySelector("form").addEventListener("submit",event=>event.preventDefault());
+}

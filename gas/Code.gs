@@ -185,10 +185,23 @@ function doPost(e) {
   try {
     let body = {};
     if (e && e.postData && e.postData.contents) {
-      body = JSON.parse(e.postData.contents);
+      try { body = JSON.parse(e.postData.contents); }
+      catch (error) {
+        // V8's JSON error may include a fragment containing health data or a key.
+        return jsonResponse({ ok: false, error: "Invalid JSON request" });
+      }
     }
     const type = body.type || (e && e.parameter && e.parameter.type) || "";
 
+    if (type === "health_bridge_upload") {
+      return jsonResponse({ ok: true, data: healthBridgeUpload(body) });
+    }
+    if (type === "health_bridge_read") {
+      return jsonResponse({ ok: true, data: healthBridgeRead(body) });
+    }
+    if (type === "health_bridge_ack") {
+      return jsonResponse({ ok: true, data: healthBridgeAck(body) });
+    }
     if (type === "goal_node_upsert") {
       return jsonResponse({ ok: true, data: goalNodeUpsert(body.node) });
     }
@@ -1305,5 +1318,140 @@ function goalItemUpsert(input) {
     }
     next.updated_at = nowJstString();
     return goalWriteRow(GOAL_ITEMS_SHEET, next);
+  });
+}
+
+
+// ---------- Health bridge: temporary, per-request handoff only ----------
+// No Sheets or Properties reads/writes here. Only the PWA's existing habit PATCH
+// flow can persist the selected day's values after its edit/date guards pass.
+const HEALTH_BRIDGE_TTL_MS = 10 * 60 * 1000;
+const HEALTH_BRIDGE_FIELDS = {
+  weight: { unit: "kg", min: 0, max: 500, exclusiveMin: true },
+  bodyFat: { unit: "%", min: 0, max: 100 },
+  kcal: { unit: "kcal", min: 0, max: 100000 },
+  steps: { unit: "count", min: 0, max: 1000000, integer: true },
+};
+
+function healthBridgeRequest(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("invalid health request");
+  if (typeof body.request_id !== "string" || !/^[A-Za-z0-9_-]{32,96}$/.test(body.request_id)) {
+    throw new Error("invalid health request id");
+  }
+  if (typeof body.pair_key !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(body.pair_key)) {
+    throw new Error("invalid health pairing key");
+  }
+  const match = typeof body.date === "string" && /^(\d{4})-(\d{2})-(\d{2})$/.exec(body.date);
+  if (!match) throw new Error("invalid health date");
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new Error("invalid health date");
+  }
+  const now = Date.now();
+  if (typeof body.issued_at !== "number" || !isFinite(body.issued_at) || !Number.isInteger(body.issued_at)
+      || body.issued_at <= 0 || body.issued_at - now > 2 * 60 * 1000) {
+    throw new Error("invalid health request time");
+  }
+  if (now - body.issued_at >= HEALTH_BRIDGE_TTL_MS) throw new Error("health request expired");
+  const hash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, body.pair_key, Utilities.Charset.UTF_8)
+    .map((value) => ("0" + ((value + 256) % 256).toString(16)).slice(-2)).join("");
+  return { request_id: body.request_id, date: body.date, issued_at: body.issued_at, key_hash: hash };
+}
+
+function healthBridgeWithLock(action) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try { return action(); }
+  finally { lock.releaseLock(); }
+}
+
+function healthBridgeLoad(cache, request) {
+  const raw = cache.get("health_bridge:" + request.request_id);
+  if (raw == null) return null; // Cache may evict early. Waiting never means a zero value.
+  let entry;
+  try { entry = JSON.parse(raw); }
+  catch (error) { throw new Error("invalid health handoff state"); }
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)
+      || entry.request_id !== request.request_id || !["ready", "consumed"].includes(entry.status)
+      || typeof entry.expires_at !== "number" || !isFinite(entry.expires_at)) {
+    throw new Error("invalid health handoff state");
+  }
+  if (entry.key_hash !== request.key_hash || entry.date !== request.date || entry.issued_at !== request.issued_at) {
+    throw new Error("health request does not match");
+  }
+  if (entry.expires_at <= Date.now()) throw new Error("health request expired");
+  return entry;
+}
+
+function healthBridgeValues(values, units) {
+  if (!values || typeof values !== "object" || Array.isArray(values)
+      || !units || typeof units !== "object" || Array.isArray(units)) {
+    throw new Error("invalid health metrics");
+  }
+  const keys = Object.keys(values), unitKeys = Object.keys(units);
+  if (keys.length !== unitKeys.length || unitKeys.some((key) => !Object.prototype.hasOwnProperty.call(values, key))) {
+    throw new Error("health units do not match metrics");
+  }
+  const checked = {}, checkedUnits = {};
+  keys.forEach((key) => {
+    if (!Object.prototype.hasOwnProperty.call(HEALTH_BRIDGE_FIELDS, key)) throw new Error("unsupported health metric");
+    const rule = HEALTH_BRIDGE_FIELDS[key], value = values[key];
+    if (typeof value !== "number" || !isFinite(value) || value < rule.min || value > rule.max
+        || rule.exclusiveMin && value === rule.min || rule.integer && !Number.isInteger(value)) {
+      throw new Error("invalid health metric value");
+    }
+    if (units[key] !== rule.unit) throw new Error("invalid health metric unit");
+    checked[key] = value;
+    checkedUnits[key] = rule.unit;
+  });
+  return { values: checked, units: checkedUnits };
+}
+
+function healthBridgeStore(cache, entry) {
+  const remaining = entry.expires_at - Date.now();
+  if (remaining <= 0) throw new Error("health request expired");
+  const seconds = Math.min(600, Math.max(1, Math.floor(remaining / 1000)));
+  cache.put("health_bridge:" + entry.request_id, JSON.stringify(entry), seconds);
+}
+
+function healthBridgeUpload(body) {
+  const request = healthBridgeRequest(body);
+  const metrics = healthBridgeValues(body.values, body.units);
+  return healthBridgeWithLock(() => {
+    const cache = CacheService.getScriptCache();
+    const existing = healthBridgeLoad(cache, request);
+    if (existing) {
+      if (existing.status === "consumed") throw new Error("health request already consumed");
+      return { status: "ready", date: request.date, issued_at: request.issued_at }; // Retry preserves the first result.
+    }
+    const entry = { ...request, status: "ready", expires_at: Math.min(request.issued_at + HEALTH_BRIDGE_TTL_MS,
+      Date.now() + HEALTH_BRIDGE_TTL_MS), values: metrics.values, units: metrics.units };
+    healthBridgeStore(cache, entry);
+    return { status: "ready", date: request.date, issued_at: request.issued_at };
+  });
+}
+
+function healthBridgeRead(body) {
+  const request = healthBridgeRequest(body);
+  return healthBridgeWithLock(() => {
+    const entry = healthBridgeLoad(CacheService.getScriptCache(), request);
+    if (!entry) return { status: "waiting", date: request.date };
+    if (entry.status === "consumed") return { status: "consumed", date: request.date, issued_at: request.issued_at };
+    const metrics = healthBridgeValues(entry.values, entry.units);
+    return { status: "ready", date: request.date, issued_at: entry.issued_at, values: metrics.values, units: metrics.units };
+  });
+}
+
+function healthBridgeAck(body) {
+  const request = healthBridgeRequest(body);
+  return healthBridgeWithLock(() => {
+    const cache = CacheService.getScriptCache();
+    const entry = healthBridgeLoad(cache, request);
+    if (!entry) return { status: "waiting", date: request.date };
+    const marker = { request_id: request.request_id, date: request.date, issued_at: request.issued_at,
+      key_hash: request.key_hash, expires_at: entry.expires_at, status: "consumed" };
+    healthBridgeStore(cache, marker); // No values or units remain in the consumed marker.
+    return { status: "consumed", date: request.date, issued_at: request.issued_at };
   });
 }

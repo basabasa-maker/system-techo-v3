@@ -1997,6 +1997,17 @@ textarea.memo-detail-text {
   margin-top: 1px;
 }
 
+/* 習慣：切り替え行と日付操作を2段で固定する。食事の共用ナビは変えない。 */
+.habit-tab { --habit-subtabs-height: 48px; }
+.habit-tab > .habit-subtabs {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  height: var(--habit-subtabs-height);
+  background: var(--bg);
+}
+.habit-tab > .habit-nav { top: var(--habit-subtabs-height); }
+
 /* 習慣：入力・グラフ・履歴の切り替え */
 .habit-subtabs {
   display: flex;

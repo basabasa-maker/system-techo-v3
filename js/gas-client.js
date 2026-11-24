@@ -290,3 +290,20 @@ export function pushGoalBoard(board) {
 export function pushGoalItem(item) {
   return pushGoalEntity("goal_item_upsert", "item", item);
 }
+
+// ---- iPhone Health bridge: request-scoped, temporary results only ----
+async function healthBridgePost(type, request) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const body = await fetchJson(GAS_URL, {
+      method: "POST", signal: controller.signal,
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ type, ...request }),
+    });
+    if (!body.ok) throw new Error("ヘルスケアの受け取りに失敗しました。連携設定と通信を確認してください");
+    return body.data;
+  } finally { clearTimeout(timer); }
+}
+export const readHealthBridge = request => healthBridgePost("health_bridge_read", request);
+export const ackHealthBridge = request => healthBridgePost("health_bridge_ack", request);
