@@ -86,3 +86,7 @@ PLAYWRIGHT_PATH=/path/to/playwright node tests/goals.cjs
 ## 公開候補の最終確認（2026-11-24）
 
 公開候補版 `20261124-233508`。Node契約25件、GAS/client12群、既存ブラウザ13件、新機能ブラウザ16件がすべて成功。全27 JSファイルとGASの構文、`git diff --check` も成功。切り替え項目の固定は390×844のHTTPS試作画面でスクロール前後の座標を照合し、切り替え行が主タブ直下に留まり本文だけが動くことを確認した。実機iPhoneと本番配信は未確認。
+
+## 前日の最終食事の自動反映（2026-11-24）
+
+`node --test tests/meal-time.test.mjs` は時刻の大小、0時、正規化、不正値、元記録の非破壊を確認する3件。`PLAYWRIGHT_PATH=/path/to/playwright node tests/last-meal.cjs` は習慣の手動更新だけの反映・年跨ぎ・1項目PATCH・欠測/失敗・手入力・日付/タブ切替・未送信・取得後編集・削除済み項目を確認する14件。すべて合成API・独立ブラウザで、本番へ接続しない。詳しくは [仕様と保持条件](../docs/meal-last-time.md)。

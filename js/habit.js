@@ -6,6 +6,7 @@
 
 import * as gas from "./gas-client.js";
 import * as sync from "./sync.js";
+import { latestMealTime } from "./meal-time.js";
 import {
   HABIT_DEFAULT_ITEMS,
   LS_KEY_HABIT_DAY_PREFIX,
@@ -579,15 +580,25 @@ function toHhMm(v) {
 
 let syncSeq = 0;
 
-async function syncFromServer(quiet = true) {
+async function syncFromServer(quiet = true, importLastMeal = false) {
   const seq = ++syncSeq;
   const view = rootEl;
   const ymd = state.date;
+  const previousDate = addDaysYmd(ymd, -1);
+  const mealKey = "meal:" + previousDate;
+  // 更新開始後は、送信待ちの処理中に確定した手入力も自動値で戻さない。
+  const refreshDayRevision = sync.revision("habit_day:" + ymd);
   try {
     await flushHabitOutbox().catch(() => {});
     const dayRevision = sync.revision("habit_day:" + ymd);
     const itemRevision = sync.revision("habit_items");
-    const [items, values] = await Promise.all([gas.pullHabitItems(), gas.pullHabitDay(ymd)]);
+    const mealRevision = sync.revision(mealKey);
+    // 食事の追加取得は、習慣タブの手動更新時だけ。取得失敗でも通常の習慣同期は残す。
+    const [items, values, mealResult] = await Promise.all([
+      gas.pullHabitItems(), gas.pullHabitDay(ymd),
+      importLastMeal ? gas.pullMealMonth(previousDate.slice(0, 7))
+        .then((days) => ({ days }), (error) => ({ error })) : null,
+    ]);
     const keys = await sync.pendingKeys();
     if (seq !== syncSeq || view !== rootEl || !view?.isConnected || state.date !== ymd) return;
     // キーボード／時刻ピッカーを開いている間は state と DOM の両方を維持。
@@ -604,7 +615,25 @@ async function syncFromServer(quiet = true) {
       saveDayLocal(ymd, values);
       changed = true;
     }
+    let lastMealSave = null;
+    const lastMeal = latestMealTime(mealResult?.days?.[previousDate]);
+    if (lastMeal !== null && state.values.lastMeal !== lastMeal
+        && state.items.some((item) => item.id === "lastMeal" && item.type === "time")
+        && !keys.has("habit_items") && itemRevision === sync.revision("habit_items")
+        && !keys.has("habit_day:" + ymd) && dayRevision === sync.revision("habit_day:" + ymd)
+        && refreshDayRevision === sync.revision("habit_day:" + ymd)
+        && !keys.has(mealKey) && mealRevision === sync.revision(mealKey)) {
+      state.values = { ...state.values, lastMeal };
+      saveDayLocal(ymd, state.values);
+      // 習慣を全日置換せず、この1項目だけを既存の永続キューへ入れる。
+      lastMealSave = sync.queue({ type: "habit_day_upsert", payload: {
+        date: ymd, set: { lastMeal }, del: [],
+      } });
+      changed = true;
+    }
     if (changed) paint();
+    if (lastMealSave) await lastMealSave;
+    if (mealResult?.error) throw mealResult.error;
   } catch (e) {
     console.warn("habit sync skipped:", e.message);
     if (!quiet) throw e;
@@ -619,7 +648,7 @@ export async function flushHabitOutbox() {
 export async function pullAndRender() {
   showSpinner();
   try {
-    await syncFromServer(false);
+    await syncFromServer(false, true);
     toast("更新を確認しました" + (await sync.pendingNote()), "success");
   } catch (e) {
     toast("取得に失敗しました: " + e.message, "error");

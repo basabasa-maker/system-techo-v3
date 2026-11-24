@@ -7,6 +7,7 @@ HTML / CSS / ES modules で動き、ビルド処理やフロントエンドフ�
 - GitHub：`basabasa-maker/system-techo-v3`
 - [構成・保存の前提・機能追加の手順](docs/architecture.md)
 - [目標とビジョンボードの仕様・検証・公開手順](docs/goals-feature.md)
+- [前日の最終食事の自動反映](docs/meal-last-time.md)
 - [隔離環境での回帰試験](tests/README.md)
 - [iOS ショートカット連携](docs/ios-shortcut-setup.md)
 
