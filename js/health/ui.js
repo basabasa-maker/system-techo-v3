@@ -60,7 +60,7 @@ export function confirmHealthValues(date, values) {
   return new Promise(resolve=>{
     let settled=false;
     const finish=value=>{if(settled)return;settled=true;modal.close();resolve(value);};
-    const rows=Object.entries(values).map(([key,value])=>`<div><dt>${esc(HEALTH_LABELS[key])}</dt><dd>${esc(value)} ${esc(key === "steps" ? "歩" : HEALTH_METRICS[key].unit)}</dd></div>`).join("");
+    const rows=Object.entries(values).map(([key,value])=>`<div><dt>${esc(HEALTH_LABELS[key])}</dt><dd>${esc(key === "steps" ? value : value.toFixed(1))} ${esc(key === "steps" ? "歩" : HEALTH_METRICS[key].unit)}</dd></div>`).join("");
     const modal=dialog("ヘルスケアの値を確認",`<p>${esc(date)} の値です。初めて届いた項目があるため、ヘルスケアの同じ日と一致するか確認してください。</p><dl class="health-preview">${rows}</dl><p class="health-small">測定のない項目には値を入れません。体脂肪率と、歩数・活動分の合計が一致することも確認してください。</p>`, '<button type="button" class="btn-ghost" id="health-reject">取り込まない</button><button type="submit" class="btn-primary" id="health-confirm">この値を取り込む</button>',()=>{if(!settled){settled=true;resolve(false);}});
     modal.element.querySelector("#health-reject").addEventListener("click",()=>finish(false));
     modal.element.querySelector("form").addEventListener("submit",event=>{event.preventDefault();finish(true);});

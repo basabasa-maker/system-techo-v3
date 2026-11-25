@@ -255,6 +255,27 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   const shot=process.env.HEALTH_SCREENSHOT;
   if(shot){await until(async()=>(await page.locator('.toast').count())===0,'transient messages clear for review',5000);fs.mkdirSync(path.dirname(shot),{recursive:true});await page.screenshot({path:shot,fullPage:true});}
  },{enabled:false});
+ await scenario('Health preview and saved measurements use one decimal while steps stay integer',async({page,opts,posts,values})=>{
+  opts.healthValues={weight:62.329999999,bodyFat:21.2679,kcal:456.789,steps:8123};
+  await begin(page,posts);await page.locator('#health-confirm').waitFor();
+  assert.equal(habitWrites(posts).length,0,'long-decimal first import cannot write before confirmation');
+  assert.deepEqual(await page.locator('.health-preview dd').allTextContents(),['62.3 kg','21.3 %','456.8 kcal','8123 歩']);
+  if(process.env.HEALTH_PRECISION_SCREENSHOT){fs.mkdirSync(path.dirname(process.env.HEALTH_PRECISION_SCREENSHOT),{recursive:true});await page.screenshot({path:process.env.HEALTH_PRECISION_SCREENSHOT,fullPage:true});}
+  await page.locator('#health-confirm').click();await done(page,posts);
+  const rounded={weight:62.3,bodyFat:21.3,kcal:456.8,steps:8123};
+  assert.deepEqual(metricWrites(posts).map(p=>({date:p.date,set:p.set,del:p.del})),[{date:TODAY,set:rounded,del:[]}]);
+  assert.deepEqual(values[TODAY],{...initialValues[TODAY],...rounded});
+  // A second unverified response checks trailing .0 without rewriting old dates.
+  await page.evaluate(key=>{const settings=JSON.parse(localStorage.getItem(key));settings.verifiedKeys=[];localStorage.setItem(key,JSON.stringify(settings));},SETTINGS);
+  opts.healthValues={weight:63.000000001,bodyFat:22,kcal:457,steps:8124};
+  const writesBefore=habitWrites(posts).length;
+  await begin(page,posts);await page.locator('#health-confirm').waitFor();
+  assert.equal(habitWrites(posts).length,writesBefore,'integer-equivalent first confirmation remains read-only');
+  assert.deepEqual(await page.locator('.health-preview dd').allTextContents(),['63.0 kg','22.0 %','457.0 kcal','8124 歩']);
+  await page.locator('#health-confirm').click();await done(page,posts);
+  assert.deepEqual(metricWrites(posts).at(-1).set,{weight:63,bodyFat:22,kcal:457,steps:8124});
+  assert.deepEqual(values[PREV],initialValues[PREV]);assert.deepEqual(values[NEXT],initialValues[NEXT]);
+ },{verified:false});
  await scenario('duplicate Shortcut name with a space and suffix 2 launches unchanged and imports only the selected day',async({page,posts,values})=>{
   await page.evaluate(key=>{const settings=JSON.parse(localStorage.getItem(key));settings.shortcutName='system-techo-health 2';localStorage.setItem(key,JSON.stringify(settings));},SETTINGS);
   const settingsBefore=await page.evaluate(key=>localStorage.getItem(key),SETTINGS);

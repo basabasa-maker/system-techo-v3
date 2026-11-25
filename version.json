@@ -1,5 +1,5 @@
 {
-  "build": "20261125-192919",
+  "build": "20261125-233946",
   "assets": [
     {
       "path": "css/goals.css",
@@ -43,7 +43,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "825cb51e319dd7640fc2558b4ffd1546ef506b992869d4ba2690e774dde437f8"
+      "sha256": "dc98c76b0e18c6a486e04ec006e7b60fea1f95503414838eb41e167eb41ddc1b"
     },
     {
       "path": "js/app.js",
@@ -99,11 +99,11 @@
     },
     {
       "path": "js/health/model.js",
-      "sha256": "5342de140cfb26ba546eefdb502791f34be70998a1eb1e4b2087521694316c33"
+      "sha256": "2d876c5d6cdfc712a8b3376e681a200db6bfe3a4f6d89721431807ec31de1c8c"
     },
     {
       "path": "js/health/ui.js",
-      "sha256": "3af44cb509724b4ff58f6d3f171736a49858f3299b267bedfbdc6f2b06aa2517"
+      "sha256": "81c169a9634b318b25f2dedf7bdaea740d26efd3b780b0fc8f240df756d699f1"
     },
     {
       "path": "js/meal-time.js",
@@ -199,7 +199,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "423124481d31fc48f90a3b1d99e58494d5f3bb365d8fa48eef3eb6e5d97490fb"
+      "sha256": "b10baf33c1cb2a482c1e6294a457f46ced28bbbfa7f13459f71020a4f3d44f1e"
     }
   ]
 }

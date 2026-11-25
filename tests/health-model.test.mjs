@@ -20,6 +20,18 @@ test('accepts only canonical daily measurements and preserves genuine zero value
   assert.deepEqual(validateHealthValues({}, {}), {}, 'missing samples produce no patch fields');
 });
 
+test('rounds imported decimal metrics to one place without changing input, steps or missing fields', () => {
+  const raw = Object.freeze({ weight: 62.329999999, bodyFat: 21.2679, kcal: 456.789, steps: 8123 });
+  assert.deepEqual(validateHealthValues(raw, units), { weight: 62.3, bodyFat: 21.3, kcal: 456.8, steps: 8123 });
+  assert.equal(raw.bodyFat, 21.2679, 'the received object remains unchanged');
+  assert.deepEqual(validateHealthValues({ bodyFat: 0, kcal: 0, steps: 0 }, { bodyFat: '%', kcal: 'kcal', steps: 'count' }), { bodyFat: 0, kcal: 0, steps: 0 });
+  assert.deepEqual(validateHealthValues({ kcal: 12.36 }, { kcal: 'kcal' }), { kcal: 12.4 }, 'missing fields stay absent');
+  assert.deepEqual(validateHealthValues({}, {}), {});
+  assert.deepEqual(validateHealthResult(ready(raw, units), request, stamp + 1), { weight: 62.3, bodyFat: 21.3, kcal: 456.8, steps: 8123 });
+  assert.throws(() => validateHealthValues({ bodyFat: 100.01 }, { bodyFat: '%' }), 'rounding must not rescue an invalid raw value');
+  assert.throws(() => validateHealthValues({ weight: 0.01 }, { weight: 'kg' }), 'rounding must not introduce an invalid zero weight');
+});
+
 test('rejects malformed values, impossible bounds, unknown fields and mismatched units without exposing values', () => {
   for (const malformed of [null, [], '', 'private-value', 5]) assert.throws(() => validateHealthValues(malformed, {}));
   const badValues = [

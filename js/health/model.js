@@ -42,7 +42,10 @@ export function validateHealthValues(values, units) {
     if (!own(units, key) || units[key] !== HEALTH_METRICS[key].unit) {
       throw new Error("Health units do not match");
     }
-    validated[key] = Object.is(values[key], -0) ? 0 : values[key];
+    // Use the same precision for the preview and the selected day's PATCH.
+    const value = HEALTH_METRICS[key].integer ? values[key] : Math.round(values[key] * 10) / 10;
+    if (!validValue(key, value)) throw new Error("Invalid health measurement");
+    validated[key] = Object.is(value, -0) ? 0 : value;
   }
   return validated;
 }
