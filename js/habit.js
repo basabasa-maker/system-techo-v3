@@ -35,6 +35,7 @@ let healthPollUntil = 0;
 let healthReady = null;
 let healthMessage = "";
 let healthSaving = false;
+let healthToolsExpanded = false;
 
 
 // ---------- 保存（表示キャッシュ） ----------
@@ -232,6 +233,8 @@ async function paintStats() {
 
 function paint() {
   if (!rootEl?.isConnected) return;
+  const disclosure = rootEl.querySelector("#health-disclosure");
+  if (disclosure) healthToolsExpanded = disclosure.open;
   if (state.sub !== "input") {
     paintStats();
     return;
@@ -696,6 +699,9 @@ export async function pullAndRender() {
 
 // ---------- iPhone Health bridge (only an explicitly requested day) ----------
 function healthToolsHtml() {
+  return `<details id="health-disclosure" class="health-disclosure" ${healthToolsExpanded ? "open" : ""}><summary>ヘルスケア連携</summary>${healthToolsContentsHtml()}</details>`;
+}
+function healthToolsContentsHtml() {
   let settings, request, last;
   try { settings=loadHealthSettings();request=healthBridge.pending();last=healthBridge.lastSync(); }
   catch (_) { return '<div class="health-tools"><p id="health-status">連携設定を確認してください。</p><button id="h-health-setup">ヘルスケア連携</button></div>'; }
@@ -703,6 +709,10 @@ function healthToolsHtml() {
   return `<div class="health-tools"><p id="health-status" role="status">${escapeHtml(note)}</p><button id="h-health-setup" ${healthSaving ? "disabled" : ""}>ヘルスケア連携</button><button id="h-health-cancel" ${request ? "" : "hidden"} ${healthSaving ? "disabled" : ""}>中止</button></div>`;
 }
 function bindHealthTools() {
+  const disclosure = rootEl?.querySelector("#health-disclosure");
+  if (disclosure) disclosure.ontoggle = () => {
+    if (disclosure.isConnected) healthToolsExpanded = disclosure.open;
+  };
   rootEl?.querySelector("#h-health-setup")?.addEventListener("click",()=>showHealthSettings(()=>{
     healthMessage="";healthReady=null;clearTimeout(healthTimer);updateHealthTools();
   }));
@@ -713,7 +723,7 @@ function bindHealthTools() {
 function updateHealthTools() {
   const tools=rootEl?.querySelector(".health-tools");
   if (!tools || !rootEl.isConnected) return;
-  tools.outerHTML=healthToolsHtml();bindHealthTools();
+  tools.outerHTML=healthToolsContentsHtml();bindHealthTools();
 }
 function healthInputBusy() {
   return rootEl?.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)

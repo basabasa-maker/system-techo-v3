@@ -41,6 +41,11 @@ async function begin(page,posts){
  assert.equal(input.request_id,request.request_id);assert.equal(input.date,TODAY);assert(!launches.at(-1).includes(PAIR_KEY));
  await until(()=>Promise.resolve(healthReads(posts).length>0),'Health result polling starts');return request;
 }
+async function openHealthTools(page){
+ const disclosure=page.locator('#health-disclosure');
+ if(!await disclosure.evaluate(el=>el.open))await disclosure.locator('summary').click();
+}
+async function openHealthSettings(page){await openHealthTools(page);await page.locator('#h-health-setup').click();}
 async function done(page,posts){await until(async()=>!await pending(page),'Health import finishes');await until(()=>Promise.resolve(posts.some(p=>p.type==='health_bridge_ack')),'temporary result acknowledged');}
 async function scenario(name,fn,{enabled=true,verified=true}={}){
  if(process.env.HEALTH_TEST&&!name.includes(process.env.HEALTH_TEST))return;
@@ -108,9 +113,32 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));base='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+ await scenario('Health controls start folded and keep their disclosure state without changing records',async({page,posts,values})=>{
+  const disclosure=page.locator('#health-disclosure'),summary=disclosure.locator('summary');
+  assert.equal(await disclosure.count(),1,'Health controls have a disclosure');
+  assert.equal(await disclosure.evaluate(el=>el.open),false,'closed by default');
+  assert.equal(await summary.isVisible(),true);assert.equal(await page.locator('#h-health-setup').isVisible(),false);
+  assert.equal(await page.locator('#health-status').isVisible(),false,'routine status is hidden');
+  const closed=await disclosure.boundingBox();
+  if(process.env.HEALTH_COLLAPSED_SCREENSHOT)await page.screenshot({path:process.env.HEALTH_COLLAPSED_SCREENSHOT});
+  await summary.press('Space');await until(()=>disclosure.evaluate(el=>el.open),'keyboard opens disclosure');
+  assert.equal(await page.locator('#h-health-setup').isVisible(),true);
+  const expanded=await disclosure.boundingBox();assert(expanded.height>closed.height,'only opened details occupy extra height');
+  assert(closed.x>=0&&closed.x+closed.width<=390,'disclosure fits mobile viewport');
+  if(process.env.HEALTH_EXPANDED_SCREENSHOT)await page.screenshot({path:process.env.HEALTH_EXPANDED_SCREENSHOT});
+  await page.locator('#btn-refresh').click();await delay(300);
+  assert.equal(await disclosure.evaluate(el=>el.open),true,'normal refresh preserves open choice');
+  await summary.click();await until(async()=>!await disclosure.evaluate(el=>el.open),'disclosure closes');
+  await page.locator('#btn-refresh').click();await delay(300);
+  assert.equal(await disclosure.evaluate(el=>el.open),false,'normal refresh keeps controls folded');
+  await page.reload();await field(page,'weight').waitFor();
+  assert.equal(await disclosure.evaluate(el=>el.open),false,'new page starts folded');
+  assert.equal(healthReads(posts).length,0);assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
+  console.log('Disclosure mobile heights: '+closed.height+' closed / '+expanded.height+' open');
+ },{enabled:false});
  await scenario('settings enable Health import and only requested fields on the selected day change',async({page,values,posts})=>{
   assert.equal(healthReads(posts).length,0,'launch does not query Health');
-  await page.locator('#h-health-setup').click();await page.locator('#health-enabled').check();
+  await openHealthSettings(page);await page.locator('#health-enabled').check();
   await page.locator('#health-shortcut-name').fill('システム手帳 ヘルスケア同期');await page.locator('#health-pair-key').fill(PAIR_KEY);await page.locator('#health-save').click();
   assert.equal(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).enabled,SETTINGS),true);
   await begin(page,posts);
@@ -134,18 +162,18 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   await delay(200);assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
  },{verified:false});
  await scenario('draft pairing key survives reload before setup is saved without enabling Health',async({page,posts,values})=>{
-  await page.locator('#h-health-setup').click();
+  await openHealthSettings(page);
   const first=await page.locator('#health-pair-key').inputValue();
   assert.equal(/^[A-Za-z0-9_-]{43}$/.test(first),true,'setup generates a valid local pairing key');
   assert.equal(await page.locator('#health-enabled').isChecked(),false);
-  await page.reload();await field(page,'weight').waitFor();await page.locator('#h-health-setup').click();
+  await page.reload();await field(page,'weight').waitFor();await openHealthSettings(page);
   const second=await page.locator('#health-pair-key').inputValue();
   assert.equal(first===second,true,'unsaved initial key must survive the iPhone setup handoff');
   assert.equal(await page.locator('#health-enabled').isChecked(),false,'persisting a draft key does not enable Health');
   await page.locator('#health-enabled').check();await page.locator('#health-save').click();
-  await page.locator('#h-health-setup').click();await page.locator('#health-renew-key').click();
+  await openHealthSettings(page);await page.locator('#health-renew-key').click();
   assert.equal(first===(await page.locator('#health-pair-key').inputValue()),false,'renew changes the form draft');
-  await page.reload();await field(page,'weight').waitFor();await page.locator('#h-health-setup').click();
+  await page.reload();await field(page,'weight').waitFor();await openHealthSettings(page);
   assert.equal(first===(await page.locator('#health-pair-key').inputValue()),true,'unsaved renewal must not replace a saved pairing key');
   assert.equal(await page.locator('#health-enabled').isChecked(),true,'existing enabled setting remains saved');
   assert.equal(healthReads(posts).length,0);assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
@@ -184,7 +212,7 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   assert.equal(await page.locator('.task-tab').count(),1);assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
  });
  await scenario('disabling pairing cancels a waiting import and ignores its later result',async({page,opts,posts,values})=>{
-  opts.healthStatus='waiting';await begin(page,posts);await page.locator('#h-health-setup').click();await page.locator('#health-enabled').uncheck();await page.locator('#health-save').click();
+  opts.healthStatus='waiting';await begin(page,posts);await openHealthSettings(page);await page.locator('#health-enabled').uncheck();await page.locator('#health-save').click();
   assert.equal(await pending(page),null);opts.healthStatus='ready';await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));await delay(1700);
   assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
  });

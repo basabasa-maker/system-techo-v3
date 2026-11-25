@@ -104,3 +104,7 @@ PLAYWRIGHT_PATH=/path/to/playwright node tests/health.cjs
 Node44件、GAS Health11群（Sheet/Properties呼出ゼロ）、新Healthブラウザ15件。初回設定中のdraftキー保持と、保存直前の期限再確認も失敗再現→修正→成功を確認した。HealthのOS起動境界はNavigation APIで止め、すべて合成受信結果で対象日のPATCHと他日不変を確認する。実機Healthや個人Shortcutを試験で実行しない。初回確認・取消、欠測・0、単位/対象日/期限、手入力を元に戻す場合、日付/タブ切替、未送信、保存開始後の中止不可を検証する。旧入力13・最終食事15・目標16も回帰対象。
 
 Shortcutの生成は `python3 build/build-health-shortcut.py`、署名は[生成手順](../shortcuts/health-bridge/README.md)を参照。plist構造検査と署名成功は実機実行成功を意味しない。公開前承認・実機で残る確認は[仕様](../docs/health-bridge.md)に記録。
+
+## ヘルスケア欄の折りたたみ（2026-11-25）
+
+`tests/health.cjs` は16件。初期閉、Spaceキーでの開閉、通常更新後の開閉状態維持、再読み込み時の初期閉、開閉だけでHealth取得や保存が起きないことを追加確認する。`HEALTH_COLLAPSED_SCREENSHOT` と `HEALTH_EXPANDED_SCREENSHOT` にパスを指定すると390×844の画面を保存する。実Healthと本番記録は使用しない。
