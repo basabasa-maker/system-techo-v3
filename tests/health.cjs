@@ -22,7 +22,7 @@ const headers={'Access-Control-Allow-Origin':'*'};
 const server=http.createServer((req,res)=>{
  const rel=decodeURIComponent(new URL(req.url,'http://localhost').pathname),file=path.resolve(root,'.'+(rel==='/'?'/index.html':rel));
  if(!file.startsWith(root+path.sep))return res.writeHead(403).end();
- fs.readFile(file,(e,b)=>{if(e)return res.writeHead(404).end();res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg'})[path.extname(file)]||'text/html');res.end(b);});
+ fs.readFile(file,(e,b)=>{if(e)return res.writeHead(404).end();res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.json':'application/json','.zip':'application/zip','.png':'image/png','.jpg':'image/jpeg'})[path.extname(file)]||'text/html');res.end(b);});
 });
 let browser,base,passed=0,failed=0;
 async function until(check,message,timeout=7000){const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await delay(30);}assert.fail(message);}
@@ -135,6 +135,23 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   assert.equal(await disclosure.evaluate(el=>el.open),false,'new page starts folded');
   assert.equal(healthReads(posts).length,0);assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
   console.log('Disclosure mobile heights: '+closed.height+' closed / '+expanded.height+' open');
+ },{enabled:false});
+ await scenario('setup downloads a ZIP containing the signed shortcut without navigating away',async({page,posts,values})=>{
+  await openHealthSettings(page);
+  const footer=await page.locator('#health-save').boundingBox();
+  assert(footer&&footer.y>=0&&footer.y+footer.height<=844,'save button stays inside the mobile viewport');
+  const body=page.locator('.health-modal .modal-body');
+  assert.equal(await body.evaluate(el=>el.scrollHeight>el.clientHeight),true,'long instructions scroll inside the dialog');
+  if(process.env.HEALTH_SETUP_SCREENSHOT)await page.screenshot({path:process.env.HEALTH_SETUP_SCREENSHOT});
+  const link=page.locator('.health-setup-steps a[download]');
+  assert.equal(await link.getAttribute('href'),'shortcuts/health-bridge/system-techo-health.zip');
+  const [download]=await Promise.all([page.waitForEvent('download'),link.click()]);
+  assert.equal(download.suggestedFilename(),'system-techo-health.zip');
+  assert.equal(await download.failure(),null);
+  const bytes=fs.readFileSync(await download.path());
+  assert.deepEqual(bytes,fs.readFileSync(path.join(root,'shortcuts/health-bridge/system-techo-health.zip')));
+  assert.equal(await page.locator('#health-save').isVisible(),true,'download keeps setup open');
+  assert.equal(healthReads(posts).length,0);assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
  },{enabled:false});
  await scenario('settings enable Health import and only requested fields on the selected day change',async({page,values,posts})=>{
   assert.equal(healthReads(posts).length,0,'launch does not query Health');

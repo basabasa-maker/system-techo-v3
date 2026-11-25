@@ -5,12 +5,14 @@
   "writes_health": false,
   "posts_existing_habits": false,
   "callback_contains_health_or_credentials": false,
-  "native_variable_values_use_attachment": true,
+  "dynamic_dictionary_values_use_single_token_strings": true,
   "ios_execution": "not_tested",
   "signed_with": "Apple shortcuts sign --mode anyone",
-  "signed_bytes": 35730,
-  "signed_sha256": "ebe0fd2939e2cad7e113132b4ce89b58f3a7b62ddf7ad500400a1e6e5ae7ff23",
+  "signed_bytes": 35827,
+  "signed_sha256": "9ef68b73700c1c2536537d991d005b74bbf950ebcd26c5619c851677de28f13f",
   "signature_command_exit": 0,
-  "native_variable_puts": 10,
-  "literal_string_puts": 5
+  "dynamic_variable_token_puts": 10,
+  "literal_string_puts": 5,
+  "native_dictionary_probe": "macOS Shortcuts: former request_id error reproduced; corrected strings/numbers/zero/nested/empty JSON verified; no Health/network actions",
+  "iphone_execution_of_repair": "not_yet_verified"
 }

@@ -1420,15 +1420,23 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>ActionOutput</string>
-						<key>OutputUUID</key>
-						<string>266EC0E2-329D-5D18-AC41-796080F5BDA7</string>
-						<key>OutputName</key>
-						<string>Item from List</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>ActionOutput</string>
+								<key>OutputUUID</key>
+								<string>266EC0E2-329D-5D18-AC41-796080F5BDA7</string>
+								<key>OutputName</key>
+								<string>Item from List</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>
@@ -2119,15 +2127,23 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>ActionOutput</string>
-						<key>OutputUUID</key>
-						<string>67759D95-EBE7-5025-9007-54F91DB28F58</string>
-						<key>OutputName</key>
-						<string>Item from List</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>ActionOutput</string>
+								<key>OutputUUID</key>
+								<string>67759D95-EBE7-5025-9007-54F91DB28F58</string>
+								<key>OutputName</key>
+								<string>Item from List</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>
@@ -2881,15 +2897,23 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>ActionOutput</string>
-						<key>OutputUUID</key>
-						<string>13B6E2CF-F2D9-55EF-B70B-70BDA60BC1DA</string>
-						<key>OutputName</key>
-						<string>Item from List</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>ActionOutput</string>
+								<key>OutputUUID</key>
+								<string>13B6E2CF-F2D9-55EF-B70B-70BDA60BC1DA</string>
+								<key>OutputName</key>
+								<string>Item from List</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>
@@ -3656,15 +3680,23 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>ActionOutput</string>
-						<key>OutputUUID</key>
-						<string>413FABE2-18FF-501B-ADD7-E3A619539712</string>
-						<key>OutputName</key>
-						<string>Item from List</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>ActionOutput</string>
+								<key>OutputUUID</key>
+								<string>413FABE2-18FF-501B-ADD7-E3A619539712</string>
+								<key>OutputName</key>
+								<string>Item from List</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>
@@ -3917,13 +3949,21 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>RequestID</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>RequestID</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>
@@ -3977,13 +4017,21 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>PairKey</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>PairKey</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>
@@ -4037,13 +4085,21 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>TargetDay</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>TargetDay</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>
@@ -4097,13 +4153,21 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>IssuedAt</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>IssuedAt</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>
@@ -4157,13 +4221,21 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>HealthValues</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>HealthValues</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>
@@ -4217,13 +4289,21 @@
 				<dict>
 					<key>Value</key>
 					<dict>
-						<key>Type</key>
-						<string>Variable</string>
-						<key>VariableName</key>
-						<string>HealthUnits</string>
+						<key>string</key>
+						<string>￼</string>
+						<key>attachmentsByRange</key>
+						<dict>
+							<key>{0, 1}</key>
+							<dict>
+								<key>Type</key>
+								<string>Variable</string>
+								<key>VariableName</key>
+								<string>HealthUnits</string>
+							</dict>
+						</dict>
 					</dict>
 					<key>WFSerializationType</key>
-					<string>WFTextTokenAttachment</string>
+					<string>WFTextTokenString</string>
 				</dict>
 				<key>WFDictionary</key>
 				<dict>

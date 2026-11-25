@@ -108,3 +108,9 @@ Shortcutの生成は `python3 build/build-health-shortcut.py`、署名は[生成
 ## ヘルスケア欄の折りたたみ（2026-11-25）
 
 `tests/health.cjs` は16件。初期閉、Spaceキーでの開閉、通常更新後の開閉状態維持、再読み込み時の初期閉、開閉だけでHealth取得や保存が起きないことを追加確認する。`HEALTH_COLLAPSED_SCREENSHOT` と `HEALTH_EXPANDED_SCREENSHOT` にパスを指定すると390×844の画面を保存する。実Healthと本番記録は使用しない。
+
+## Shortcutの辞書変数とZIP配布（2026-11-25）
+
+`python3 tests/health-shortcut.test.py` の3件で、実書出しに合うsingle-token text形式、4項目の抽出/欠測規則、キー未設定の追加質問とplist往復を確認する。旧Attachment値はこの試験で失敗し、macOSのHealth/通信なし合成Shortcutでも実機と同じrequest_id値未指定を再現。修正後のnative実行は、文字列・数値時刻・小数・0・入れ子辞書・空辞書のJSON出力まで照合済み。iPhoneの実Health読取成功を意味しない。
+
+Health browserはZIPダウンロードを加えて17件。ZIPの名前・内容一致・設定画面が維持されること・保存ボタンがモバイル画面に収まり本文が内部スクロールすることを確認する。`HEALTH_SETUP_SCREENSHOT` で設定画面を保存できる。

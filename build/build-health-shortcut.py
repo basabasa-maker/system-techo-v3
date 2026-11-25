@@ -48,7 +48,7 @@ class Workflow:
         group=self.condition(self.ref(out,'Matches'),101);self.stop(message);self.end(group)
     def dictionary(self):return self.add('dictionary',WFItems={'Value':{'WFDictionaryFieldValueItems':[]},'WFSerializationType':'WFDictionaryFieldValue'})
     def put(self,dictionary,key,ref):
-        out=self.add('setvalueforkey',WFDictionaryKey=key,WFDictionaryValue=self.att(ref) if isinstance(ref,dict) else self.text(str(ref)),WFDictionary=self.att(self.var(dictionary)))
+        out=self.add('setvalueforkey',WFDictionaryKey=key,WFDictionaryValue=self.text(ref if isinstance(ref,dict) else str(ref)),WFDictionary=self.att(self.var(dictionary)))
         self.bind(dictionary,self.ref(out,'Dictionary'))
 
 
@@ -136,11 +136,14 @@ def validate(workflow,endpoint):
             assert p['WFContentItemLimitEnabled'] is False
         if ident=='is.workflow.actions.setvalueforkey':
             value=p['WFDictionaryValue']
-            if value['WFSerializationType']=='WFTextTokenString':
-                assert 'attachmentsByRange' not in value['Value'], 'A pure variable must keep its native type'
-            else:
-                assert value['WFSerializationType']=='WFTextTokenAttachment'
-                assert value['Value']['Type'] in ['ActionOutput','Variable']
+            # This action's Value is a text parameter even for one variable.
+            # A standalone Attachment imports as an empty required value.
+            assert value['WFSerializationType']=='WFTextTokenString'
+            state=value['Value']
+            if 'attachmentsByRange' in state:
+                assert state['string']=='\ufffc'
+                assert set(state['attachmentsByRange'])=={'{0, 1}'}
+                assert state['attachmentsByRange']['{0, 1}']['Type'] in ['ActionOutput','Variable']
         if ident=='is.workflow.actions.downloadurl':assert p['WFURL']['Value']['string']==endpoint
         if ident=='is.workflow.actions.openurl':assert p['WFInput']['Value']['string']==CALLBACK
     assert not groups
@@ -148,7 +151,7 @@ def validate(workflow,endpoint):
     encoded=plistlib.dumps(workflow)
     assert b'habit_day_upsert' not in encoded and b'Basal' not in encoded
     assert PLACEHOLDER.encode() in encoded
-    return {'actions':len(actions),'health_queries':4,'contains_real_pair_key':False,'writes_health':False,'posts_existing_habits':False,'callback_contains_health_or_credentials':False,'native_variable_values_use_attachment':True,'ios_execution':'not_tested'}
+    return {'actions':len(actions),'health_queries':4,'contains_real_pair_key':False,'writes_health':False,'posts_existing_habits':False,'callback_contains_health_or_credentials':False,'dynamic_dictionary_values_use_single_token_strings':True,'ios_execution':'not_tested'}
 
 
 def main():

@@ -1,15 +1,15 @@
 # iPhone「システム手帳 ヘルスケア同期」試作
 
-`system-techo-health.shortcut` は Apple の `shortcuts sign --mode anyone` で署名した、iPhoneへ追加するためのテンプレートです。実際の連携キーや健康データは含みません。**構造検証・署名まで完了。iPhoneでの追加とHealth実データでの実行は未確認です。**
+`system-techo-health.shortcut` は Apple の `shortcuts sign --mode anyone` で署名した、iPhoneへ追加するためのテンプレートです。実際の連携キーや健康データは含みません。旧版は本人のiPhoneで追加・4項目の順次許可まで確認しましたが、送信辞書の `request_id` で「値未指定」になりました。今回の修正版は、macOSの合成Shortcutで同じ失敗の再現と修正後の型保持を確認済みです。**修正版で実iPhoneのHealth値を取り込むところは、まだ未確認です。**
 
 ## 初回の設定
 
 1. 普段使うホーム画面の手帳の習慣タブでヘルスケア連携設定を開き、連携キーを発行・コピーします。
-2. iPhoneで `system-techo-health.shortcut` を開き、ショートカットに追加します。
+2. [追加用ZIP](system-techo-health.zip)をダウンロードし、iPhoneの「ファイル」→「ダウンロード」でZIPをタップして展開します。中の `system-techo-health.shortcut` を開き、「ショートカットを設定」を押します。ファイルへ `.html` が付く誤保存を避けるため、配布入口はZIPにします。
 3. 追加時の質問に、手帳でコピーした43文字の連携キーを貼り付けます。質問が表示されない場合は、ショートカットの編集画面で冒頭のテキスト `PASTE_HEALTH_PAIR_KEY_HERE` を置き換えてください。
-4. ショートカット名を **「システム手帳 ヘルスケア同期」** にします。別名にする場合は、手帳側のショートカット名と一致させます。
+4. 登録名はファイル名由来の **`system-techo-health`** になることを本人のiPhoneで確認しています。手帳側の「ショートカット名」を実際の登録名に合わせます。旧版を登録済みなら、修正版を別名で追加して手帳側も同じ名前へ変更すれば、旧版を削除せず試せます。既存の連携キーは作り直しません。
 5. 手帳で確認したい日を表示し、更新ボタンから実行します。ショートカット単体の手動実行には、対象日とリクエスト情報がないため対応しません。
-6. 初回のヘルスケア読み取り許可では、体重・体脂肪率・アクティブエネルギー・歩数を許可します。このショートカットはヘルスケアへの書き込みをしません。
+6. 初回のヘルスケア読み取り許可は、体重から4項目が順に表示されます。体重・体脂肪率・アクティブエネルギー・歩数を許可します。このショートカットはヘルスケアへの書き込みをしません。
 7. 実行後にSafariが開いた場合は、元のホーム画面の手帳へ戻ってください。WebアプリとSafariは保存領域が異なる可能性があります。自動で同じ手帳画面へ戻るとは保証していません。
 8. 初めて届いた項目は、手帳側の確認画面で**同じ日付のヘルスケア表示と値・単位を照合してから**取り込みます。未表示項目を0で補う必要はありません。
 
@@ -54,11 +54,13 @@ plutil -lint shortcuts/health-bridge/system-techo-health.source.plist
 shortcuts sign --mode anyone \
   --input shortcuts/health-bridge/system-techo-health.unsigned.shortcut \
   --output shortcuts/health-bridge/system-techo-health.shortcut
+python3 build/package-health-shortcut.py
+python3 tests/health-shortcut.test.py
 ```
 
-生成スクリプトは標準ライブラリだけを使い、健康データや個人のショートカット一覧を読みません。署名するのはキー未設定のテンプレートだけです。`structure-check.json` は参照UUID・制御ブロック・4つのHealth query・固定送信先・欠測補完OFF・Health/習慣への直接書き込みなしを検査した結果です。測定Number・issued_at・values/units辞書をSet Dictionary Valueへ渡す箇所は、文字列テンプレートではなく単一の `WFTextTokenAttachment` 参照を使い、最後のPayloadだけをTextでJSON化します。この構造を検査していますが、実機でのJSON型保持を確認したものではありません。
+生成スクリプトは標準ライブラリだけを使い、健康データや個人のショートカット一覧を読みません。署名するのはキー未設定のテンプレートだけです。`structure-check.json` は参照UUID・制御ブロック・4つのHealth query・固定送信先・欠測補完OFF・Health/習慣への直接書き込みなしを検査した結果です。Set Dictionary Valueの `WFDictionaryValue` は、単一変数でも `WFTextTokenString`（U+FFFC 1文字と `{0, 1}` の変数参照）で渡します。ここへ単独の `WFTextTokenAttachment` を渡す旧形式は、macOS Shortcutsでも同じ「request_idの値未指定」で停止しました。辞書本体の入力 `WFDictionary` は従来どおり `WFTextTokenAttachment` です。修正版の合成実行では、文字列・数値時刻・小数・0・入れ子辞書・空辞書が最終JSONでも保持されることを確認しました。実Health/ネットワークを使わないmacOSテストであり、iPhoneの実測値照合とは区別します。
 
-`system-techo-health.source.plist` と `.unsigned.shortcut` は編集・再生成用の資料です。iPhoneへ追加するファイルは署名済みの `system-techo-health.shortcut` 一つです。
+`system-techo-health.source.plist` と `.unsigned.shortcut` は編集・再生成用の資料です。配布ZIPは、署名済みの `system-techo-health.shortcut` 一つだけを含みます。ZIP展開後のファイルと元の署名ファイルが完全一致することをpackagerで検査します。
 
 ## 構造の根拠
 
