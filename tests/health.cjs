@@ -38,6 +38,10 @@ async function begin(page,posts){
  assert(launches.length>0,'native Shortcut launch is captured and cancelled at the test OS boundary');
  const url=new URL(launches.at(-1)),input=JSON.parse(url.searchParams.get('text'));
  assert.equal(url.protocol,'shortcuts:');assert.deepEqual(Object.keys(input).sort(),['date','issued_at','request_id']);
+ const configuredName=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).shortcutName,SETTINGS);
+ const rawName=url.search.slice(1).split('&').find(part=>part.startsWith('name=')).slice(5);
+ assert.equal(decodeURIComponent(rawName),configuredName,'native URL scheme receives the exact configured name');
+ assert(!rawName.includes('+'),'spaces must not turn into a different Shortcut name');
  assert.equal(input.request_id,request.request_id);assert.equal(input.date,TODAY);assert(!launches.at(-1).includes(PAIR_KEY));
  await until(()=>Promise.resolve(healthReads(posts).length>0),'Health result polling starts');return request;
 }
@@ -172,6 +176,16 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   const shot=process.env.HEALTH_SCREENSHOT;
   if(shot){await until(async()=>(await page.locator('.toast').count())===0,'transient messages clear for review',5000);fs.mkdirSync(path.dirname(shot),{recursive:true});await page.screenshot({path:shot,fullPage:true});}
  },{enabled:false});
+ await scenario('duplicate Shortcut name with a space and suffix 2 launches unchanged and imports only the selected day',async({page,posts,values})=>{
+  await page.evaluate(key=>{const settings=JSON.parse(localStorage.getItem(key));settings.shortcutName='system-techo-health 2';localStorage.setItem(key,JSON.stringify(settings));},SETTINGS);
+  const settingsBefore=await page.evaluate(key=>localStorage.getItem(key),SETTINGS);
+  await begin(page,posts);await done(page,posts);
+  const launch=await page.evaluate(()=>window.testShortcutLaunches.at(-1));
+  assert(launch.includes('name=system-techo-health%202'));
+  assert.equal(await page.evaluate(key=>localStorage.getItem(key),SETTINGS),settingsBefore,'name and pairing key stay unchanged');
+  assert.deepEqual(metricWrites(posts).map(p=>({date:p.date,set:p.set,del:p.del})),[{date:TODAY,set:{weight:62.3,bodyFat:21.2,kcal:420,steps:8040},del:[]}]);
+  assert.equal(values[TODAY].water,500);
+ });
  await scenario('rejecting first unverified measurements preserves all saved data',async({page,posts,values})=>{
   await begin(page,posts);await page.locator('#health-reject').waitFor();
   assert.equal(habitWrites(posts).length,0,'unverified result waits for user decision');

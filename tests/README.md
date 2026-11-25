@@ -129,3 +129,7 @@ PLAYWRIGHT_PATH=/path/to/playwright node tests/app-update-service-worker.cjs
 
 
 実SW試験の`UPDATE_SW_LEGACY=1`モードは、初回移行の確認用に`git show d186547:sw.js`を読み取り、旧network-first workerから新workerへ切り替える追加1ケースだけを実行する。そのためGit履歴の該当commitが必要。通常モードはA→B更新・Bのオフライン起動・壊れたCの拒否・B維持の4ケース。どちらも記録・連携キー・未送信・添付の保持を合成データで照合し、実Health/本番記録を使わない。
+
+## Shortcut名に空白がある場合（2026-11-25）
+
+Health bridgeのNode9件とmodel8件。名前のqueryを生のpercent decodingで照合し、空白が`+`へ化ける修正前の失敗を確認する。Healthブラウザは18件で、`system-techo-health 2`という複製名の起動と設定/キー不変、対象日だけの保存を追加した。URLSearchParams.getは`+`を空白へ戻すので、それだけでネイティブ起動名の正しさを判断しない。

@@ -1,5 +1,5 @@
 {
-  "build": "20261125-112410",
+  "build": "20261125-115426",
   "assets": [
     {
       "path": "css/goals.css",
@@ -43,7 +43,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "5748fa91d8771d97594eb9d2af59a9721590fd786fe28947c986e291bdc3d6b2"
+      "sha256": "35dc72f6690291f27aa8c2529c2e06f8367efe5c41f67e3d5db001866688d467"
     },
     {
       "path": "js/app.js",
@@ -95,7 +95,7 @@
     },
     {
       "path": "js/health/bridge.js",
-      "sha256": "6c691dd45004d08377df4d3bcf4e99d338afcb8aa4e4a02c7c38c23148d2d30b"
+      "sha256": "b76c58e4113914279b1abd8dc974125cd52206ba3192c048277fa7953f71932f"
     },
     {
       "path": "js/health/model.js",
@@ -199,7 +199,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "569d47f3f863da4f2a6449e35ca2597878b2e848852d39dc09be213018b3c075"
+      "sha256": "f484541b2dd7c6b44341b03d498710c8366a9547b1dd9ce553c8c5d5b3d4827c"
     }
   ]
 }

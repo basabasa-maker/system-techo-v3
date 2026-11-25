@@ -27,6 +27,21 @@ test('launch URL contains only date and request metadata, never pairing key or h
   assert(!url.includes(key));assert(!('weight' in input));assert.equal(f.bridge.pending().request_id,request.request_id);
   assert.throws(()=>f.bridge.prepare('2026-02-30',{}));
 });
+test('Shortcuts names use percent-encoded spaces without confusing literal plus signs',()=>{
+  for(const name of ['system-techo-health 2','手帳 ヘルスケア 2','A+B & C 2']){
+    const f=fixture();saveHealthSettings({enabled:true,shortcutName:name,pairKey:key},f.storage);
+    const saved=f.storage.getItem(SETTINGS_KEY);
+    const {url}=f.bridge.prepare('2026-11-25',{weight:60,steps:0});
+    const rawName=new URL(url).search.slice(1).split('&').find(part=>part.startsWith('name=')).slice(5);
+    // The native URL scheme uses percent decoding; URLSearchParams.get() would
+    // hide the old bug by translating a form-encoded '+' back into a space.
+    assert.equal(decodeURIComponent(rawName),name);
+    assert(!rawName.includes('+'),'a space must be %20, never a form-style plus');
+    if(name.includes('+'))assert(rawName.includes('%2B'),'literal plus stays a literal plus');
+    assert.equal(f.storage.getItem(SETTINGS_KEY),saved,'launch does not rename or re-pair settings');
+    assert.equal(f.map.get('existing-cache'),' { "keep":0 } ');assert.equal(f.calls.length,0);
+  }
+});
 test('reads use authenticated POST metadata and accept absent metrics without fabricating zeros',async()=>{
   const f=fixture();enable(f);const {request}=f.bridge.prepare('2026-11-25',{});
   f.setResponse({status:'ready',date:request.date,issued_at:request.issued_at,values:{steps:0},units:{steps:'count'}});

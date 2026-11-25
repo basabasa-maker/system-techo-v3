@@ -76,6 +76,9 @@ export function createHealthBridge(options = {}) {
     url.searchParams.set("name", settings.shortcutName);
     url.searchParams.set("input", "text");
     url.searchParams.set("text", JSON.stringify(input));
+    // Shortcuts uses percent decoding, not form decoding: spaces must be %20.
+    // Literal plus signs have already been escaped as %2B by URLSearchParams.
+    url.search = url.searchParams.toString().replace(/\+/g, "%20");
     return { request, url: url.toString() };
   }
   async function read(request) {
