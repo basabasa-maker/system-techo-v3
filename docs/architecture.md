@@ -84,3 +84,8 @@ flowchart TD
 今後の候補は、メモ詳細画面のさらなる分割、タスク・メモの保存経路の統一、習慣グラフ取得時の未送信キャッシュ保護、複数端末での同時編集対策です。GAS の習慣・食事にはロックがありますが、タスク・メモに同じ保護はありません。これらは実際の要件と再現試験を用意してから変更します。
 
 公開候補の最終確認で `build/cache-bust.sh` が現役ツリーにあることを確認し、HTML/SWの版を更新しました。共通手順として案内された `basabasa-knowledge/docs/app-git-workflow.md` の現在の所在は未確認です。公開判断には `ナレッジ_Claude-Codex共通/システム手帳_開発方針.md` の「公開前に承認を得る」「GAS反映後に画面を公開する」という既存方針を参照します。
+
+
+## 全体設定・安全なアプリ更新（2026-11-25）
+
+`js/settings/ui.js` は全体設定、`updater.js` は版と静的ファイルの検証・同一画面の再読み込み、`safety.js` は入力/保存/写真/Health待機/未送信の検査を担当。`version.json` は `build/write-version.py` で静的資産から生成する。保存APIのpayloadや既存DB/schemaは変更せず、gas-clientと添付/目標には更新を止めるための読み取り専用busy情報だけを追加した。詳しくは [app-settings.md](app-settings.md)。

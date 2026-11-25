@@ -713,12 +713,13 @@ function bindHealthTools() {
   if (disclosure) disclosure.ontoggle = () => {
     if (disclosure.isConnected) healthToolsExpanded = disclosure.open;
   };
-  rootEl?.querySelector("#h-health-setup")?.addEventListener("click",()=>showHealthSettings(()=>{
-    healthMessage="";healthReady=null;clearTimeout(healthTimer);updateHealthTools();
-  }));
+  rootEl?.querySelector("#h-health-setup")?.addEventListener("click",()=>showHealthSettings(healthSettingsChanged));
   rootEl?.querySelector("#h-health-cancel")?.addEventListener("click",()=>{
     healthBridge.cancel();healthReady=null;clearTimeout(healthTimer);healthMessage="取り込みを中止しました。";updateHealthTools();
   });
+}
+export function healthSettingsChanged() {
+  healthMessage="";healthReady=null;clearTimeout(healthTimer);updateHealthTools();
 }
 function updateHealthTools() {
   const tools=rootEl?.querySelector(".health-tools");

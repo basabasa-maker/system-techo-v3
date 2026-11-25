@@ -114,3 +114,18 @@ Shortcutの生成は `python3 build/build-health-shortcut.py`、署名は[生成
 `python3 tests/health-shortcut.test.py` の3件で、実書出しに合うsingle-token text形式、4項目の抽出/欠測規則、キー未設定の追加質問とplist往復を確認する。旧Attachment値はこの試験で失敗し、macOSのHealth/通信なし合成Shortcutでも実機と同じrequest_id値未指定を再現。修正後のnative実行は、文字列・数値時刻・小数・0・入れ子辞書・空辞書のJSON出力まで照合済み。iPhoneの実Health読取成功を意味しない。
 
 Health browserはZIPダウンロードを加えて17件。ZIPの名前・内容一致・設定画面が維持されること・保存ボタンがモバイル画面に収まり本文が内部スクロールすることを確認する。`HEALTH_SETUP_SCREENSHOT` で設定画面を保存できる。
+
+## 全体設定と安全なアプリ更新（2026-11-25）
+
+```sh
+node --test tests/app-update.test.mjs tests/app-update-safety.test.mjs tests/app-update-worker.test.cjs
+PLAYWRIGHT_PATH=/path/to/playwright node tests/app-settings.cjs
+PLAYWRIGHT_PATH=/path/to/playwright node tests/app-update-service-worker.cjs
+```
+
+更新本体・安全guard・SWを依存注入/メモリ内キャッシュで確認する。版/相対URL/SHA/index版/active worker版が一致したときだけ同じ画面を再読み込みし、入力・保存・添付・Health待機・未送信・取得失敗・不完全配信では停止する。workerは新静的キャッシュの完成前に旧キャッシュを変更せず、添付/他用途のキャッシュも消さない。
+
+設定ブラウザ14件は、本番APIとHealthを遮断した合成APIだけで設定UI・空欄・説明ページ・更新/停止・メモの入力保持を確認する。`SETTINGS_SCREENSHOT`、`SETTINGS_LIGHT_SCREENSHOT`、`HEADER_SCREENSHOT`で390×844の画面を保存する。実SW統合試験は同じ隔離ブラウザのlocalhost配信を版A/Bへ切り替えて確認し、普段のPWAや本番へは接続しない。
+
+
+実SW試験の`UPDATE_SW_LEGACY=1`モードは、初回移行の確認用に`git show d186547:sw.js`を読み取り、旧network-first workerから新workerへ切り替える追加1ケースだけを実行する。そのためGit履歴の該当commitが必要。通常モードはA→B更新・Bのオフライン起動・壊れたCの拒否・B維持の4ケース。どちらも記録・連携キー・未送信・添付の保持を合成データで照合し、実Health/本番記録を使わない。

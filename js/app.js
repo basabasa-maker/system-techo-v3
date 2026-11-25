@@ -7,7 +7,9 @@ import { toast } from "./toast.js";
 import { initTheme } from "./theme.js";
 import { initTabNavigation, revealActiveTab } from "./tab-navigation.js";
 import { healthBridge } from "./health/bridge.js";
-import { showHealthReturnNotice } from "./health/ui.js";
+import { showHealthReturnNotice, showHealthSettings } from "./health/ui.js";
+import { healthSettingsChanged } from "./habit.js";
+import { showAppSettings } from "./settings/ui.js";
 
 // タブの種類。表示順は tab-navigation.js が端末の設定を復元する。
 const TABS = Object.keys(TAB_DEFINITIONS);
@@ -23,6 +25,9 @@ function init() {
 
   document.getElementById("btn-refresh").addEventListener("click", onRefresh);
   initTheme();
+  document.getElementById("btn-settings").addEventListener("click", () => showAppSettings({
+    onOpenHealthSettings: () => showHealthSettings(healthSettingsChanged),
+  }));
 
   if (!TABS.includes(appState.activeTab)) appState.activeTab = DEFAULT_TAB;
   const healthReturn = window.location.hash === "#health-return";

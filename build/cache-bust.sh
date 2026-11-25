@@ -24,11 +24,15 @@ for f in "${TARGETS[@]}"; do
     sed -i.bak "s|__BUILD_VERSION__|${BUILD_VERSION}|g" "$f"
     # 2. 既存の ?v=YYYYMMDD-HHMMSS 形式も新しい値に更新（再ビルド時用）
     sed -i.bak -E "s|\?v=[0-9]{8}-[0-9]{6}|?v=${BUILD_VERSION}|g" "$f"
+    # Keep the document build and release descriptor in step with the worker.
+    sed -i.bak -E "s|name=\"app-build\" content=\"[0-9]{8}-[0-9]{6}\"|name=\"app-build\" content=\"${BUILD_VERSION}\"|g" "$f"
     # 3. sw.js の BUILD_VERSION = "YYYYMMDD-HHMMSS" 定数も更新
     sed -i.bak -E "s|BUILD_VERSION = \"[0-9]{8}-[0-9]{6}\"|BUILD_VERSION = \"${BUILD_VERSION}\"|g" "$f"
     rm -f "${f}.bak"
     echo "[cache-bust] updated: ${f}"
   fi
 done
+
+python3 "${ROOT_DIR}/build/write-version.py"
 
 echo "[cache-bust] done."

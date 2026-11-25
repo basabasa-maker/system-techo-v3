@@ -3,20 +3,31 @@
 
 import { GAS_URL } from "./config.js";
 
+// Read-only activity signal for safe in-app updates. Count the full response,
+// including its decoding; callers retain the same API and error behavior.
+let pendingWrites = 0;
+export function hasPendingWrites() { return pendingWrites > 0; }
+
 async function fetchJson(url, options) {
-  const res = await fetch(url, {
-    mode: "cors",
-    redirect: "follow",
-    ...options,
-  });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
-  }
-  const text = await res.text();
+  const writing = options?.method?.toUpperCase() === "POST";
+  if (writing) pendingWrites++;
   try {
-    return JSON.parse(text);
-  } catch (e) {
-    throw new Error("Invalid JSON response (GAS access denied?)");
+    const res = await fetch(url, {
+      mode: "cors",
+      redirect: "follow",
+      ...options,
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      throw new Error("Invalid JSON response (GAS access denied?)");
+    }
+  } finally {
+    if (writing) pendingWrites--;
   }
 }
 

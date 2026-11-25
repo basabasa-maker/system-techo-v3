@@ -1,0 +1,205 @@
+{
+  "build": "20261125-112410",
+  "assets": [
+    {
+      "path": "css/goals.css",
+      "sha256": "f87b2a1b1dbd4ca810af50b40812de0ccce2aa4cf43210b193f09e2006978118"
+    },
+    {
+      "path": "css/health.css",
+      "sha256": "4218cb31189eda1e863e940b79f96a7612fd7002ae63c612009e81914310f664"
+    },
+    {
+      "path": "css/information.css",
+      "sha256": "ed07aee651787e83a87b2a4525ad606bb5e0a20371e02f2342a16436d15d843e"
+    },
+    {
+      "path": "css/settings.css",
+      "sha256": "d8cbdcd0727a9688fefa884fecdf245473eef5f8257b705f2539da861445bc0c"
+    },
+    {
+      "path": "css/style.css",
+      "sha256": "1d1d4d4283a60b7dbf8a12807919cf4407e2d334d2722f94cc87e0ba8a214669"
+    },
+    {
+      "path": "icons/eraser.png",
+      "sha256": "4f495aa0560ca33c0be926d8d6b6f3d494f5c3ab9475ebf52fb9ab51d26cc37c"
+    },
+    {
+      "path": "icons/goal-cork.jpg",
+      "sha256": "53214b0c8352fcab96061fae646f43c517061fae94740ce0013642f6d98c0890"
+    },
+    {
+      "path": "icons/goal-pin.png",
+      "sha256": "fcc96cf431ca6022f15c4f5e128db3b7f23e59b95c96b12a0ca591666c701d18"
+    },
+    {
+      "path": "icons/icon-192.png",
+      "sha256": "1a84a0c5b647f8249b6e9140bacc890c46168ca5263f7fa9ee2306ea2780e53d"
+    },
+    {
+      "path": "icons/icon-512.png",
+      "sha256": "9479c22445517156cd6070a42ee496f6530bffbf3ad5ab7daf6ef58f858cc3c8"
+    },
+    {
+      "path": "index.html",
+      "sha256": "5748fa91d8771d97594eb9d2af59a9721590fd786fe28947c986e291bdc3d6b2"
+    },
+    {
+      "path": "js/app.js",
+      "sha256": "20ff2311417f5880f13a770cdb80ac468da9b719c899e2ae7337dcc32394c461"
+    },
+    {
+      "path": "js/config.js",
+      "sha256": "c3285c5f30d2d559fee845afa179822e06efa466e51a2e70c3a3a4b24139bbc0"
+    },
+    {
+      "path": "js/daily.js",
+      "sha256": "90b606710f55b5091f6d19d95d43f702b7dc84ccc46d585bfd1ddb2637e3dd1d"
+    },
+    {
+      "path": "js/date-util.js",
+      "sha256": "ac4ce970042b6988bbfc91347ed609a5eb6e040a8d8e47c92d6aecb01c785686"
+    },
+    {
+      "path": "js/gas-client.js",
+      "sha256": "5d37e62c34553bd6c46595978139419b09cda4e718e1037252362757e56f42ae"
+    },
+    {
+      "path": "js/goals/board.js",
+      "sha256": "125904d1e4819d0610fd893ac7cb4e6499ad3aa99117610d92a207bc610a2fc0"
+    },
+    {
+      "path": "js/goals/model.js",
+      "sha256": "c3c7d9abd6f16ec6f2e2ff443c880c68b31b153c9f8dd6a07bbd1e5b24fcc24b"
+    },
+    {
+      "path": "js/goals/repository.js",
+      "sha256": "7160879cec63f1166e2e1f8563179e81ddcfd5b30fd2536b2db47085859e49b0"
+    },
+    {
+      "path": "js/goals/ui.js",
+      "sha256": "eb856e0bf91d9dae4fa2ed84d10cd1c8ffbcf9df2afea65ba744c64c2ce7537a"
+    },
+    {
+      "path": "js/goals.js",
+      "sha256": "f2976462d2700b3a3360dd58cc359eaad0041d273c578c86065b0d8c6c8fd0bf"
+    },
+    {
+      "path": "js/habit-stats.js",
+      "sha256": "8958d6189c550ca27129dd954938b98aac067188c743120a745fe8e1be4c428f"
+    },
+    {
+      "path": "js/habit.js",
+      "sha256": "f3e815e575c0131cb884487510a278c50150899fa6f37f276ddeccdbf9aacd96"
+    },
+    {
+      "path": "js/health/bridge.js",
+      "sha256": "6c691dd45004d08377df4d3bcf4e99d338afcb8aa4e4a02c7c38c23148d2d30b"
+    },
+    {
+      "path": "js/health/model.js",
+      "sha256": "5342de140cfb26ba546eefdb502791f34be70998a1eb1e4b2087521694316c33"
+    },
+    {
+      "path": "js/health/ui.js",
+      "sha256": "85088d81b5125b71a75c1c8b833b4c51b100ea22d1dbb66b9c848c034f609037"
+    },
+    {
+      "path": "js/meal-time.js",
+      "sha256": "d5aabc0a0fc1188ed36e0121911c14864e36c5d53cd176b9b76fa27127ae80ee"
+    },
+    {
+      "path": "js/meal.js",
+      "sha256": "b4ad03e23522421d2fd789a920ccab1f467e39eea3633c4e5876c160ddadb091"
+    },
+    {
+      "path": "js/memo/attachments.js",
+      "sha256": "3258da18587e8b8f4affe5b743bb4236e0c8acc898ef3adaeec76040558a66e6"
+    },
+    {
+      "path": "js/memo/body.js",
+      "sha256": "0efb8f0fb8c809949cff2252de060e0cea5f208669a6012ce3235be74a356017"
+    },
+    {
+      "path": "js/memo.js",
+      "sha256": "db4263df4a665a39a84a23fd5b1906a6fa8e01df89e0f54961353778a1e3abd8"
+    },
+    {
+      "path": "js/outbox.js",
+      "sha256": "49395f08f7d78e7b8e60588f8492e037991e7a728fc3a3235e94aea7ad3a9277"
+    },
+    {
+      "path": "js/reorder.js",
+      "sha256": "4a33cbf2195da64723303b8cdfc57112c5ca3e8d1560a728440341b9b3f5307b"
+    },
+    {
+      "path": "js/settings/safety.js",
+      "sha256": "bffe3b0ab71ca0a2f39bb7ab7e9f69015ecb00498ec0e8a04c55b44faa4b1c11"
+    },
+    {
+      "path": "js/settings/ui.js",
+      "sha256": "1225d25bf12746c551e6a1922eeb4f153903023812a696cf0bd421cf0cf1e9de"
+    },
+    {
+      "path": "js/settings/updater.js",
+      "sha256": "a9a98b975025a30d2bc2a84d79c1a74ff00ddb0331ff52133ca22a4d3130e395"
+    },
+    {
+      "path": "js/store.js",
+      "sha256": "60b46f7f078c42f09ad33ef52e0e7c5565e9c9223b2f873a5f8a8bd7cdd3d7c4"
+    },
+    {
+      "path": "js/sync-operations.js",
+      "sha256": "fb23b82292001aec6ac6071cb3ef894af016f2f0f075cf85285c874f887426e3"
+    },
+    {
+      "path": "js/sync.js",
+      "sha256": "5b6c77624581b4c90c6332e7c08bb4aad14e3cf5e78923f84932ef8eacd00508"
+    },
+    {
+      "path": "js/tab-navigation.js",
+      "sha256": "1d36c5e5c9345c543bf2ae45d070ebbbebcf09bbb25b80111871a3dd26c46053"
+    },
+    {
+      "path": "js/tabs.js",
+      "sha256": "8d53249f61771f80ef350f1ab561084399591c50bb3620c5d2cc8e3a1e5f07cf"
+    },
+    {
+      "path": "js/task.js",
+      "sha256": "5336b1d28f862396950ac9fa4958db82b4235c4e7b778d791d36078cea6a68ff"
+    },
+    {
+      "path": "js/theme.js",
+      "sha256": "fe06cd1148d86d58555e911769577cd998f5fd5c840fd0491b992509cc587b04"
+    },
+    {
+      "path": "js/toast.js",
+      "sha256": "ecae6edbd0a9fe2fb97da05be94af71b04440288e38ac3c2dad2c16952f82b5f"
+    },
+    {
+      "path": "manifest.json",
+      "sha256": "80acaa59388f7e4f82610cc102341b992715ec32c351179c353db4ca4b1c8397"
+    },
+    {
+      "path": "privacy.html",
+      "sha256": "2e18d7d3fc75ffcc869e15dc89aa3b9e036c2a56ad0b13101e0e27c7ca9f538b"
+    },
+    {
+      "path": "shortcuts/health-bridge/system-techo-health.shortcut",
+      "sha256": "9ef68b73700c1c2536537d991d005b74bbf950ebcd26c5619c851677de28f13f"
+    },
+    {
+      "path": "shortcuts/health-bridge/system-techo-health.zip",
+      "sha256": "15af59d1b051a179e3c0c038617b5a0a1d6b73a49cfff33c291041b3015a707a"
+    },
+    {
+      "path": "support.html",
+      "sha256": "787d958f9909b5996fee3d26ca256444d90143f33cf96241ebfe17422889c6d1"
+    },
+    {
+      "path": "sw.js",
+      "sha256": "569d47f3f863da4f2a6449e35ca2597878b2e848852d39dc09be213018b3c075"
+    }
+  ]
+}

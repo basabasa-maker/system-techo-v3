@@ -13,6 +13,7 @@ let mountedBoard = null;
 let interactionVersion = 0;
 let pullVersion = 0;
 let uploadingPhotos = false;
+export function hasPendingGoalPhotos() { return uploadingPhotos; }
 
 const active = (list) => list.filter((entry) => !entry.deleted);
 const ordered = (list) => [...list].sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0) || String(a.id).localeCompare(String(b.id)));

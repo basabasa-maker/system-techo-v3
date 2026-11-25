@@ -2,8 +2,16 @@
 import * as gas from "../gas-client.js";
 
 const attMem = new Map();
+let pendingUploads = 0;
+export function hasPendingUploads() { return pendingUploads > 0; }
 
 export async function uploadFile(file) {
+  pendingUploads++;
+  try { return await uploadFileContents(file); }
+  finally { pendingUploads--; }
+}
+
+async function uploadFileContents(file) {
   let blob = file;
   let name = file.name || "file";
   let mime = file.type || "application/octet-stream";

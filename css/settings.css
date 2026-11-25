@@ -1,0 +1,19 @@
+.btn-settings { min-height:40px; padding:0 10px; border:1px solid rgb(255 255 255 / .28); border-radius:20px; background:rgb(255 255 255 / .08); color:#fff; font-size:13px; white-space:nowrap; }
+.app-settings-body { gap:0; }
+.settings-section { padding:6px 0 18px; margin-bottom:14px; border-bottom:1px solid rgb(var(--ov) / .14); }
+.settings-section:last-child { margin-bottom:0; border-bottom:0; }
+.settings-section h2 { margin:0 0 12px; font-size:16px; color:var(--fg); }
+.settings-section p { margin:8px 0; font-size:13px; line-height:1.8; color:var(--muted); }
+.settings-section button { min-height:44px; }
+.settings-update-button { width:100%; margin-top:8px; }
+.settings-facts { margin:0; }
+.settings-facts > div { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); align-items:start; gap:14px; padding:8px 0; }
+.settings-facts dt { color:var(--muted); font-size:12px; }
+.settings-facts dd { min-height:18px; margin:0; text-align:right; overflow-wrap:anywhere; font-size:13px; }
+.settings-section .settings-small { font-size:12px; }
+.settings-link { display:block; padding:12px 0; min-height:44px; box-sizing:border-box; color:var(--accent); font-size:14px; }
+.settings-section .settings-update-status { min-height:44px; margin-bottom:0; }
+.settings-section .settings-error { color:#ffb7ae; }
+:root[data-kind="light"] .settings-section .settings-error { color:#a31919; }
+.app-settings-modal [aria-busy="true"] button:disabled { opacity:.65; cursor:wait; }
+.app-settings-modal footer button { width:100%; }

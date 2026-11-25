@@ -33,7 +33,7 @@ export function showHealthSettings(onSaved) {
     catch (error) { toast(error.message,"error");return; }
   }
   const modal = dialog("ヘルスケア連携", `
-    <p>iPhoneのショートカットで、表示中の日の4項目を読み取ります。初めて届く項目だけ、値を確認してから保存します。</p>
+    <p>iPhoneのショートカットで、表示中の日の4項目を読み取り、Google上の一時保管先へ送信します。初めて届いた項目は、手帳で値を確認してから連携先のGoogleスプレッドシートへ保存します。</p>
     <ol class="health-setup-steps"><li>下の連携キーをコピーします。</li><li><a href="shortcuts/health-bridge/system-techo-health.zip" download>追加用ZIPをダウンロード</a>します。</li><li>iPhoneの「ファイル」→「ダウンロード」でZIPをタップして展開し、中の「system-techo-health.shortcut」を開きます。</li><li>「ショートカットを設定」でキーを貼り付け、追加します。登録された名前と下のショートカット名を合わせます。</li><li>手帳で連携をONにして保存し、対象日の更新から実行します。初回の4項目の読み取り許可は順に表示されます。</li><li>元の手帳へ戻り、同じ日のヘルスケア値と照合してから取り込みます。</li></ol>
     <label class="health-enable"><input type="checkbox" id="health-enabled" ${settings.enabled ? "checked" : ""}>入力画面の更新で連携する</label>
     <label>ショートカット名<input id="health-shortcut-name" value="${esc(settings.shortcutName)}" maxlength="100" /></label>
