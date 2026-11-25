@@ -33,39 +33,12 @@ export function applyTheme(id) {
   if (meta) meta.setAttribute("content", t.kind === "light" ? "#2b3a4f" : t.bg);
 }
 
-export function initTheme() {
-  applyTheme(currentThemeId());
-  const btn = document.getElementById("btn-theme");
-  if (btn) btn.addEventListener("click", openThemePicker);
+export function selectTheme(id) {
+  if (!THEMES.some(t => t.id === id)) return;
+  try { localStorage.setItem(KEY, id); } catch (error) {}
+  applyTheme(id);
 }
 
-function openThemePicker() {
-  const cur = currentThemeId();
-  const modal = document.createElement("div");
-  modal.className = "modal-backdrop";
-  modal.innerHTML = `
-    <div class="modal">
-      <header>背景色</header>
-      <div class="theme-grid">
-        ${THEMES.map(
-          (t) => `
-          <button class="theme-swatch ${t.id === cur ? "on" : ""}" data-id="${t.id}">
-            <span class="theme-chip" style="background:${t.bg};color:${t.kind === "light" ? "#22262e" : "#fff"}">${t.id === cur ? "✓" : ""}</span>
-            <span>${t.name}</span>
-          </button>`,
-        ).join("")}
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  const close = () => modal.remove();
-  modal.addEventListener("click", (e) => {
-    if (e.target === modal) return close();
-    const sw = e.target.closest(".theme-swatch");
-    if (!sw) return;
-    try {
-      localStorage.setItem(KEY, sw.dataset.id);
-    } catch (err) {}
-    applyTheme(sw.dataset.id);
-    close();
-  });
+export function initTheme() {
+  applyTheme(currentThemeId());
 }

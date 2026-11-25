@@ -83,6 +83,42 @@ async function scenario(name,fn){
 (async()=>{
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));base='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+ await scenario('background colors live in settings and header actions keep a compact touch gap',async({page,posts,values})=>{
+  assert.equal(await page.locator('#app-header #btn-theme').count(),0,'color control moved out of header');
+  assert.equal(await page.locator('#app-header button').count(),2,'header keeps settings and data refresh');
+  const geometry=[];
+  for(const width of [320,390,1280]){
+   await page.setViewportSize({width,height:844});
+   const settings=await page.locator('#btn-settings').boundingBox(),refresh=await page.locator('#btn-refresh').boundingBox();
+   const gap=refresh.x-settings.x-settings.width;
+   assert(gap>=8&&gap<=16,'header actions have a modest 8–16px gap');
+   assert(settings.width>=44&&settings.height>=40&&refresh.width>=44&&refresh.height>=40,'touch targets remain usable');
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+   geometry.push({width,gap,settings,refresh});
+   if(width===1280&&process.env.COLOR_DESKTOP_SCREENSHOT)await page.screenshot({path:process.env.COLOR_DESKTOP_SCREENSHOT});
+  }
+  await page.setViewportSize({width:390,height:844});
+  if(process.env.COLOR_HEADER_SCREENSHOT)await page.screenshot({path:process.env.COLOR_HEADER_SCREENSHOT});
+  const storedBefore=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage)));
+  await openSettings(page);
+  assert.equal(await page.locator('#settings-theme-grid .theme-swatch').count(),12);
+  if(process.env.COLOR_DARK_SCREENSHOT)await page.screenshot({path:process.env.COLOR_DARK_SCREENSHOT});
+  assert.equal(await page.locator('#settings-theme-grid [data-theme-id="navy"]').getAttribute('aria-pressed'),'true');
+  await page.locator('#settings-theme-grid [data-theme-id="mint"]').click();
+  assert.equal(await page.locator('.app-settings-modal').count(),1,'selection stays in settings');
+  assert.equal(await page.locator('#settings-theme-grid [data-theme-id="mint"]').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'mint');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('sth_v3_theme')),'mint');
+  if(process.env.COLOR_SETTINGS_SCREENSHOT)await page.screenshot({path:process.env.COLOR_SETTINGS_SCREENSHOT});
+  await page.locator('#settings-close').click();await openSettings(page);
+  assert.equal(await page.locator('#settings-theme-grid [data-theme-id="mint"]').getAttribute('aria-pressed'),'true');
+  await page.locator('#settings-close').click();await page.reload();await weight(page).waitFor();
+  assert.equal(await page.evaluate(()=>document.documentElement.dataset.theme),'mint','saved color survives reload');
+  const storedAfter=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage)));
+  for(const [key,value] of Object.entries(storedBefore))assert.equal(storedAfter[key],value,'existing setting/cache unchanged: '+key);
+  assert.deepEqual(values,initialValues);assert.equal(posts.length,0,'changing color never writes records');
+  if(process.env.COLOR_LAYOUT_REPORT)fs.writeFileSync(process.env.COLOR_LAYOUT_REPORT,JSON.stringify({geometry,theme:'mint',palette:12,recordPosts:posts.length},null,2));
+ });
  await scenario('header settings fit mobile and expose blank operator/contact plus working information links',async({page,context,posts,values})=>{
   assert.equal(await page.locator('#btn-settings').count(),1,'global settings button exists');
   const header=await page.locator('#app-header').boundingBox();assert(header&&header.x>=0&&header.x+header.width<=390);

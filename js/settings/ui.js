@@ -1,5 +1,6 @@
 import { createAppUpdater } from './updater.js';
 import { createUpdateSafety } from './safety.js';
+import { THEMES, currentThemeId, selectTheme } from '../theme.js';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function currentAppBuild() {
@@ -11,11 +12,21 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
   if (existing) { existing.querySelector('[role="dialog"]').focus({preventScroll:true}); return; }
   const previous = document.activeElement;
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(previous?.tagName || '')) previous.blur();
+  const themeId = currentThemeId();
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop app-settings-modal';
   backdrop.innerHTML = `<section class="modal" role="dialog" aria-modal="true" aria-label="設定" tabindex="-1">
     <header>設定</header>
     <div class="modal-body app-settings-body">
+      <section class="settings-section" aria-labelledby="settings-theme-title">
+        <h2 id="settings-theme-title">画面の色</h2>
+        <p>この端末の背景色を変更します。</p>
+        <div class="theme-grid settings-theme-grid" id="settings-theme-grid" role="group" aria-labelledby="settings-theme-title">
+          ${THEMES.map(t => `<button type="button" class="theme-swatch ${t.id === themeId ? 'on' : ''}" data-theme-id="${t.id}" aria-pressed="${t.id === themeId}" aria-label="${t.name}">
+            <span class="theme-chip" style="background:${t.bg};color:${t.kind === 'light' ? '#22262e' : '#fff'}" aria-hidden="true">${t.id === themeId ? '✓' : ''}</span><span>${t.name}</span>
+          </button>`).join('')}
+        </div>
+      </section>
       <section class="settings-section" aria-labelledby="settings-update-title">
         <h2 id="settings-update-title">アプリの更新</h2>
         <dl class="settings-facts"><div><dt>現在のバージョン</dt><dd id="settings-current-build">${escapeHtml(currentAppBuild() || '確認できません')}</dd></div></dl>
@@ -58,6 +69,7 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
     updateButton.disabled = value;
     closeButton.disabled = value;
     healthButton.disabled = value;
+    backdrop.querySelectorAll('.theme-swatch').forEach(button => { button.disabled = value; });
     backdrop.querySelector('[role="dialog"]').setAttribute('aria-busy', String(value));
   }
   function progress({stage,completed,total}) {
@@ -78,6 +90,17 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
       status.classList.add('settings-error');
       status.textContent = error.message || '更新を確認できませんでした。記録はそのまま残っています。';
     } finally { setBusy(false); }
+  });
+  backdrop.querySelector('#settings-theme-grid').addEventListener('click', event => {
+    const swatch = event.target.closest('[data-theme-id]');
+    if (!swatch || updating) return;
+    selectTheme(swatch.dataset.themeId);
+    backdrop.querySelectorAll('[data-theme-id]').forEach(button => {
+      const selected = button === swatch;
+      button.classList.toggle('on', selected);
+      button.setAttribute('aria-pressed', String(selected));
+      button.querySelector('.theme-chip').textContent = selected ? '✓' : '';
+    });
   });
   closeButton.addEventListener('click', close);
   healthButton.addEventListener('click',()=>{close();onOpenHealthSettings?.();});

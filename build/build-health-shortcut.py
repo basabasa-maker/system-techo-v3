@@ -98,7 +98,7 @@ def build(endpoint):
     body=w.dictionary();w.bind('Payload',w.ref(body,'Dictionary'))
     for key,ref in [('type','health_bridge_upload'),('request_id',w.var('RequestID')),('pair_key',w.var('PairKey')),('date',w.var('TargetDay')),('issued_at',w.var('IssuedAt')),('values',w.var('HealthValues')),('units',w.var('HealthUnits'))]:w.put('Payload',key,ref)
     json_text=w.add('gettext',WFTextActionText=w.text(w.var('Payload')))
-    request=w.add('downloadurl',WFURL=w.text(endpoint),WFHTTPMethod='POST',WFHTTPBodyType='File',WFRequestVariable=w.text(w.ref(json_text,'Text')),WFFormValues={'Value':{'WFDictionaryFieldValueItems':[]},'WFSerializationType':'WFDictionaryFieldValue'},WFHTTPHeaders={'Value':{'WFDictionaryFieldValueItems':[{'WFItemType':0,'WFKey':w.text('Content-Type'),'WFValue':w.text('application/json')}]},'WFSerializationType':'WFDictionaryFieldValue'})
+    request=w.add('downloadurl',WFURL=w.text(endpoint),WFHTTPMethod='POST',WFHTTPBodyType='File',WFRequestVariable=w.att(w.ref(json_text,'Text')),WFFormValues={'Value':{'WFDictionaryFieldValueItems':[]},'WFSerializationType':'WFDictionaryFieldValue'},WFHTTPHeaders={'Value':{'WFDictionaryFieldValueItems':[{'WFItemType':0,'WFKey':w.text('Content-Type'),'WFValue':w.text('application/json')}]},'WFSerializationType':'WFDictionaryFieldValue'})
     response=w.add('detect.dictionary',WFInput=w.att(w.ref(request,'Contents of URL')))
     ok=w.get(w.ref(response,'Dictionary'),'ok');ok_number=w.add('number',WFNumberActionNumber=w.text(w.ref(ok,'Dictionary Value')));success=w.condition(w.ref(ok_number,'Number'),4,1)
     w.add('notification',WFNotificationActionTitle=w.text('ヘルスケアの読み取りが完了しました'),WFNotificationActionBody=w.text('元のシステム手帳へ戻ってください。Safariが開いた場合も元の手帳を開くと取り込みを続けます。'),WFNotificationActionSound=False)
@@ -144,7 +144,10 @@ def validate(workflow,endpoint):
                 assert state['string']=='\ufffc'
                 assert set(state['attachmentsByRange'])=={'{0, 1}'}
                 assert state['attachmentsByRange']['{0, 1}']['Type'] in ['ActionOutput','Variable']
-        if ident=='is.workflow.actions.downloadurl':assert p['WFURL']['Value']['string']==endpoint
+        if ident=='is.workflow.actions.downloadurl':
+            assert p['WFURL']['Value']['string']==endpoint
+            assert p['WFRequestVariable']['WFSerializationType']=='WFTextTokenAttachment'
+            assert p['WFRequestVariable']['Value']['Type']=='ActionOutput'
         if ident=='is.workflow.actions.openurl':assert p['WFInput']['Value']['string']==CALLBACK
     assert not groups
     assert len([a for a in actions if a['WFWorkflowActionIdentifier']=='is.workflow.actions.filter.health.quantity'])==4

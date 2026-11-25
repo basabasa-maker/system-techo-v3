@@ -17,3 +17,5 @@
 :root[data-kind="light"] .settings-section .settings-error { color:#a31919; }
 .app-settings-modal [aria-busy="true"] button:disabled { opacity:.65; cursor:wait; }
 .app-settings-modal footer button { width:100%; }
+
+.settings-theme-grid { padding:4px 0 2px; }

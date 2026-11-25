@@ -8,11 +8,13 @@
   "dynamic_dictionary_values_use_single_token_strings": true,
   "ios_execution": "not_tested",
   "signed_with": "Apple shortcuts sign --mode anyone",
-  "signed_bytes": 35827,
-  "signed_sha256": "9ef68b73700c1c2536537d991d005b74bbf950ebcd26c5619c851677de28f13f",
+  "signed_bytes": 35826,
+  "signed_sha256": "83be182e915353845da67192b83e2585f04df30223d6483d7568691cb9ee546d",
   "signature_command_exit": 0,
   "dynamic_variable_token_puts": 10,
   "literal_string_puts": 5,
-  "native_dictionary_probe": "macOS Shortcuts: former request_id error reproduced; corrected strings/numbers/zero/nested/empty JSON verified; no Health/network actions",
+  "http_file_body_variable_serialization": "WFTextTokenAttachment",
+  "native_http_probe": "macOS: original body selector unassigned; native selected Payload sent valid synthetic JSON to localhost; generated corrected Attachment recognized as Text in body selector; repeated generated HTTP run did not complete and was stopped",
+  "native_response_probe": "macOS synthetic ok true/false correctly select success/failure",
   "iphone_execution_of_repair": "not_yet_verified"
 }

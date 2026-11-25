@@ -36,6 +36,25 @@ class HealthShortcutTests(unittest.TestCase):
         for key in ('request_id', 'pair_key', 'date', 'issued_at', 'values', 'units'):
             self.assertIn(key, dynamic)
 
+    def test_http_body_is_an_attachment_to_the_json_text_output(self):
+        workflow = builder.build(ENDPOINT)
+        actions = workflow['WFWorkflowActions']
+        send = next(a['WFWorkflowActionParameters'] for a in actions
+                    if a['WFWorkflowActionIdentifier'] == 'is.workflow.actions.downloadurl')
+        # Native File body selector ignores WFTextTokenString and displays
+        # an unassigned variable. Exported native selection uses Attachment.
+        body = send['WFRequestVariable']
+        self.assertEqual(body['WFSerializationType'], 'WFTextTokenAttachment')
+        token = body['Value']
+        self.assertEqual(token['Type'], 'ActionOutput')
+        source = next(a for a in actions if a['WFWorkflowActionParameters']['UUID'] == token['OutputUUID'])
+        self.assertEqual(source['WFWorkflowActionIdentifier'], 'is.workflow.actions.gettext')
+        value = source['WFWorkflowActionParameters']['WFTextActionText']['Value']
+        self.assertEqual(value['string'], '\ufffc')
+        self.assertEqual(value['attachmentsByRange']['{0, 1}'], builder.Workflow().var('Payload'))
+        self.assertEqual(send['WFHTTPBodyType'], 'File')
+        self.assertEqual(send['WFHTTPMethod'], 'POST')
+
     def test_all_four_health_filters_and_missing_value_rules_remain(self):
         workflow = builder.build(ENDPOINT)
         actions = workflow['WFWorkflowActions']
