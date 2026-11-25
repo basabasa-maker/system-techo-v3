@@ -1,6 +1,6 @@
 # iPhoneヘルスケア連携の試作
 
-現行公開版は `20261125-122202`。送信本文の変数指定修正と色選択の設定内移動を、本人の「OK」で公開承認。直前の空白名修正版は `20261125-115426`。各節は変更履歴として保持する。今回の送信本文修正ではiPhoneに登録済みのShortcut差し替えが必要で、実4値送信成功は未確認。
+最新の公開対象は `20261125-153907`。日付整形・復帰後受信を修正しSafari起動を撤去する版を、本人の「許可する」で承認。直前の公開版は `20261125-122202`。各節は変更履歴として保持する。登録済みShortcutの差し替えが必要で、実iPhoneの4値取得成功と完全自動PWA復帰は未確認。
 
 2026-11-25。本人が「更新からショートカットへ一時的に切り替える方式で作ってみる」と決定。PC側の隔離検証を実施し、本人の「公開して」の指示で公開する。消費カロリーはアクティブエネルギーのみ。安静時は含めない。
 
@@ -89,7 +89,7 @@ Node回帰はURLSearchParams.getだけでなく、生queryをdecodeURIComponent�
 
 検証用STH_ResponseProbe/STH_HTTPProbe/STH_HTTPProbe_FIXEDの3件も同じ「OK」で削除承認を受け、Shortcuts UIで3件削除・元の4件維持を確認した。本人用system-techo-health 2は残っている。
 
-## 日付が空文字になる不具合と受信再開の修正候補（2026-11-25、未公開）
+## 日付が空文字になる不具合と受信再開の修正（2026-11-25、公開承認済み）
 
 本人は現行公開版からsystem-techo-health3を実行し、Safari起動後に元PWAへ戻っても「この日のヘルスケアデータはありません。4項目は変更していません」と表示。実データは存在する。これはempty{}の受信/消費成功を示し、今回の主因は通信ではない。4項目共通のFormat DateのWFDateFormat=Custom/WFDateFormatString=yyyy-MM-ddが誤り。ローカルAppleのFormat StringはWFDateFormatで、native固定日付probeは11月24日/25日とも旧形式で空文字、WFDateFormat=yyyy-MM-ddで正しい各日付を返すことを確認。4つすべての日付比較で全除外する欠陥を修正した。Python回帰はRED観測後6件成功。値の単位/Health4type/日付filter境界/欠測保護/GAS/対象日PATCHは不変。実iPhoneの4値成功とは区別する。
 
@@ -97,4 +97,4 @@ Node回帰はURLSearchParams.getだけでなく、生queryをdecodeURIComponent�
 
 SafariはShortcut最後のopenurlで明示的に開かれていた。この1actionを撤去し、通知は送信受理と元アプリへの戻り操作を案内する。HTTPSの戻り先を変えるだけでホーム画面PWAへの自動復帰が保証されるとは扱わない。今回完全な自動復帰は未実装。旧ハッシュの互換案内は残す。
 
-本人の最新削除希望を受け、同期済みShortcuts一覧で現行system-techo-health3（空白なし）と旧system-techo-health 2を確認。旧2の全iCloudデバイス削除確認を表示してCancel、最終確認待ち。今回作成したHealth/通信なしSTH_DateCheckも片付け対象。予約管理など本人の他Shortcutは編集/実行/削除していない。新しい番号4を増やさず、修正版切替後に使うものだけへ整理する。
+本人の最新削除希望を受け、同期済みShortcuts一覧で現行system-techo-health3（空白なし）と旧system-techo-health 2を確認。本人の「許可する」で旧2とHealth/通信なしSTH_DateCheckの削除を承認。Shortcuts UIでこの2件だけを削除し、現行system-techo-health3と他の本人用Shortcutを含む5件が残ることを確認。予約管理など本人の他Shortcutは編集/実行/削除していない。新しい番号4を増やさず、修正版切替後に使うものだけへ整理する。
