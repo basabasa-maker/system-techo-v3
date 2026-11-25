@@ -10,7 +10,7 @@
 2. この手帳の連携キーをコピーし、[追加用ZIP](../shortcuts/health-bridge/system-techo-health.zip)をダウンロードする。「ファイル」→「ダウンロード」でZIPを展開し、中の署名済み `.shortcut` を開く。「ショートカットを設定」の質問へキーを貼り付けて追加する。
 3. 手帳とショートカットの名前を合わせ、手帳で連携をONにして保存する。
 4. 対象日を表示し、右上の「更新」を押す。ショートカットが前面へ出て、その日だけを読み取る。読み取り許可は本人がiPhoneで行う。
-5. Safariが開いた場合は元のホーム画面の手帳へ戻る。自動で同じPWAへ戻ることは未確認なので保証しない。
+5. 日付修正候補ではSafariを開くアクションを撤去。送信後は画面左上の「システム手帳」から元のアプリへ戻る。表示がなければホーム画面から開く。完全な自動復帰は保証しない。
 6. 初めて届く項目は、同じ日のヘルスケア表示と数値・単位を照合してから取り込む。確認済みの項目は次回から自動で反映する。初回確認の「取り込まない」では保存しない。
 
 [詳細なiPhone手順と検証限界](../shortcuts/health-bridge/README.md)。キーを入れた個人用ショートカットは再配布せず、公開するのはキー未設定のテンプレートだけとする。
@@ -88,3 +88,13 @@ Node回帰はURLSearchParams.getだけでなく、生queryをdecodeURIComponent�
 今回はiPhoneに登録済みのShortcutファイルを差し替える必要がある。Webアプリ更新だけでは追加済みShortcutは変わらない。連携キーは再発行せず同じものを使用する。本人の「OK」で公開承認を受け、版20261125-122202のZIPを配信する。新しいHealth結果を本番へ試験POSTしたり、既存記録を修正したりしない。
 
 検証用STH_ResponseProbe/STH_HTTPProbe/STH_HTTPProbe_FIXEDの3件も同じ「OK」で削除承認を受け、Shortcuts UIで3件削除・元の4件維持を確認した。本人用system-techo-health 2は残っている。
+
+## 日付が空文字になる不具合と受信再開の修正候補（2026-11-25、未公開）
+
+本人は現行公開版からsystem-techo-health3を実行し、Safari起動後に元PWAへ戻っても「この日のヘルスケアデータはありません。4項目は変更していません」と表示。実データは存在する。これはempty{}の受信/消費成功を示し、今回の主因は通信ではない。4項目共通のFormat DateのWFDateFormat=Custom/WFDateFormatString=yyyy-MM-ddが誤り。ローカルAppleのFormat StringはWFDateFormatで、native固定日付probeは11月24日/25日とも旧形式で空文字、WFDateFormat=yyyy-MM-ddで正しい各日付を返すことを確認。4つすべての日付比較で全除外する欠陥を修正した。Python回帰はRED観測後6件成功。値の単位/Health4type/日付filter境界/欠測保護/GAS/対象日PATCHは不変。実iPhoneの4値成功とは区別する。
+
+別の実在欠陥として、PWAが裏へ回って一時受信失敗するとcatchがpendingを消すことも合成で再現。失敗時は元TTL内のnonceと取得済み値を保持し、復帰/再起動/同日更新で再開する。更新連打で新nonceに置き換えない。中止・期限切れ・別日/別キー・手入力保護は維持する。取得0件表示は存在否定ではなく取得失敗として説明する。
+
+SafariはShortcut最後のopenurlで明示的に開かれていた。この1actionを撤去し、通知は送信受理と元アプリへの戻り操作を案内する。HTTPSの戻り先を変えるだけでホーム画面PWAへの自動復帰が保証されるとは扱わない。今回完全な自動復帰は未実装。旧ハッシュの互換案内は残す。
+
+本人の最新削除希望を受け、同期済みShortcuts一覧で現行system-techo-health3（空白なし）と旧system-techo-health 2を確認。旧2の全iCloudデバイス削除確認を表示してCancel、最終確認待ち。今回作成したHealth/通信なしSTH_DateCheckも片付け対象。予約管理など本人の他Shortcutは編集/実行/削除していない。新しい番号4を増やさず、修正版切替後に使うものだけへ整理する。

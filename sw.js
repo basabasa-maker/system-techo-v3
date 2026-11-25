@@ -1,6 +1,6 @@
 // A release becomes active only after every published asset is verified and saved.
 // Record storage and the separate attachment cache are never changed here.
-const BUILD_VERSION = "20261125-122202";
+const BUILD_VERSION = "20261125-153907";
 const CACHE_NAME = `system-techo-v3-${BUILD_VERSION}`;
 const REQUEST_TIMEOUT_MS = 15000;
 const MAX_ASSETS = 128;

@@ -58,7 +58,7 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'});
   page=await ctx.newPage();page.setDefaultTimeout(4000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const values=clone(initialValues),days=clone(initialDays),posts=[],gets=[];
-  const opts={healthStatus:'ready',readDelay:0,healthValues:{weight:62.3,bodyFat:21.2,kcal:420,steps:8040},healthUnits:{weight:'kg',bodyFat:'%',kcal:'kcal',steps:'count'},resultDate:null,failPosts:false,habitPostDelay:0,habitGetDelay:0,items:clone(items)};
+  const opts={healthStatus:'ready',readDelay:0,failHealthRead:false,healthValues:{weight:62.3,bodyFat:21.2,kcal:420,steps:8040},healthUnits:{weight:'kg',bodyFat:'%',kcal:'kcal',steps:'count'},resultDate:null,failPosts:false,habitPostDelay:0,habitGetDelay:0,items:clone(items)};
   await ctx.route('**/*',async route=>{
    const req=route.request(),url=new URL(req.url());
    if(url.origin===base)return route.continue();
@@ -73,6 +73,7 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
    if(req.method()==='POST'){
     posts.push(clone(p));
     if(p.type==='health_bridge_read'){
+     if(opts.failHealthRead){await delay(opts.readDelay);return route.abort('failed');}
      const data=opts.healthStatus==='ready'?{status:'ready',date:opts.resultDate||p.date,issued_at:p.issued_at,values:clone(opts.healthValues),units:clone(opts.healthUnits)}:{status:opts.healthStatus,date:p.date,issued_at:p.issued_at};
      await delay(opts.readDelay);return route.fulfill({json:{ok:true,data},headers});
     }
@@ -157,6 +158,53 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   assert.equal(await page.locator('#health-save').isVisible(),true,'download keeps setup open');
   assert.equal(healthReads(posts).length,0);assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
  },{enabled:false});
+ await scenario('temporary read failure while away retains the explicit request and resumes on return',async({page,values,posts,opts})=>{
+  opts.failHealthRead=true;opts.readDelay=650;
+  const request=await begin(page,posts);
+  await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});document.dispatchEvent(new Event('visibilitychange'));});
+  await delay(850);
+  assert.equal((await pending(page))?.request_id,request.request_id,'a temporary failure while away must retain the explicitly requested import');
+  assert.equal(habitWrites(posts).length,0,'background response never writes');
+  opts.failHealthRead=false;opts.readDelay=0;
+  await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'visible'});document.dispatchEvent(new Event('visibilitychange'));window.dispatchEvent(new Event('pageshow'));});
+  await page.locator('#health-confirm').waitFor();
+  assert.equal(habitWrites(posts).length,0,'first-time values still require confirmation after returning');
+  await page.locator('#health-confirm').click();await done(page,posts);
+  assert.equal(values[TODAY].weight,62.3);assert.equal(values[TODAY].steps,8040);
+ },{verified:false});
+ await scenario('interrupted receiving survives a page restart without changing the original request',async({page,values,posts,opts})=>{
+  opts.failHealthRead=true;opts.readDelay=650;const request=await begin(page,posts);
+  await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'});document.dispatchEvent(new Event('visibilitychange'));});
+  await delay(850);opts.failHealthRead=false;opts.readDelay=0;
+  await page.reload();await field(page,'weight').waitFor();
+  await page.locator('#health-confirm').waitFor();
+  assert.equal(habitWrites(posts).length,0,'restarting must not approve first-time values');
+  await page.locator('#health-confirm').click();await done(page,posts);
+  assert(healthReads(posts).every(p=>p.request_id===request.request_id),'restart resumes the persisted request');
+  assert.equal(await page.evaluate(()=>window.testShortcutLaunches.length),0,'page restart never launches a new Health read');
+  assert.equal(values[TODAY].weight,62.3);
+ },{verified:false});
+ await scenario('manual refresh resumes a waiting request without replacing its nonce or launching again',async({page,values,posts,opts})=>{
+  opts.healthStatus='waiting';const request=await begin(page,posts);await delay(120);
+  opts.healthStatus='ready';await page.locator('#btn-refresh').click();
+  await done(page,posts);
+  const launches=await page.evaluate(()=>window.testShortcutLaunches);
+  assert.equal(launches.length,1,'resuming must not launch a second Shortcut');
+  assert(healthReads(posts).every(p=>p.request_id===request.request_id),'the existing upload remains bound to its original request');
+  assert.equal(values[TODAY].weight,62.3);
+ });
+ await scenario('expired request can be replaced only by another explicit update',async({page,values,posts,opts})=>{
+  opts.healthStatus='waiting';const request=await begin(page,posts);await delay(120);
+  const time=await page.evaluate(()=>Date.now());await page.clock.setFixedTime(new Date(time+600001));
+  await page.evaluate(()=>window.dispatchEvent(new Event('pageshow')));
+  await until(async()=>!await pending(page),'expired request is cleared without changing saved records');
+  assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
+  opts.healthStatus='ready';await page.locator('#btn-refresh').click();await done(page,posts);
+  const reads=healthReads(posts),newRequest=reads.at(-1);
+  assert.notEqual(newRequest.request_id,request.request_id);
+  assert.equal(await page.evaluate(()=>window.testShortcutLaunches.length),2,'only the explicit second click launches again');
+  assert.equal(values[TODAY].weight,62.3);
+ });
  await scenario('settings enable Health import and only requested fields on the selected day change',async({page,values,posts})=>{
   assert.equal(healthReads(posts).length,0,'launch does not query Health');
   await openHealthSettings(page);await page.locator('#health-enabled').check();
@@ -222,6 +270,9 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
  await scenario('no samples never writes zeros, previous values or an empty replacement day',async({page,opts,posts,values})=>{
   opts.healthValues={};opts.healthUnits={};await begin(page,posts);await done(page,posts);
   assert.deepEqual(values,initialValues);assert.equal(habitWrites(posts).length,0);
+  await openHealthTools(page);
+  const status=await page.locator('#health-status').textContent();
+  assert(status.includes('取得できませんでした'));assert(!status.includes('データはありません'));
  });
  for(const invalid of ['day','unit'])await scenario('invalid Health '+invalid+' cannot mutate any saved habit',async({page,opts,posts,values})=>{
   if(invalid==='day')opts.resultDate=PREV;else opts.healthUnits.steps='kg';

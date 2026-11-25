@@ -1,5 +1,5 @@
 {
-  "actions": 170,
+  "actions": 169,
   "health_queries": 4,
   "contains_real_pair_key": false,
   "writes_health": false,
@@ -8,13 +8,13 @@
   "dynamic_dictionary_values_use_single_token_strings": true,
   "ios_execution": "not_tested",
   "signed_with": "Apple shortcuts sign --mode anyone",
-  "signed_bytes": 35826,
-  "signed_sha256": "83be182e915353845da67192b83e2585f04df30223d6483d7568691cb9ee546d",
+  "signed_bytes": 35734,
+  "signed_sha256": "6a349fda32c1ccb05335999275d846d19e81c8b616d253ef2a05a008a46dee4b",
   "signature_command_exit": 0,
-  "dynamic_variable_token_puts": 10,
-  "literal_string_puts": 5,
   "http_file_body_variable_serialization": "WFTextTokenAttachment",
-  "native_http_probe": "macOS: original body selector unassigned; native selected Payload sent valid synthetic JSON to localhost; generated corrected Attachment recognized as Text in body selector; repeated generated HTTP run did not complete and was stopped",
-  "native_response_probe": "macOS synthetic ok true/false correctly select success/failure",
+  "date_format": "WFDateFormat=yyyy-MM-dd; WFDateFormatString omitted",
+  "native_date_probe": "macOS fixed Nov24/25: old formats both empty; corrected formats preserve both dates; no Health/network",
+  "safari_open_action": false,
+  "automatic_pwa_return_verified": false,
   "iphone_execution_of_repair": "not_yet_verified"
 }

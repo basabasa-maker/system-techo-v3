@@ -34,13 +34,13 @@ export function showHealthSettings(onSaved) {
   }
   const modal = dialog("ヘルスケア連携", `
     <p>iPhoneのショートカットで、表示中の日の4項目を読み取り、Google上の一時保管先へ送信します。初めて届いた項目は、手帳で値を確認してから連携先のGoogleスプレッドシートへ保存します。</p>
-    <ol class="health-setup-steps"><li>下の連携キーをコピーします。</li><li><a href="shortcuts/health-bridge/system-techo-health.zip" download>追加用ZIPをダウンロード</a>します。</li><li>iPhoneの「ファイル」→「ダウンロード」でZIPをタップして展開し、中の「system-techo-health.shortcut」を開きます。</li><li>「ショートカットを設定」でキーを貼り付け、追加します。登録された名前と下のショートカット名を合わせます。</li><li>手帳で連携をONにして保存し、対象日の更新から実行します。初回の4項目の読み取り許可は順に表示されます。</li><li>元の手帳へ戻り、同じ日のヘルスケア値と照合してから取り込みます。</li></ol>
+    <ol class="health-setup-steps"><li>下の連携キーをコピーします。</li><li><a href="shortcuts/health-bridge/system-techo-health.zip" download>追加用ZIPをダウンロード</a>します。</li><li>iPhoneの「ファイル」→「ダウンロード」でZIPをタップして展開し、中の「system-techo-health.shortcut」を開きます。</li><li>「ショートカットを設定」でキーを貼り付け、追加します。登録された名前と下のショートカット名を合わせます。</li><li>手帳で連携をONにして保存し、対象日の更新から実行します。初回の4項目の読み取り許可は順に表示されます。</li><li>読み取り後は画面左上の「システム手帳」から元のアプリへ戻り、同じ日のヘルスケア値と照合してから取り込みます。</li></ol>
     <label class="health-enable"><input type="checkbox" id="health-enabled" ${settings.enabled ? "checked" : ""}>入力画面の更新で連携する</label>
     <label>ショートカット名<input id="health-shortcut-name" value="${esc(settings.shortcutName)}" maxlength="100" /></label>
     <label>この手帳の連携キー<input type="password" id="health-pair-key" value="${esc(key)}" autocomplete="off" spellcheck="false" /></label>
     <div class="health-key-actions"><button type="button" id="health-copy-key" class="btn-ghost">キーをコピー</button><button type="button" id="health-renew-key" class="btn-ghost">キーを作り直す</button></div>
     <p class="health-small">キーを作り直した場合は、ショートカット側にも新しいキーを設定してください。</p>
-    <p class="health-small">測定のない項目は変更しません。Safariが開いた場合は、元の手帳へ戻ってください。</p>`, '<button type="button" class="btn-ghost" id="health-settings-close">キャンセル</button><button type="submit" class="btn-primary" id="health-save">保存</button>');
+    <p class="health-small">測定のない項目は変更しません。修正版はSafariを自動で開きません。元のホーム画面アプリへ戻る操作は必要です。</p>`, '<button type="button" class="btn-ghost" id="health-settings-close">キャンセル</button><button type="submit" class="btn-primary" id="health-save">保存</button>');
   modal.element.querySelector("#health-settings-close").addEventListener("click",modal.close);
   modal.element.querySelector("#health-renew-key").addEventListener("click",()=>{modal.element.querySelector("#health-pair-key").value=generateHealthKey();});
   modal.element.querySelector("#health-copy-key").addEventListener("click",async()=>{

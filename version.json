@@ -1,5 +1,5 @@
 {
-  "build": "20261125-122202",
+  "build": "20261125-153907",
   "assets": [
     {
       "path": "css/goals.css",
@@ -43,7 +43,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "696909d3ea007578ca64b1758d2ad554c491f90f05d66b6ef0a7288277e9b54f"
+      "sha256": "7dec34e558f729ee1073ed29764e01a67ee8768b9a71ee9959a876e11660beca"
     },
     {
       "path": "js/app.js",
@@ -91,7 +91,7 @@
     },
     {
       "path": "js/habit.js",
-      "sha256": "f3e815e575c0131cb884487510a278c50150899fa6f37f276ddeccdbf9aacd96"
+      "sha256": "ed808ec17028141163ce0ccd5991a8c31bb8d2125c27805c51808ac4e3d84cc9"
     },
     {
       "path": "js/health/bridge.js",
@@ -103,7 +103,7 @@
     },
     {
       "path": "js/health/ui.js",
-      "sha256": "85088d81b5125b71a75c1c8b833b4c51b100ea22d1dbb66b9c848c034f609037"
+      "sha256": "51d9df907e63d341d5e31a6b78c01de715ffe08ac15b6b29d774b8474349ce3b"
     },
     {
       "path": "js/meal-time.js",
@@ -187,11 +187,11 @@
     },
     {
       "path": "shortcuts/health-bridge/system-techo-health.shortcut",
-      "sha256": "83be182e915353845da67192b83e2585f04df30223d6483d7568691cb9ee546d"
+      "sha256": "6a349fda32c1ccb05335999275d846d19e81c8b616d253ef2a05a008a46dee4b"
     },
     {
       "path": "shortcuts/health-bridge/system-techo-health.zip",
-      "sha256": "2b0715413c9b734aa4e19d48da660ff0d25d39c6e5e9da208070ec084a675dcb"
+      "sha256": "ad747816ada5167ab924f4f18ded40a546e62a7f33725e2669af578de93abcf2"
     },
     {
       "path": "support.html",
@@ -199,7 +199,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "a98368caa627afc8b0f406ffb6d2905155213ac2d654741305ec2287709fccfd"
+      "sha256": "14af58e62795206c3096bcfccb25171fd7fbf8c59d143b9a56116c3c852b3c84"
     }
   ]
 }

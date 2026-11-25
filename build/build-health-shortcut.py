@@ -5,7 +5,6 @@ import argparse, json, plistlib, re, uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = 'システム手帳 ヘルスケア同期'
-CALLBACK = 'https://basabasa-maker.github.io/system-techo-v3/#health-return'
 PLACEHOLDER = 'PASTE_HEALTH_PAIR_KEY_HERE'
 NS = uuid.UUID('b6d14ce9-5f18-4c39-9421-317d60fb7be4')
 
@@ -79,7 +78,7 @@ def build(endpoint):
         have=w.condition(w.ref(found,'Health Samples'),100)
         loop=w.uid('repeat');w.add('repeat.each',GroupingIdentifier=loop,WFControlFlowMode=0,WFInput=w.att(w.ref(found,'Health Samples')))
         date=w.add('is.workflow.actions.properties.health.quantity',WFContentItemPropertyName='Start Date',WFInput=w.att(w.var('Repeat Item')))
-        day=w.add('is.workflow.actions.format.date',WFDate=w.text(w.ref(date,'Start Date')),WFDateFormatStyle='Custom',WFDateFormat='Custom',WFDateFormatString='yyyy-MM-dd')
+        day=w.add('is.workflow.actions.format.date',WFDate=w.text(w.ref(date,'Start Date')),WFDateFormatStyle='Custom',WFDateFormat='yyyy-MM-dd')
         same=w.condition(w.ref(day,'Formatted Date'),4,w.var('TargetDay'))
         unit_detail=w.add('is.workflow.actions.properties.health.quantity',WFContentItemPropertyName='Unit',WFInput=w.att(w.var('Repeat Item')))
         unit_matches=w.condition(w.ref(unit_detail,'Unit'),4,unit)
@@ -101,8 +100,7 @@ def build(endpoint):
     request=w.add('downloadurl',WFURL=w.text(endpoint),WFHTTPMethod='POST',WFHTTPBodyType='File',WFRequestVariable=w.att(w.ref(json_text,'Text')),WFFormValues={'Value':{'WFDictionaryFieldValueItems':[]},'WFSerializationType':'WFDictionaryFieldValue'},WFHTTPHeaders={'Value':{'WFDictionaryFieldValueItems':[{'WFItemType':0,'WFKey':w.text('Content-Type'),'WFValue':w.text('application/json')}]},'WFSerializationType':'WFDictionaryFieldValue'})
     response=w.add('detect.dictionary',WFInput=w.att(w.ref(request,'Contents of URL')))
     ok=w.get(w.ref(response,'Dictionary'),'ok');ok_number=w.add('number',WFNumberActionNumber=w.text(w.ref(ok,'Dictionary Value')));success=w.condition(w.ref(ok_number,'Number'),4,1)
-    w.add('notification',WFNotificationActionTitle=w.text('ヘルスケアの読み取りが完了しました'),WFNotificationActionBody=w.text('元のシステム手帳へ戻ってください。Safariが開いた場合も元の手帳を開くと取り込みを続けます。'),WFNotificationActionSound=False)
-    w.add('openurl',WFInput=w.text(CALLBACK))
+    w.add('notification',WFNotificationActionTitle=w.text('ヘルスケアの送信を受け付けました'),WFNotificationActionBody=w.text('画面左上の「システム手帳」をタップして元のアプリへ戻ってください。表示がない場合はホーム画面の手帳を開きます。初めて届いた値は手帳で確認してから取り込みます。'),WFNotificationActionSound=False)
     w.add('conditional',GroupingIdentifier=success,WFControlFlowMode=1)
     w.stop('読み取り結果を送れませんでした。通信と連携キーを確認し、元の手帳からもう一度更新してください。')
     w.end(success)
@@ -131,6 +129,9 @@ def validate(workflow,endpoint):
         if 'WFControlFlowMode' in p:
             if p['WFControlFlowMode']==0:groups.append((ident,p['GroupingIdentifier']))
             elif p['WFControlFlowMode']==2:assert groups.pop()==(ident,p['GroupingIdentifier'])
+        if ident=='is.workflow.actions.format.date':
+            assert p['WFDateFormatStyle']=='Custom' and p['WFDateFormat']=='yyyy-MM-dd'
+            assert 'WFDateFormatString' not in p
         if ident=='is.workflow.actions.filter.health.quantity':
             assert p['WFHKSampleFilteringFillMissing'] is False
             assert p['WFContentItemLimitEnabled'] is False
@@ -148,7 +149,7 @@ def validate(workflow,endpoint):
             assert p['WFURL']['Value']['string']==endpoint
             assert p['WFRequestVariable']['WFSerializationType']=='WFTextTokenAttachment'
             assert p['WFRequestVariable']['Value']['Type']=='ActionOutput'
-        if ident=='is.workflow.actions.openurl':assert p['WFInput']['Value']['string']==CALLBACK
+        assert ident!='is.workflow.actions.openurl', 'Do not open Safari instead of the originating Home Screen app'
     assert not groups
     assert len([a for a in actions if a['WFWorkflowActionIdentifier']=='is.workflow.actions.filter.health.quantity'])==4
     encoded=plistlib.dumps(workflow)

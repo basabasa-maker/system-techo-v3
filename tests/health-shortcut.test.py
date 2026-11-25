@@ -55,6 +55,31 @@ class HealthShortcutTests(unittest.TestCase):
         self.assertEqual(send['WFHTTPBodyType'], 'File')
         self.assertEqual(send['WFHTTPMethod'], 'POST')
 
+    def test_success_does_not_open_safari_or_claim_app_records_are_saved(self):
+        workflow = builder.build(ENDPOINT)
+        actions = workflow['WFWorkflowActions']
+        self.assertFalse(any(a['WFWorkflowActionIdentifier'] == 'is.workflow.actions.openurl' for a in actions),
+                         'an HTTPS callback opens Safari, not the originating Home Screen app')
+        notice = next(a['WFWorkflowActionParameters'] for a in actions
+                      if a['WFWorkflowActionIdentifier'] == 'is.workflow.actions.notification')
+        self.assertEqual(notice['WFNotificationActionTitle']['Value']['string'], 'ヘルスケアの送信を受け付けました')
+        body = notice['WFNotificationActionBody']['Value']['string']
+        self.assertIn('左上', body)
+        self.assertIn('システム手帳', body)
+        self.assertNotIn('Safariが開いた', body)
+
+    def test_each_health_sample_uses_the_native_custom_date_format_field(self):
+        workflow = builder.build(ENDPOINT)
+        formats = [a['WFWorkflowActionParameters'] for a in workflow['WFWorkflowActions']
+                   if a['WFWorkflowActionIdentifier'] == 'is.workflow.actions.format.date']
+        self.assertEqual(len(formats), 4)
+        for fmt in formats:
+            # Native fixed-date RED/GREEN: old Format='Custom' produced an
+            # empty string for Nov24 and Nov25; Format='yyyy-MM-dd' kept both.
+            self.assertEqual(fmt['WFDateFormatStyle'], 'Custom')
+            self.assertEqual(fmt['WFDateFormat'], 'yyyy-MM-dd')
+            self.assertNotIn('WFDateFormatString', fmt)
+
     def test_all_four_health_filters_and_missing_value_rules_remain(self):
         workflow = builder.build(ENDPOINT)
         actions = workflow['WFWorkflowActions']

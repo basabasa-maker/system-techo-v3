@@ -1108,8 +1108,6 @@
 				<key>WFDateFormatStyle</key>
 				<string>Custom</string>
 				<key>WFDateFormat</key>
-				<string>Custom</string>
-				<key>WFDateFormatString</key>
 				<string>yyyy-MM-dd</string>
 				<key>UUID</key>
 				<string>CB076F9A-9CC1-5ACA-869E-F216B5D76B06</string>
@@ -1815,8 +1813,6 @@
 				<key>WFDateFormatStyle</key>
 				<string>Custom</string>
 				<key>WFDateFormat</key>
-				<string>Custom</string>
-				<key>WFDateFormatString</key>
 				<string>yyyy-MM-dd</string>
 				<key>UUID</key>
 				<string>A448CC66-72B4-5906-95AE-E9CEDA9C07B5</string>
@@ -2524,8 +2520,6 @@
 				<key>WFDateFormatStyle</key>
 				<string>Custom</string>
 				<key>WFDateFormat</key>
-				<string>Custom</string>
-				<key>WFDateFormatString</key>
 				<string>yyyy-MM-dd</string>
 				<key>UUID</key>
 				<string>F1977015-2797-5646-BD40-72E42F473985</string>
@@ -3307,8 +3301,6 @@
 				<key>WFDateFormatStyle</key>
 				<string>Custom</string>
 				<key>WFDateFormat</key>
-				<string>Custom</string>
-				<key>WFDateFormatString</key>
 				<string>yyyy-MM-dd</string>
 				<key>UUID</key>
 				<string>D2D7BD52-D7CD-5E71-9F5D-0501BEC1F00C</string>
@@ -4586,7 +4578,7 @@
 					<key>Value</key>
 					<dict>
 						<key>string</key>
-						<string>ヘルスケアの読み取りが完了しました</string>
+						<string>ヘルスケアの送信を受け付けました</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenString</string>
@@ -4596,7 +4588,7 @@
 					<key>Value</key>
 					<dict>
 						<key>string</key>
-						<string>元のシステム手帳へ戻ってください。Safariが開いた場合も元の手帳を開くと取り込みを続けます。</string>
+						<string>画面左上の「システム手帳」をタップして元のアプリへ戻ってください。表示がない場合はホーム画面の手帳を開きます。初めて届いた値は手帳で確認してから取り込みます。</string>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFTextTokenString</string>
@@ -4609,25 +4601,6 @@
 		</dict>
 		<dict>
 			<key>WFWorkflowActionIdentifier</key>
-			<string>is.workflow.actions.openurl</string>
-			<key>WFWorkflowActionParameters</key>
-			<dict>
-				<key>WFInput</key>
-				<dict>
-					<key>Value</key>
-					<dict>
-						<key>string</key>
-						<string>https://basabasa-maker.github.io/system-techo-v3/#health-return</string>
-					</dict>
-					<key>WFSerializationType</key>
-					<string>WFTextTokenString</string>
-				</dict>
-				<key>UUID</key>
-				<string>AADD410D-A3AE-5F63-A92F-BD28EFF19EF6</string>
-			</dict>
-		</dict>
-		<dict>
-			<key>WFWorkflowActionIdentifier</key>
 			<string>is.workflow.actions.conditional</string>
 			<key>WFWorkflowActionParameters</key>
 			<dict>
@@ -4636,7 +4609,7 @@
 				<key>WFControlFlowMode</key>
 				<integer>1</integer>
 				<key>UUID</key>
-				<string>CDDF1AE5-774D-592F-A9B4-C4952FA0B272</string>
+				<string>CDE7DF13-4498-57B9-B06F-151707BEB15F</string>
 			</dict>
 		</dict>
 		<dict>
@@ -4659,7 +4632,7 @@
 				<key>WFAlertActionCancelButtonShown</key>
 				<false/>
 				<key>UUID</key>
-				<string>B26AB350-509B-58C7-B0F2-B4908402B559</string>
+				<string>54918C45-1037-5CA1-9BF3-531672D3D137</string>
 			</dict>
 		</dict>
 		<dict>
@@ -4668,7 +4641,7 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>UUID</key>
-				<string>89137034-26E3-533E-93DD-D1AC97FA21A3</string>
+				<string>E5DE9FDD-2333-580A-A9D7-33D6981BC694</string>
 			</dict>
 		</dict>
 		<dict>
@@ -4681,7 +4654,7 @@
 				<key>WFControlFlowMode</key>
 				<integer>2</integer>
 				<key>UUID</key>
-				<string>337BBD03-6790-50D3-B10D-C15E573394C0</string>
+				<string>C1F1F5F4-9031-5751-9C17-1EFE069BB855</string>
 			</dict>
 		</dict>
 	</array>

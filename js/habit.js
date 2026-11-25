@@ -673,6 +673,15 @@ export async function pullAndRender() {
   try {
     if (state.sub === "input" && loadHealthSettings().enabled) {
       if (healthResumePromise) { toast("ヘルスケアの取り込み処理中です");return; }
+      const pending = healthBridge.pending();
+      if (pending?.date === state.date && Date.now() - pending.issued_at < REQUEST_TTL_MS
+          && pending.issued_at - Date.now() <= 120000) {
+        // A successful Shortcut upload is bound to this nonce. Retrying the
+        // receive step must not orphan it by launching a different request.
+        toast("前回の読み取り結果を確認しています。最初からやり直す場合は連携欄で中止してください。");
+        resumeHealthSync();
+        return;
+      }
       clearTimeout(healthTimer);
       healthReady = null;
       const { url } = healthBridge.prepare(state.date, state.values);
@@ -750,9 +759,16 @@ export function resumeHealthSync(internal = false) {
   if (!internal) healthPollUntil=Date.now()+60000;
   healthResumePromise=receiveHealth(request).catch(error=>{
     if (healthBridge.pending()?.request_id !== request.request_id) return;
-    healthBridge.cancel();healthReady=null;
-    healthMessage=error.message || "読み取り結果を受け取れませんでした。もう一度更新してください。";
-    updateHealthTools();toast(healthMessage,"error");
+    const expired = Date.now()-request.issued_at >= REQUEST_TTL_MS || request.issued_at-Date.now() > 120000;
+    const message = expired ? "読み取りが期限切れです。もう一度更新してください。"
+      : "読み取り結果をまだ受け取れていません。手帳に戻るか更新を押すと、同じ結果の受け取りを再開します。";
+    const changed = healthMessage !== message;
+    if (expired) { healthBridge.cancel();healthReady=null; }
+    else { scheduleHealth(request); }
+    // Background fetches can fail while iPhone switches apps. Retain the
+    // explicit request (and any already checked result) for resume events.
+    healthMessage=message;updateHealthTools();
+    if (changed && document.visibilityState !== "hidden") toast(healthMessage,"error");
   }).finally(()=>{healthResumePromise=null;healthSaving=false;updateHealthTools();});
   return true;
 }
@@ -805,6 +821,6 @@ async function receiveHealth(request) {
   }
   if (!await healthBridge.finish(request,appliedKeys,skipped)) return;
   healthReady=null;
-  healthMessage=!receivedKeys.length ? "この日のヘルスケアデータはありません。4項目は変更していません。" : skipped.length ? `${appliedKeys.length}項目を取り込み、変更中などの${skipped.length}項目はそのまま残しました。` : appliedKeys.length ? `ヘルスケア${appliedKeys.length}項目を取り込みました。` : "ヘルスケアの値を確認しました。変更はありません。";
+  healthMessage=!receivedKeys.length ? "この日のヘルスケア値を取得できませんでした。読み取り許可・条件を確認してください。保存済みの4項目は変更していません。" : skipped.length ? `${appliedKeys.length}項目を取り込み、変更中などの${skipped.length}項目はそのまま残しました。` : appliedKeys.length ? `ヘルスケア${appliedKeys.length}項目を取り込みました。` : "ヘルスケアの値を確認しました。変更はありません。";
   updateHealthTools();toast(healthMessage + await sync.pendingNote(),"success");
 }
