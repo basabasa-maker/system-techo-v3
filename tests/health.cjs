@@ -1,6 +1,7 @@
 // Isolated browser + synthetic GAS only. Never accesses HealthKit or production data.
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {chromium}=require(process.env.PLAYWRIGHT_PATH||'playwright');
+const vm=require('node:vm');
 const root=process.env.APP_ROOT||path.resolve(__dirname,'..'),clone=x=>JSON.parse(JSON.stringify(x)),delay=ms=>new Promise(r=>setTimeout(r,ms));
 const TODAY='2027-01-01',PREV='2026-12-31',NEXT='2027-01-02',PAIR_KEY='a'.repeat(43);
 const SETTINGS='sth_v3_health_settings',PENDING='sth_v3_health_pending';
@@ -25,6 +26,36 @@ const server=http.createServer((req,res)=>{
  fs.readFile(file,(e,b)=>{if(e)return res.writeHead(404).end();res.setHeader('Content-Type',({'.js':'text/javascript','.css':'text/css','.json':'application/json','.zip':'application/zip','.png':'image/png','.jpg':'image/jpeg'})[path.extname(file)]||'text/html');res.end(b);});
 });
 let browser,base,passed=0,failed=0;
+// Exercise the shipped worker's fetch handler with an already cached old ZIP.
+// All bytes and network responses here are synthetic and remain inside this VM.
+async function assertFreshShortcutDownload(href){
+ const scope='https://planner.example/system-techo-v3/';
+ const zipURL=new URL('shortcuts/health-bridge/system-techo-health.zip',scope).href;
+ const stale=Buffer.from('previous signed shortcut ZIP'),fresh=Buffer.from('new signed shortcut ZIP');
+ const cached=new Map([[zipURL,stale]]),handlers={},fetches=[];
+ const source=fs.readFileSync(path.join(root,'sw.js'),'utf8');
+ const caches={async open(){return{
+  async match(request){const bytes=cached.get(typeof request==='string'?request:request.url);return bytes&&new Response(bytes);},
+  async put(){assert.fail('download must not rewrite cached release or records');},
+ };}};
+ const fetch=async(request,options)=>{
+  assert.equal(new URL(request.url).pathname,new URL(zipURL).pathname);
+  fetches.push({url:request.url,cache:options?.cache});return new Response(fresh);
+ };
+ const self={registration:{scope},addEventListener(name,handler){handlers[name]=handler;}};
+ vm.runInNewContext(source,{self,URL,Request,Response,TextEncoder,TextDecoder,AbortController,caches,fetch,setTimeout,clearTimeout});
+ const request=relative=>{
+  let response;handlers.fetch({request:new Request(new URL(relative,scope)),respondWith(value){response=value;}});
+  assert(response,'worker must handle the download request');return response;
+ };
+ // A normal version query reproduces the old worker's canonical-cache trap.
+ assert.deepEqual(Buffer.from(await (await request(zipURL+'?v=new')).arrayBuffer()),stale);
+ assert.equal(fetches.length,0,'ordinary version queries still hit the old release cache');
+ const response=await request(href);
+ assert.deepEqual(Buffer.from(await response.arrayBuffer()),fresh,'the actual setup link must fetch the new ZIP despite a cached old ZIP');
+ assert.equal(fetches.length,1);assert.equal(fetches[0].cache,'no-store','bypass must also skip the browser HTTP cache');
+ assert.deepEqual(cached.get(zipURL),stale,'download leaves the active release cache unchanged');
+}
 async function until(check,message,timeout=7000){const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await delay(30);}assert.fail(message);}
 const field=(page,key)=>page.locator(`[data-id="${key}"] input`);
 const healthReads=posts=>posts.filter(p=>p.type==='health_bridge_read');
@@ -149,7 +180,7 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   assert.equal(await body.evaluate(el=>el.scrollHeight>el.clientHeight),true,'long instructions scroll inside the dialog');
   if(process.env.HEALTH_SETUP_SCREENSHOT)await page.screenshot({path:process.env.HEALTH_SETUP_SCREENSHOT});
   const link=page.locator('.health-setup-steps a[download]');
-  assert.equal(await link.getAttribute('href'),'shortcuts/health-bridge/system-techo-health.zip');
+  await assertFreshShortcutDownload(await link.getAttribute('href'));
   const [download]=await Promise.all([page.waitForEvent('download'),link.click()]);
   assert.equal(download.suggestedFilename(),'system-techo-health.zip');
   assert.equal(await download.failure(),null);
