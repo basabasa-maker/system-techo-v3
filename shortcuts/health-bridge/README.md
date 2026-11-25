@@ -74,6 +74,6 @@ Appleの公式説明：
 - [辞書の利用](https://support.apple.com/guide/shortcuts/apd43b69f337/ios)
 - [Macでのショートカット共有と署名](https://support.apple.com/guide/shortcuts-mac/apd455c82f02/mac)
 
-## 送信本文修正版（未公開候補）
+## 送信本文修正版（2026-11-25公開）
 
-File本文の変数指定は `WFRequestVariable = WFTextTokenAttachment` とする。旧 `WFTextTokenString` はmacOSの本文選択で未指定になった。ネイティブUIで合成Payloadを指定したlocalhost送信と書き出し形式を照合済み。生成修正版の本文変数認識は確認したが、そのlocalhost再実行は完了せず中止した。iPhoneでの実測値送信は別途確認が必要。連携キーは同じものを使い、追加済みShortcutは公開後のZIPから差し替える。
+File本文の変数指定は `WFRequestVariable = WFTextTokenAttachment` とする。旧 `WFTextTokenString` はmacOSの本文選択で未指定になった。ネイティブUIで合成Payloadを指定したlocalhost送信と書き出し形式を照合済み。生成修正版の本文変数認識は確認したが、そのlocalhost再実行は完了せず中止した。iPhoneでの実測値送信は別途確認が必要。連携キーは同じものを使い、追加済みShortcutは最新版ZIPから差し替える。Web公開版は20261125-122202。
