@@ -68,6 +68,29 @@ class HealthShortcutTests(unittest.TestCase):
         self.assertIn('システム手帳', body)
         self.assertNotIn('Safariが開いた', body)
 
+    def test_date_window_adjustments_use_native_single_token_text_inputs(self):
+        workflow = builder.build(ENDPOINT)
+        actions = workflow['WFWorkflowActions']
+        adjustments = [a['WFWorkflowActionParameters'] for a in actions
+                       if a['WFWorkflowActionIdentifier'] == 'is.workflow.actions.adjustdate']
+        self.assertEqual(len(adjustments), 2)
+        for adjustment in adjustments:
+            # Native bounds probe: a standalone Attachment renders WFDate as
+            # empty and produces no WindowStart; this field takes token text.
+            value = adjustment['WFDate']
+            self.assertEqual(value['WFSerializationType'], 'WFTextTokenString')
+            self.assertEqual(value['Value']['string'], '\ufffc')
+            self.assertEqual(set(value['Value']['attachmentsByRange']), {'{0, 1}'})
+        start_token = adjustments[0]['WFDate']['Value']['attachmentsByRange']['{0, 1}']
+        raw_date = next(a for a in actions
+                        if a['WFWorkflowActionParameters']['UUID'] == start_token['OutputUUID'])
+        self.assertEqual(raw_date['WFWorkflowActionIdentifier'], 'is.workflow.actions.date')
+        self.assertEqual(adjustments[0]['WFAdjustOperation'], 'Get Start of Day')
+        self.assertEqual(adjustments[1]['WFDate']['Value']['attachmentsByRange']['{0, 1}'],
+                         {'Type': 'Variable', 'VariableName': 'WindowStart'})
+        self.assertEqual(adjustments[1]['WFAdjustOperation'], 'Add')
+        self.assertEqual(adjustments[1]['WFDuration']['Value'], {'Magnitude': '1', 'Unit': 'days'})
+
     def test_each_health_sample_uses_the_native_custom_date_format_field(self):
         workflow = builder.build(ENDPOINT)
         formats = [a['WFWorkflowActionParameters'] for a in workflow['WFWorkflowActions']

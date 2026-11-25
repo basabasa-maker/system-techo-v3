@@ -1,5 +1,5 @@
 {
-  "build": "20261125-153907",
+  "build": "20261125-162238",
   "assets": [
     {
       "path": "css/goals.css",
@@ -43,7 +43,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "7dec34e558f729ee1073ed29764e01a67ee8768b9a71ee9959a876e11660beca"
+      "sha256": "5b189d220fbfa88593c1ab51e87007c39464122a058cfaffeadb5b858e25522b"
     },
     {
       "path": "js/app.js",
@@ -187,11 +187,11 @@
     },
     {
       "path": "shortcuts/health-bridge/system-techo-health.shortcut",
-      "sha256": "6a349fda32c1ccb05335999275d846d19e81c8b616d253ef2a05a008a46dee4b"
+      "sha256": "8ab9a22e88b12ae731f72fc0bf5ba771da3a3ab7ef329500f99e4c90f40bbae5"
     },
     {
       "path": "shortcuts/health-bridge/system-techo-health.zip",
-      "sha256": "ad747816ada5167ab924f4f18ded40a546e62a7f33725e2669af578de93abcf2"
+      "sha256": "559c6991cd8efc3258418c2e0423b69539fda289b0b88738f57bdfe140110b85"
     },
     {
       "path": "support.html",
@@ -199,7 +199,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "14af58e62795206c3096bcfccb25171fd7fbf8c59d143b9a56116c3c852b3c84"
+      "sha256": "6abb5623357541739bc97a0eb402ab2c13c6dec74e9614abb11f735cb1eb55d6"
     }
   ]
 }

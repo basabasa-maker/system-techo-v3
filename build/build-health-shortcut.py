@@ -63,8 +63,8 @@ def build(endpoint):
         w.regex_guard(w.var(name),pattern,'手帳の習慣タブの更新ボタンから実行してください。入力された対象日またはリクエストが正しくありません。')
     issued=w.get(w.var('Request'),'issued_at');number=w.add('number',WFNumberActionNumber=w.text(w.ref(issued,'Dictionary Value')));w.bind('IssuedAt',w.ref(number,'Number'))
     raw_date=w.add('date',WFDateActionMode='Specified Date',WFDateActionDate=w.text(w.var('TargetDay')))
-    start=w.add('adjustdate',WFDate=w.att(w.ref(raw_date,'Date')),WFAdjustOperation='Get Start of Day');w.bind('WindowStart',w.ref(start,'Adjusted Date'))
-    end=w.add('adjustdate',WFDate=w.att(w.var('WindowStart')),WFAdjustOperation='Add',WFDuration={'Value':{'Magnitude':'1','Unit':'days'},'WFSerializationType':'WFQuantityFieldValue'});w.bind('WindowEnd',w.ref(end,'Adjusted Date'))
+    start=w.add('adjustdate',WFDate=w.text(w.ref(raw_date,'Date')),WFAdjustOperation='Get Start of Day');w.bind('WindowStart',w.ref(start,'Adjusted Date'))
+    end=w.add('adjustdate',WFDate=w.text(w.var('WindowStart')),WFAdjustOperation='Add',WFDuration={'Value':{'Magnitude':'1','Unit':'days'},'WFSerializationType':'WFQuantityFieldValue'});w.bind('WindowEnd',w.ref(end,'Adjusted Date'))
     for name in ['HealthValues','HealthUnits']:
         empty=w.dictionary();w.bind(name,w.ref(empty,'Dictionary'))
     for key,label,unit,cumulative in [('weight','Weight','kg',False),('bodyFat','Body Fat Percentage','%',False),('kcal','Active Calories','kcal',True),('steps','Steps','count',True)]:
@@ -129,6 +129,11 @@ def validate(workflow,endpoint):
         if 'WFControlFlowMode' in p:
             if p['WFControlFlowMode']==0:groups.append((ident,p['GroupingIdentifier']))
             elif p['WFControlFlowMode']==2:assert groups.pop()==(ident,p['GroupingIdentifier'])
+        if ident=='is.workflow.actions.adjustdate':
+            value=p['WFDate']
+            assert value['WFSerializationType']=='WFTextTokenString'
+            assert value['Value']['string']=='\ufffc'
+            assert set(value['Value']['attachmentsByRange'])=={'{0, 1}'}
         if ident=='is.workflow.actions.format.date':
             assert p['WFDateFormatStyle']=='Custom' and p['WFDateFormat']=='yyyy-MM-dd'
             assert 'WFDateFormatString' not in p
