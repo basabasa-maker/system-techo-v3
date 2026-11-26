@@ -97,6 +97,9 @@ export function createMemoEditor(host, {
 } = {}) {
   let destroyed = false, compositionActive = false, compositionFrame = 0, ruledEnabled = !!ruled;
   let lastText = String(text), enterKeydownPending = false, enterPendingTimer = 0;
+  const appleTouch = /iP(?:hone|ad|od)/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let initialTouch = null;
   const clearPendingEnter = () => {
     enterKeydownPending = false;
     clearTimeout(enterPendingTimer);
@@ -126,6 +129,46 @@ export function createMemoEditor(host, {
     }
   }, {decorations: plugin => plugin.decorations});
   const events = EditorView.domEventHandlers({
+    touchstart(event, view) {
+      initialTouch = null;
+      // iOS's default first tap can pan the page while opening the keyboard.
+      // Only replace that first short tap. Active editing/selection stays native.
+      if (!appleTouch || view.hasFocus || compositionActive || view.composing
+          || event.touches.length !== 1
+          || event.target.closest?.("button, a, input, select, textarea")
+          || view.root.getSelection?.()?.isCollapsed === false) return false;
+      const touch = event.touches[0];
+      initialTouch = { id: touch.identifier, x: touch.clientX, y: touch.clientY,
+        at: performance.now(), top: view.scrollDOM.scrollTop, left: view.scrollDOM.scrollLeft };
+      return false;
+    },
+    touchmove(event) {
+      if (!initialTouch) return false;
+      const touch = Array.from(event.touches).find(t => t.identifier === initialTouch.id);
+      if (event.touches.length !== 1 || !touch
+          || Math.hypot(touch.clientX - initialTouch.x, touch.clientY - initialTouch.y) > 8) initialTouch = null;
+      return false;
+    },
+    touchcancel() { initialTouch = null; return false; },
+    touchend(event, view) {
+      const start = initialTouch;
+      initialTouch = null;
+      if (!start || !event.cancelable || event.touches.length
+          || performance.now() - start.at > 350
+          || compositionActive || view.composing
+          || view.root.getSelection?.()?.isCollapsed === false
+          || Math.abs(view.scrollDOM.scrollTop - start.top) > 2
+          || Math.abs(view.scrollDOM.scrollLeft - start.left) > 2) return false;
+      const touch = Array.from(event.changedTouches).find(t => t.identifier === start.id);
+      if (!touch || Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 8) return false;
+      const position = view.posAtCoords({ x: touch.clientX, y: touch.clientY }, false);
+      if (position == null) return false;
+      event.preventDefault();
+      // Use the actual document's coordinates; no mirror or fake caret is needed.
+      // No scroll request and no text change: preserve the tapped line and body.
+      focusEditor({ anchor: position });
+      return true;
+    },
     beforeinput(event, view) {
       if (event.inputType !== "insertParagraph" && event.inputType !== "insertLineBreak") return false;
       if (!event.cancelable || event.isComposing || compositionActive || view.composing) return false;
@@ -205,6 +248,20 @@ export function createMemoEditor(host, {
       ],
     }),
   });
+  function focusEditor(selection = null) {
+    if (appleTouch) {
+      // CodeMirror's Safari >=26 fallback omits this native option. Its
+      // synchronous scroll restore cannot stop the later keyboard viewport pan.
+      // Set the real DOM caret first. iOS may focus implicitly while doing so;
+      // the explicit preventScroll call must follow that selection update.
+      view.dispatch({ selection: selection || view.state.selection, userEvent: "select.pointer" });
+      view.contentDOM.focus({ preventScroll: true });
+      view.dispatch({});
+    } else {
+      if (selection) view.dispatch({ selection, userEvent: "select.pointer" });
+      view.focus();
+    }
+  }
   // Capture runs even when CodeMirror's iOS/Android handler defers keydown
   // before plugin event hooks run. Avoid processing that same Enter twice.
   const captureEnter = event => {
@@ -235,13 +292,17 @@ export function createMemoEditor(host, {
         if (remove) changes.push({from: line.from, to: line.from + prefix, insert: ""});
         else if (!prefix) changes.push({from: line.from, insert: "☐ "});
       }
-      if (changes.length) view.dispatch({changes, userEvent: "input.checklist"});
-      view.focus();
+      if (changes.length) {
+        // A caret exactly at an added prefix otherwise maps before the widget.
+        // Put new typing in editable label text, including native Japanese IME.
+        const afterPrefix = from === to && changes.some(change => change.from === from && change.insert === "☐ ");
+        view.dispatch({ changes, ...(afterPrefix ? { selection: { anchor: from + 2 } } : {}), userEvent: "input.checklist" });
+      }
+      focusEditor();
     },
     focus({preventScroll = true} = {}) {
       if (destroyed) return;
-      // EditorView.focus uses native focusPreventScroll and restores its selection.
-      if (preventScroll) view.focus();
+      if (preventScroll) focusEditor();
       else view.contentDOM.focus();
     },
     setRuled(value) {
@@ -254,7 +315,7 @@ export function createMemoEditor(host, {
     destroy() {
       if (destroyed) return;
       lastText = view.state.sliceDoc();
-      destroyed = true; compositionActive = false;
+      destroyed = true; compositionActive = false; initialTouch = null;
       cancelAnimationFrame(compositionFrame);
       clearPendingEnter();
       view.dom.removeEventListener("keydown", captureEnter, true);

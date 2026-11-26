@@ -179,10 +179,17 @@ async function scenario(name, fn, seed = ordinary(), dimensions = { width: 390, 
   });
   await scenario('composition defers autosave and composing Enter does not create checklist items', async ({ page, posts }) => {
     await open(page); await replaceText(page, '☐ 変換前'); await waitBody(page, '☐ 変換前');
-    const before = memoWrites(posts).length; await editor(page).focus();
+    // Queue-first persistence becomes locally visible before its network attempt.
+    // Settle that completed edit before counting writes caused by IME composition.
+    await until(() => memoWrites(posts).some(post => post.entry.body === '☐ 変換前'), 'the completed pre-composition edit reaches its API attempt');
+    const before = memoWrites(posts).length;
+    observations.compositionSaves={beforeBodies:memoWrites(posts).map(post=>post.entry.body)};
+    await editor(page).focus();
     await editor(page).dispatchEvent('compositionstart', { data: '' }); await page.keyboard.insertText('変換中');
     await editor(page).evaluate(el => el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true, cancelable: true })));
-    await delay(900); assert.equal(memoWrites(posts).length, before, 'composition does not trigger partial memo saves');
+    await delay(900);
+    observations.compositionSaves.afterBodies=memoWrites(posts).map(post=>post.entry.body);
+    assert.equal(memoWrites(posts).length, before, 'composition does not trigger partial memo saves');
     await editor(page).dispatchEvent('compositionend', { data: '変換中' });
     await until(async () => (await localMemo(page)).body.includes('変換中'), 'completed composition is eventually saved');
     const body = (await localMemo(page)).body; assert.equal(body.split('\n').length, 1, 'IME conversion Enter is not checklist continuation');

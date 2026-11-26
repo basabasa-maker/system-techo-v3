@@ -157,3 +157,17 @@ PLAYWRIGHT_PATH=/path/to/playwright node tests/app-update-service-worker.cjs
 iOS 27のiPhone 17 Simulator Safariでもlocalhost合成本文で録画・フレーム計測を行う。実iPhoneの日本語IME、指フリック慣性、ホーム画面PWAは未確認。保存形式・公開判断・検証の範囲は [memo-editor.md](../docs/memo-editor.md) を参照。
 
 2026-11-26に公開承認を受け、配信用版 `20261126-134727` を生成。候補版から本文ロジック・CSS・vendorの変更はなく、承認後もNode122件、構文・配信55ファイルのSHAを再確認した。
+
+
+## メモの初回フォーカス（2026-11-26）
+
+```sh
+PLAYWRIGHT_PATH=/path/to/playwright MEMO_ENGINE=chromium node tests/memo-focus.cjs
+PLAYWRIGHT_PATH=/path/to/playwright PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers MEMO_ENGINE=webkit node tests/memo-focus.cjs
+```
+
+27ケース×2。`MEMO_FOCUS_TEST`でケース名を絞り、`MEMO_ARTIFACT_DIR`で結果保存先を指定する。初回tapの制御・native focusへのpreventScroll引数・focus前の選択位置・追記/Undo・IMEとgesture例外・実観測した70px panの座標再生を確認する。WebKitのUAはSafari27を明示し、CodeMirrorのSafari>=26のfocus fallbackも対象にする。headlessでOS keyboard pan自体は再現できなかったので、別の公式XCUITest実キーボード確認と混同しない。
+
+本文/保存のNode32件、既存メモ20件の回帰も確認。実native試験では空・短文・長文・チェック追加の4ケースと日本語入力/保存を確認し、全rAFで画面・本文上端が固定された。実行範囲と証拠は [memo-focus.md](../docs/memo-focus.md) を参照。
+
+本人の承認後、配信用版 `20261126-154700` を生成。native検証済みのメモ2モジュール・CSSおよびfocus QA対象ソースのSHAが一致し、Node全122件と配信55ファイルのSHAが一致することを再確認した。

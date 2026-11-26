@@ -1,5 +1,5 @@
 {
-  "build": "20261126-134727",
+  "build": "20261126-154700",
   "assets": [
     {
       "path": "css/goals.css",
@@ -47,7 +47,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "d5d7ec5f70faa848db1c0d8265bd3656e715272e79c52708866cea7f83107e48"
+      "sha256": "c0068fd66d0016b7641dc4c1a94d646f75cb1d886c28289a80732eeaddb85f1b"
     },
     {
       "path": "js/app.js",
@@ -131,7 +131,7 @@
     },
     {
       "path": "js/memo/editor.js",
-      "sha256": "dab505a255b19b5860ce95de53a07df8446f00bac71d1ce25bfae9e639b7fd06"
+      "sha256": "32e247ea60652ce7502e29238c2d58497a67fef47b1936f5184d2efaadf33639"
     },
     {
       "path": "js/memo/repository.js",
@@ -139,7 +139,7 @@
     },
     {
       "path": "js/memo.js",
-      "sha256": "2c634aab99726ce04a2840f4e260882f11937c50015cd5acf5eedfc81fdf449a"
+      "sha256": "fdb7ca0914bb4a74aa267dbdfd24afe0d88c992c90f614f1f8e455a1fc9d74ef"
     },
     {
       "path": "js/outbox.js",
@@ -215,7 +215,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "b587745a1e54577a554547f229a7c45199f4d9216f1e5c709b02c5214240a83b"
+      "sha256": "e4056e5a7fd8563d44587f84ccc154d65c34455142e44ec662d1bb9d9d56d536"
     },
     {
       "path": "vendor/codemirror/codemirror.js",

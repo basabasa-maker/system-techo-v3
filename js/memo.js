@@ -668,7 +668,10 @@ function bindMemoViewport(detail) {
   const measure = () => {
     frame = 0;
     if (!detail.isConnected) return;
-    const top = Math.max(0, globalThis.document.getElementById("scroll-container")?.getBoundingClientRect().top || 0);
+    // The main scroller is a direct child of the fixed, top:0 app shell.
+    // offsetTop stays in that layout coordinate system. Its client rect moves
+    // during iOS keyboard panning and would apply the same shift a second time.
+    const top = Math.max(0, globalThis.document.getElementById("scroll-container")?.offsetTop || 0);
     const bottom = viewport ? viewport.height + viewport.offsetTop : window.innerHeight;
     detail.style.top = top + "px";
     detail.style.height = Math.max(120, bottom - top) + "px";
