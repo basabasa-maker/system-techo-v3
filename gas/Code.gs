@@ -40,6 +40,16 @@ function authorizeOnce() {
   return results;
 }
 
+/** Editor-only authorization check; never copies data or creates triggers. */
+function authorizeBackupSetup_() {
+  ScriptApp.requireScopes(ScriptApp.AuthMode.FULL, [
+    "https://www.googleapis.com/auth/script.scriptapp",
+  ]);
+  backupOwner_();
+  ScriptApp.getProjectTriggers();
+  return { authorized: true };
+}
+
 // ---- Sheets定義 ----
 
 const TASKS_SHEET = "tasks";
@@ -107,6 +117,12 @@ const CALENDAR_DEFS = [
 function doGet(e) {
   const type = (e && e.parameter && e.parameter.type) || "";
   try {
+    if (type === "backup_status") {
+      return jsonResponse({ ok: true, data: getBackupStatus() });
+    }
+    if (type === "backup_admin") {
+      return renderBackupAdminPage();
+    }
     if (type === "goals") {
       return jsonResponse({ ok: true, data: pullGoals() });
     }

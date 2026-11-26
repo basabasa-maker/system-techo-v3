@@ -171,3 +171,19 @@ PLAYWRIGHT_PATH=/path/to/playwright PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers M
 本文/保存のNode32件、既存メモ20件の回帰も確認。実native試験では空・短文・長文・チェック追加の4ケースと日本語入力/保存を確認し、全rAFで画面・本文上端が固定された。実行範囲と証拠は [memo-focus.md](../docs/memo-focus.md) を参照。
 
 本人の承認後、配信用版 `20261126-154700` を生成。native検証済みのメモ2モジュール・CSSおよびfocus QA対象ソースのSHAが一致し、Node全122件と配信55ファイルのSHAが一致することを再確認した。
+
+
+## 習慣の文章・追加画像アイコン・バックアップ（2026-11-26、公開前）
+
+```sh
+node --test tests/*.test.mjs tests/app-update-worker.test.cjs tests/backup-routes.test.cjs
+node tests/gas-backup.cjs
+PLAYWRIGHT_PATH=/path/to/playwright HABIT_ENGINE=chromium node tests/habit-text.cjs
+PLAYWRIGHT_PATH=/path/to/playwright PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers HABIT_ENGINE=webkit node tests/habit-text.cjs
+PLAYWRIGHT_PATH=/path/to/playwright BACKUP_ENGINE=chromium node tests/backup-settings.cjs
+PLAYWRIGHT_PATH=/path/to/playwright PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers BACKUP_ENGINE=webkit node tests/backup-settings.cjs
+```
+
+実行変数の詳細は各テスト冒頭を参照。GAS、Drive、Healthはすべて合成応答/メモリstubで、実データや実トリガーは使わない。文章の改行・保存/復旧・旧入力イベント・型変更・他日保持、20画像＋50既存アイコンの選択/再開、バックアップ状態取得と管理者画面へのGET導線を検証する。
+
+設定は17件（未保存の文章で更新を止め、復旧・同期後だけ許すケースを追加）、Health23件・最終食事15件も回帰確認した。Googleの追加認可や実際のコピー/トリガーが成功したという意味ではない。公開前の手順・未確認範囲は [habit-text-backup.md](../docs/habit-text-backup.md)。

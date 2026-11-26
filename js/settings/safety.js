@@ -7,6 +7,8 @@ import { healthBridge } from '../health/bridge.js';
 import { pendingKeys } from '../sync.js';
 import { count as outboxCount } from '../outbox.js';
 import { readMemoRecoveryIds } from '../memo/repository.js';
+import { getHabitTextRecoveryDates } from '../habit/text.js';
+import { hasUnsavedHabitText } from '../habit.js';
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function boundedRead(read, timeoutMs) {
@@ -28,6 +30,8 @@ export function createUpdateSafety(options = {}) {
   const readPending = options.pendingKeys || pendingKeys;
   const readCount = options.outboxCount || outboxCount;
   const readRecovery = options.memoRecoveryIds || (() => readMemoRecoveryIds(globalThis.localStorage));
+  const readHabitRecovery = options.habitTextRecoveryDates || (() => getHabitTextRecoveryDates());
+  const habitTextDirty = options.habitTextDirty || hasUnsavedHabitText;
   const delay = options.delay || wait;
   const settleMs = options.settleMs ?? 1000;
   const readTimeoutMs = options.readTimeoutMs ?? 5000;
@@ -37,6 +41,9 @@ export function createUpdateSafety(options = {}) {
     if (!doc || typeof doc.querySelector !== 'function' || typeof doc.querySelectorAll !== 'function') {
       throw new Error('画面と保存状況を確認できないため、更新していません。');
     }
+    const dirtyText = habitTextDirty();
+    if (typeof dirtyText !== 'boolean') throw new Error('文章の保存状況を確認できないため、更新していません。');
+    if (dirtyText) throw new Error('未保存の文章があります。設定を閉じ、習慣の文章を保存してからアプリを更新してください。');
     if (doc.querySelector('.memo-detail')) {
       throw new Error('メモを閉じて一覧に戻り、保存が終わってからアプリを更新してください。');
     }
@@ -60,14 +67,14 @@ export function createUpdateSafety(options = {}) {
       settled = true;
     }
     assertIdle(doc);
-    const recovery = checkPending(readRecovery());
+    const recovery = checkPending(readRecovery()) + checkPending(readHabitRecovery());
     const firstPending = checkPending(await boundedRead(readPending, readTimeoutMs));
     const queued = await boundedRead(readCount, readTimeoutMs);
     if (!Number.isInteger(queued) || queued < 0) throw new Error('未送信の記録を確認できないため、更新していません。');
     // A write may have entered staging while the IndexedDB count was awaited.
     const lastPending = checkPending(await boundedRead(readPending, readTimeoutMs));
     assertIdle(doc);
-    if (recovery || checkPending(readRecovery()) || firstPending || queued || lastPending) {
+    if (recovery || checkPending(readRecovery()) || checkPending(readHabitRecovery()) || firstPending || queued || lastPending) {
       throw new Error('未送信の記録が残っています。同期が完了してからアプリを更新してください。記録は端末に残しています。');
     }
     return true;

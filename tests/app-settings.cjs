@@ -178,6 +178,40 @@ async function scenario(name,fn){
   assert.equal(navigations(),before);assert.equal(assetGets.length,0);
   assert.deepEqual(await page.evaluate(()=>[localStorage.getItem('sth_v3_memo_recovery'),localStorage.getItem('sth_v3_memo_all')]),[recovery,memo]);
  });
+ await scenario('unsaved habit text blocks update then retries without changing original records or other dates',async({page,opts,posts,values,navigations})=>{
+  const originalText='保存済みの文章\n原本の行末  ',nextText='ローカル保存に失敗しても残す新しい文章\n続き';
+  await page.locator('#h-add').click();await page.locator('#e-label').fill('更新保護の文章');await page.locator('#e-type').selectOption('text');await page.locator('#e-save').click();
+  const input=page.locator('textarea.habit-text-input');await input.waitFor();
+  const id=await input.evaluate(el=>el.closest('[data-id]').dataset.id);
+  await input.fill(originalText);await input.blur();
+  await until(()=>Promise.resolve(values[id]===originalText),'initial text is saved to the synthetic server');
+  await until(()=>page.evaluate(async()=>(await import('/js/outbox.js')).count().then(n=>n===0)),'initial text queue is empty');
+  const savedBefore=clone(values),otherDay='2026-12-31';
+  const otherRaw=' { "journal":"別の日の原本", "count":0, "checked":false, "future":{"keep":true} } ';
+  const cacheBefore=await page.evaluate(({date,otherDay,otherRaw})=>{localStorage.setItem('sth_v3_habitday_'+otherDay,otherRaw);return localStorage.getItem('sth_v3_habitday_'+date);},{date:TODAY,otherDay,otherRaw});
+  await page.evaluate(({date})=>{const set=Storage.prototype.setItem;window.restoreSettingsHabitStorage=()=>Storage.prototype.setItem=set;Storage.prototype.setItem=function(key,value){if(this===localStorage&&key==='sth_v3_habitday_'+date)throw new DOMException('synthetic text cache failure','QuotaExceededError');return set.call(this,key,value);};},{date:TODAY});
+  await input.fill(nextText);
+  assert.equal(await input.inputValue(),nextText);
+  assert.equal(await page.evaluate(date=>localStorage.getItem('sth_v3_habitday_'+date),TODAY),cacheBefore,'failed local write leaves the saved cache intact');
+  assert.deepEqual(values,savedBefore,'failed local write never reaches the server');
+  const before=navigations();opts.available=true;await openInjectedSettings(page);await page.locator('#settings-apply-update').click();
+  await until(async()=>await page.evaluate(()=>window.settingsTestReloads)>0||/文章|未保存|保存でき/.test(await page.locator('#settings-update-status').textContent()),'text-save failure is refused instead of reloading');
+  assert.equal(await page.evaluate(()=>window.settingsTestReloads),0,'update must not discard visible unsaved habit text');
+  await finishedMessage(page,/文章|未保存|保存でき/,'text-save refusal leaves update controls usable');
+  assert.equal(navigations(),before);assert.deepEqual(values,savedBefore,'original remote record is unchanged while update is refused');
+  if(process.env.SETTINGS_HABIT_FAILURE_SCREENSHOT)await page.screenshot({path:process.env.SETTINGS_HABIT_FAILURE_SCREENSHOT});
+  await page.locator('#settings-close').click();assert.equal(await input.inputValue(),nextText,'closing settings retains the unsaved textarea');
+  await page.evaluate(()=>window.restoreSettingsHabitStorage());await input.focus();await input.blur();
+  await until(()=>Promise.resolve(values[id]===nextText),'the same visible text is saved after local storage recovers');
+  await until(()=>page.evaluate(async()=>(await import('/js/outbox.js')).count().then(n=>n===0)),'recovered text queue is empty');
+  assert.deepEqual(values,{...savedBefore,[id]:nextText},'only the selected text value changes after the retry');
+  assert.equal(await page.evaluate(date=>localStorage.getItem('sth_v3_habitday_'+date),otherDay),otherRaw,'another date stays byte-for-byte unchanged');
+  for(const post of posts.filter(post=>post.type==='habit_day_upsert')){assert.equal(post.date,TODAY);assert.deepEqual(Object.keys(post.set),[id]);assert.deepEqual(post.del,[]);}
+  await openInjectedSettings(page);await page.locator('#settings-apply-update').click();
+  await until(()=>page.evaluate(()=>window.settingsTestReloads===1),'update is allowed once the visible text and queue are saved');
+  assert.equal(navigations(),before);assert.deepEqual(values,{...savedBefore,[id]:nextText});
+  assert.equal(await page.evaluate(date=>localStorage.getItem('sth_v3_habitday_'+date),otherDay),otherRaw);
+ });
  await scenario('memo detail editing blocks reload and keeps unsaved text in its editor',async({page,opts,assetGets,navigations})=>{
   opts.available=true;opts.failPosts=true;await page.locator('[data-tab="memo"]').click();await page.locator('#btn-new-memo').click();await replaceMemoText(page,'消してはいけない入力途中のメモ');
   const before=navigations();await openSettings(page);await page.locator('#settings-apply-update').click();

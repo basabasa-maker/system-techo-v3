@@ -1,11 +1,13 @@
 // habit.js - 習慣タブ（旧アプリ「習慣ログ」を手帳に統合）
-// - 日付ごとに 時刻・数値・チェック を記録する（メモ欄は無し）
+// - 日付ごとに 時刻・数値・チェック・文章 を記録する
 // - 各項目は長押しで上下に移動できる（reorder.js）
 // - 保存は日付1件ずつ。全件の取得・上書きはしない
 // - 旧アプリの過去データは取り込まない（白紙から開始）
 
 import * as gas from "./gas-client.js";
+import { habitIconContents, habitImageIconOptions } from "./habit/icons.js";
 import * as sync from "./sync.js";
+import { bindHabitTextInput, persistHabitText, replayHabitTextRecovery, getHabitTextRecoveryDates, markHabitValueChanged, invalidateHabitTextItem } from "./habit/text.js";
 import { latestMealTime } from "./meal-time.js";
 import { healthBridge, loadHealthSettings, saveHealthSettings, REQUEST_TTL_MS } from "./health/bridge.js";
 import { selectHealthPatch } from "./health/model.js";
@@ -36,6 +38,19 @@ let healthReady = null;
 let healthMessage = "";
 let healthSaving = false;
 let healthToolsExpanded = false;
+let textInputs = [];
+function flushTextInputs() {
+  // Commit the original date/id before any DOM or navigation change.
+  return textInputs.every(controller => controller.flush());
+}
+export function hasUnsavedHabitText() {
+  return textInputs.some(controller => controller.isDirty());
+}
+export function disposeHabitTab() {
+  if (!flushTextInputs()) return false;
+  textInputs = [];
+  return true;
+}
 
 
 // ---------- 保存（表示キャッシュ） ----------
@@ -152,10 +167,16 @@ function valueLabel(item, v) {
 
 function itemHtml(item) {
   const v = state.values[item.id];
-  const icon = `<span class="habit-icon">${escapeHtml(item.icon || "•")}</span>`;
+  const icon = `<span class="habit-icon">${habitIconContents(item.icon)}</span>`;
   const del = state.editMode
     ? `<button class="habit-del" data-del="${escapeHtml(item.id)}" aria-label="削除">−</button>`
     : "";
+  if (item.type === "text") {
+    return '<li class="habit-item habit-text-row" data-id="' + escapeHtml(item.id) + '">'
+      + del + icon + '<span class="habit-label">' + escapeHtml(item.label) + '</span>'
+      + '<button class="habit-clear" aria-label="文章を消す" ' + (v != null && v !== "" ? "" : "hidden") + '><img src="icons/eraser.png" alt="" width="24" height="24" /></button>'
+      + '<textarea rows="3" class="habit-value-input habit-text-input" aria-label="' + escapeHtml(item.label) + '" placeholder="文章を入力"></textarea></li>';
+  }
   if (item.type === "check") {
     const on = v === true;
     return `
@@ -195,6 +216,7 @@ function subTabsHtml() {
 function bindSubTabs() {
   rootEl.querySelectorAll(".habit-sub").forEach((b) => {
     b.addEventListener("click", () => {
+      if (!flushTextInputs()) return;
       state.sub = b.dataset.sub;
       state.editMode = false;
       paint();
@@ -232,7 +254,8 @@ async function paintStats() {
 }
 
 function paint() {
-  if (!rootEl?.isConnected) return;
+  if (!rootEl?.isConnected || !flushTextInputs()) return;
+  textInputs = [];
   const disclosure = rootEl.querySelector("#health-disclosure");
   if (disclosure) healthToolsExpanded = disclosure.open;
   if (state.sub !== "input") {
@@ -276,10 +299,12 @@ function bind() {
   rootEl.querySelector("#h-prev").addEventListener("click", () => moveDate(-1));
   rootEl.querySelector("#h-next").addEventListener("click", () => moveDate(1));
   rootEl.querySelector("#h-today").addEventListener("click", () => {
+    if (!flushTextInputs()) return;
     state.date = todayYmd();
     reloadDay();
   });
   rootEl.querySelector("#h-edit").addEventListener("click", () => {
+    if (!flushTextInputs()) return;
     state.editMode = !state.editMode;
     paint();
   });
@@ -294,7 +319,23 @@ function bind() {
     if (del) {
       del.addEventListener("click", () => deleteItem(id));
     }
-    if (item.type === "check") {
+    if (item.type === "text") {
+      const input = li.querySelector("textarea");
+      // Property assignment preserves a leading LF that HTML textarea parsing strips.
+      input.value = state.values[id] == null ? "" : String(state.values[id]);
+      input.classList.toggle("filled", input.value !== "");
+      const date = state.date;
+      const controller = bindHabitTextInput(input, {
+        key: date + ":" + id,
+        commit: value => setTextValue(date, id, value),
+        onError: () => toast("文章を端末に保存できません。画面を閉じずに再試行してください", "error"),
+      });
+      textInputs.push(controller);
+      li.querySelector(".habit-clear").addEventListener("click", () => {
+        input.value = "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    } else if (item.type === "check") {
       li.addEventListener("click", (e) => {
         if (justDragged() || e.target.closest(".habit-del")) return;
         toggleCheck(id);
@@ -385,6 +426,7 @@ function bind() {
 // ---------- 日付の移動 ----------
 
 function moveDate(diff) {
+  if (!flushTextInputs()) return;
   state.date = addDaysYmd(state.date, diff);
   reloadDay();
 }
@@ -407,6 +449,7 @@ function setValue(id, value, quiet) {
   else next[id] = value;
   state.values = next;
   saveDayLocal(state.date, next);
+  markHabitValueChanged(state.date, id);
   if (quiet) {
     // 入力中の欄を作り直さない。睡眠時間だけ更新する
     const el = rootEl && rootEl.querySelector(".habit-sleep-val");
@@ -415,6 +458,21 @@ function setValue(id, value, quiet) {
     paint();
   }
   schedulePush(state.date, erase ? { [id]: undefined } : { [id]: value }, erase);
+}
+
+// Text listeners retain their rendered date even after that DOM is detached.
+function setTextValue(ymd, id, value) {
+  const raw = localStorage.getItem(LS_KEY_HABIT_DAY_PREFIX + ymd);
+  const before = raw == null ? {} : JSON.parse(raw);
+  if (!before || typeof before !== "object" || Array.isArray(before)) throw new Error("日別の記録を確認できません");
+  if ((before[id] == null ? "" : String(before[id])) === value) return;
+  const next = value === "" ? { ...before } : { ...before, [id]: value };
+  if (value === "") delete next[id];
+  // Keep a recovery marker until this one-field patch is durable in the outbox.
+  const queued = persistHabitText(ymd, id, value, () => saveDayLocal(ymd, next));
+  if (state.date === ymd) state.values = next;
+  try { healthBridge.markEdited(id, ymd); } catch (_) { healthBridge.cancel(); }
+  queued.catch(() => toast("文章は端末に残しています。送信できないため再試行してください", "error"));
 }
 
 function toggleCheck(id) {
@@ -460,6 +518,7 @@ const ICONS = ["🌙","☀️","💤","⏰","🍽️","💧","⚖️","📏","�
 
 // 項目の追加・編集（アイコン・名前・入力方式・単位）
 function openItemEditor(id) {
+  if (!flushTextInputs()) return;
   const item = id ? state.items.find((x) => x.id === id) : null;
   if (id && !item) return;
   let icon = item ? item.icon || "•" : ICONS[0];
@@ -470,7 +529,9 @@ function openItemEditor(id) {
     <div class="modal">
       <header>${item ? "項目を編集" : "項目を追加"}</header>
       <div class="modal-body">
-        <div class="ed-label">アイコン</div>
+        <div class="ed-label">追加の画像アイコン（20種類）</div>
+        <div class="icon-grid habit-image-grid">${habitImageIconOptions(icon)}</div>
+        <div class="ed-label">これまでのアイコン</div>
         <div class="icon-grid">${ICONS.map((ic) => `<button type="button" class="icon-opt ${ic === icon ? "sel" : ""}" data-ic="${ic}">${ic}</button>`).join("")}</div>
         <label>項目名
           <input type="text" id="e-label" autocomplete="off" placeholder="例：体温" value="${escapeHtml(item ? item.label : "")}" />
@@ -482,6 +543,7 @@ function openItemEditor(id) {
             <option value="cumulative">累積（欄に入れた数を合計に足す）</option>
             <option value="check">チェック</option>
             <option value="time">時刻</option>
+            <option value="text">文章（改行できます）</option>
           </select>
         </label>
         <label id="e-unit-wrap">単位（例：kg、歩、ml）
@@ -499,14 +561,15 @@ function openItemEditor(id) {
   typeSel.value = type;
   const syncUnit = () => {
     modal.querySelector("#e-unit-wrap").style.display =
-      typeSel.value === "check" || typeSel.value === "time" ? "none" : "";
+      typeSel.value === "check" || typeSel.value === "time" || typeSel.value === "text" ? "none" : "";
   };
   typeSel.addEventListener("change", syncUnit);
   syncUnit();
   modal.querySelectorAll(".icon-opt").forEach((b) => {
     b.addEventListener("click", () => {
-      modal.querySelectorAll(".icon-opt").forEach((x) => x.classList.remove("sel"));
+      modal.querySelectorAll(".icon-opt").forEach((x) => { x.classList.remove("sel"); x.setAttribute("aria-pressed", "false"); });
       b.classList.add("sel");
+      b.setAttribute("aria-pressed", "true");
       icon = b.dataset.ic;
     });
   });
@@ -522,12 +585,13 @@ function openItemEditor(id) {
       return;
     }
     const t = typeSel.value;
-    const unit = t === "check" || t === "time" ? "" : modal.querySelector("#e-unit").value.trim();
-    const next = { id: item ? item.id : "c_" + Date.now(), label, icon, type: t, unit };
+    const unit = t === "check" || t === "time" || t === "text" ? "" : modal.querySelector("#e-unit").value.trim();
+    const next = { ...(item || {}), id: item ? item.id : "c_" + Date.now(), label, icon, type: t, unit };
     state.items = item
       ? state.items.map((x) => (x.id === item.id ? next : x))
       : [...state.items, next];
     saveItemsLocal(state.items);
+    if (item && item.type !== t) invalidateHabitTextItem(item.id);
     close();
     paint();
     pushItems(state.items);
@@ -607,6 +671,7 @@ async function syncFromServer(quiet = true, importLastMeal = false) {
   // 更新開始後は、送信待ちの処理中に確定した手入力も自動値で戻さない。
   const refreshDayRevision = sync.revision("habit_day:" + ymd);
   try {
+    await replayHabitTextRecovery();
     await flushHabitOutbox().catch(() => {});
     const dayRevision = sync.revision("habit_day:" + ymd);
     const itemRevision = sync.revision("habit_items");
@@ -618,6 +683,7 @@ async function syncFromServer(quiet = true, importLastMeal = false) {
         .then((days) => ({ days }), (error) => ({ error })) : null,
     ]);
     const keys = await sync.pendingKeys();
+    for (const date of getHabitTextRecoveryDates()) keys.add("habit_day:" + date);
     if (seq !== syncSeq || view !== rootEl || !view?.isConnected || state.date !== ymd) return;
     // キーボード／時刻ピッカーを開いている間は state と DOM の両方を維持。
     if (view.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)

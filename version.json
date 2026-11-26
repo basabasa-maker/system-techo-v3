@@ -1,9 +1,17 @@
 {
-  "build": "20261126-154700",
+  "build": "20261126-203859",
   "assets": [
     {
       "path": "css/goals.css",
       "sha256": "f87b2a1b1dbd4ca810af50b40812de0ccce2aa4cf43210b193f09e2006978118"
+    },
+    {
+      "path": "css/habit-icons.css",
+      "sha256": "d0075979376061452e6495f5648b7ca648f5e724aa6a0b43a76d518f64d55b0e"
+    },
+    {
+      "path": "css/habit-text.css",
+      "sha256": "962a538c94a13a604fd9f9059f38c5bb82a86e14c3072f49b62b5d198a33788e"
     },
     {
       "path": "css/health.css",
@@ -38,6 +46,10 @@
       "sha256": "fcc96cf431ca6022f15c4f5e128db3b7f23e59b95c96b12a0ca591666c701d18"
     },
     {
+      "path": "icons/habit-icons.png",
+      "sha256": "274d9f9cb75cbddb5c7a66e431f392c9532ca27d498381a64d5b7511141a70e1"
+    },
+    {
       "path": "icons/icon-192.png",
       "sha256": "1a84a0c5b647f8249b6e9140bacc890c46168ca5263f7fa9ee2306ea2780e53d"
     },
@@ -47,11 +59,15 @@
     },
     {
       "path": "index.html",
-      "sha256": "c0068fd66d0016b7641dc4c1a94d646f75cb1d886c28289a80732eeaddb85f1b"
+      "sha256": "59de12de5cbcd172edd613161889986913b4b797d70aa1036afcf3df2e6050f5"
     },
     {
       "path": "js/app.js",
       "sha256": "a4db87026f6de0b987ad28812645b3e537e5d48b599d230eae556f23c52f9dd2"
+    },
+    {
+      "path": "js/backup/client.js",
+      "sha256": "7ec8a48d3da3cf3979a63854195b75f22cea9e873acf72c80726a31fe23aff2e"
     },
     {
       "path": "js/config.js",
@@ -90,12 +106,20 @@
       "sha256": "f2976462d2700b3a3360dd58cc359eaad0041d273c578c86065b0d8c6c8fd0bf"
     },
     {
+      "path": "js/habit/icons.js",
+      "sha256": "80bbda332f899af7bae674f3aeb4d9ea65be9351c49f9432f3996f256389e08d"
+    },
+    {
+      "path": "js/habit/text.js",
+      "sha256": "5d1a99724b631a8678b0e80cd8c5595f147c51342992c5eb6ee376f514548f4c"
+    },
+    {
       "path": "js/habit-stats.js",
-      "sha256": "8958d6189c550ca27129dd954938b98aac067188c743120a745fe8e1be4c428f"
+      "sha256": "c5bf560e66f4cd19ebefae2cca329fec3fa8837e695bb622917f770482042bf5"
     },
     {
       "path": "js/habit.js",
-      "sha256": "ed808ec17028141163ce0ccd5991a8c31bb8d2125c27805c51808ac4e3d84cc9"
+      "sha256": "a97d5e9e0799eb3defa5a31f89e5d50044c2bb9a25caef9d0efd0152cdace621"
     },
     {
       "path": "js/health/bridge.js",
@@ -151,11 +175,11 @@
     },
     {
       "path": "js/settings/safety.js",
-      "sha256": "01995074a202ba21bec6a2156e4d7cee7b3457ec812889cd2844cea8be8aee11"
+      "sha256": "8a2216442af8e9c232d774856e82c118e5952e51d21eea3cd79c315cdc20ed7e"
     },
     {
       "path": "js/settings/ui.js",
-      "sha256": "62c2a3872f72a9ed053fbf0bc667daa20a2e73c1297bc2c2f3aa6d8d131bd75e"
+      "sha256": "a50b17cbf48ae9104692541470891e4297dced6fc25851ad55961ce1b4159d0e"
     },
     {
       "path": "js/settings/updater.js",
@@ -171,7 +195,7 @@
     },
     {
       "path": "js/sync.js",
-      "sha256": "928dd86e9df9060a848ab15b2e6ed975187ae37573cac55574d8c93f8794f8ee"
+      "sha256": "59a32d61f6446843ebfdcd76924f09d9b291c3152d3b5d08848b37641d856de5"
     },
     {
       "path": "js/tab-navigation.js",
@@ -179,7 +203,7 @@
     },
     {
       "path": "js/tabs.js",
-      "sha256": "d18366682c53fbf7f02216b93d8f669f16920bf42224ef754eee94c1b0569d87"
+      "sha256": "629f0d03f908a810ba22f9c16261ac82d52545c196124a476e531ff476ac78a8"
     },
     {
       "path": "js/task.js",
@@ -199,7 +223,7 @@
     },
     {
       "path": "privacy.html",
-      "sha256": "2e18d7d3fc75ffcc869e15dc89aa3b9e036c2a56ad0b13101e0e27c7ca9f538b"
+      "sha256": "50bc79d6cd0b484b87e30bd502e625d0cee1cbb2fe01f6773be04cd4395092fc"
     },
     {
       "path": "shortcuts/health-bridge/system-techo-health.shortcut",
@@ -211,11 +235,11 @@
     },
     {
       "path": "support.html",
-      "sha256": "787d958f9909b5996fee3d26ca256444d90143f33cf96241ebfe17422889c6d1"
+      "sha256": "a77124c648c7c753f4c49767248aa97b652e062eece2a159e8257e7f469e72a8"
     },
     {
       "path": "sw.js",
-      "sha256": "e4056e5a7fd8563d44587f84ccc154d65c34455142e44ec662d1bb9d9d56d536"
+      "sha256": "292810e356c417beff95b6ccdbbdc0681d59ec76f36c7e656c349650ffb10d9c"
     },
     {
       "path": "vendor/codemirror/codemirror.js",

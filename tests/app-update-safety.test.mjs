@@ -16,7 +16,7 @@ function fixture(overrides = {}) {
   const guard = createUpdateSafety({
     document: doc, healthPending: () => state.health, apiBusy: () => state.api,
     uploadBusy: () => state.upload, goalUploadBusy: () => state.photo,
-    pendingKeys: async () => state.staged, outboxCount: async () => state.queued, memoRecoveryIds: () => new Set(),
+    pendingKeys: async () => state.staged, outboxCount: async () => state.queued, memoRecoveryIds: () => new Set(), habitTextRecoveryDates: () => new Set(), habitTextDirty: () => false,
     delay: async ms => { state.delays.push(ms); }, settleMs: 1000,
     ...overrides,
   });
@@ -144,4 +144,27 @@ test('memo recovery metadata blocks app reload until durable queue persistence s
 test('corrupt memo recovery metadata blocks update instead of treating it as saved', async () => {
   const { guard } = fixture({ memoRecoveryIds: () => { throw new Error('復旧情報を確認できません'); } });
   await assert.rejects(guard(), /復旧情報/);
+});
+
+test('habit text recovery prevents reload until the failed enqueue is recovered', async () => {
+  const recovery = new Set(['2026-11-26']);
+  const { guard } = fixture({ habitTextRecoveryDates: () => recovery });
+  await assert.rejects(guard(), /未送信/);
+  assert.deepEqual([...recovery], ['2026-11-26']);
+  recovery.clear(); assert.equal(await guard(), true);
+});
+test('corrupt habit text recovery refuses app update instead of discarding text', async () => {
+  const { guard } = fixture({ habitTextRecoveryDates: () => { throw new Error('文章の復旧情報を確認できません'); } });
+  await assert.rejects(guard(), /復旧情報/);
+});
+
+test('visible habit text that failed local persistence blocks reload even without a marker or outbox row', async () => {
+  let dirty = true;
+  const { guard } = fixture({ habitTextDirty: () => dirty });
+  await assert.rejects(guard(), /文章|未保存/);
+  dirty = false; assert.equal(await guard(), true);
+});
+test('unknown habit draft status cannot be mistaken for a safely saved field', async () => {
+  const { guard } = fixture({ habitTextDirty: () => undefined });
+  await assert.rejects(guard(), /確認|文章/);
 });

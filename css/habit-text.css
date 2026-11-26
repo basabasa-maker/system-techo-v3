@@ -1,0 +1,46 @@
+/* The textarea owns its text and scroll; keyboard opening does not grow the row. */
+.habit-text-row.habit-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 36px;
+  gap: 8px 10px;
+  padding: 10px 0;
+}
+.habit-text-row .habit-del { grid-column: 1; }
+.habit-text-row:has(.habit-del) { grid-template-columns: 24px 28px minmax(0, 1fr) 36px; }
+.habit-text-row .habit-label { min-width: 0; overflow-wrap: anywhere; }
+.habit-text-row .habit-clear { justify-self: end; width: 36px; }
+.habit-text-row .habit-text-input {
+  grid-column: 1 / -1;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 104px;
+  max-height: 180px;
+  padding: 10px 12px;
+  margin: 0;
+  border: 1px solid rgb(var(--ov) / 0.15);
+  border-radius: 12px;
+  background: rgb(var(--ov) / 0.06);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.55;
+  text-align: left;
+  resize: vertical;
+  overflow: auto;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.habit-text-row .habit-text-input.filled { font-size: 16px; color: var(--fg); }
+.hist-text {
+  display: block;
+  margin-top: 5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: left;
+}

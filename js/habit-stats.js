@@ -2,6 +2,8 @@
 // 30日分は、まずサーバーからまとめて取り、取れなければ手元の控えで描く
 
 import * as gas from "./gas-client.js";
+import * as sync from "./sync.js";
+import { getHabitTextRecoveryDates } from "./habit/text.js";
 import { LS_KEY_HABIT_DAY_PREFIX } from "./config.js";
 import { todayYmd, addDaysYmd, parseYmd } from "./date-util.js";
 
@@ -40,19 +42,36 @@ function localDay(ymd) {
 // 30日分（日付→記録）。サーバー分を手元の控えにも書く
 export async function loadRange() {
   const days = lastDays();
-  let remote = {};
+  const revisions = new Map(days.map(date => [date, sync.revision("habit_day:" + date)]));
+  let remote = {}, protectedDates = new Set();
   try {
+    const recoveryBefore = getHabitTextRecoveryDates();
+    const pendingBefore = await sync.pendingKeys();
     remote = await gas.pullHabitRange(days[0], days[days.length - 1]);
-    for (const [d, v] of Object.entries(remote)) {
-      localStorage.setItem(LS_KEY_HABIT_DAY_PREFIX + d, JSON.stringify(v));
+    const pendingAfter = await sync.pendingKeys();
+    const recoveryAfter = getHabitTextRecoveryDates();
+    for (const date of days) {
+      const key = "habit_day:" + date;
+      if (pendingBefore.has(key) || pendingAfter.has(key)
+          || recoveryBefore.has(date) || recoveryAfter.has(date)
+          || revisions.get(date) !== sync.revision(key)) protectedDates.add(date);
     }
-  } catch (e) {
-    console.warn("habit range skipped:", e.message);
+  } catch (error) {
+    console.warn("habit range skipped:", error.message);
+    remote = {};
   }
   const out = {};
-  for (const d of days) {
-    const v = remote[d] || localDay(d);
-    if (v) out[d] = v;
+  for (const date of days) {
+    const fetched = remote?.[date];
+    const valid = fetched && typeof fetched === "object" && !Array.isArray(fetched);
+    const value = protectedDates.has(date) ? localDay(date) : valid ? fetched : localDay(date);
+    if (value) {
+      out[date] = value;
+      if (!protectedDates.has(date) && valid) {
+        try { localStorage.setItem(LS_KEY_HABIT_DAY_PREFIX + date, JSON.stringify(value)); }
+        catch (error) { console.warn("habit range cache skipped:", error.message); }
+      }
+    }
   }
   return out;
 }
@@ -204,6 +223,10 @@ export function renderCharts(box, items, data) {
   });
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 export function renderHistory(box, items, data, onPick) {
   const dates = Object.keys(data).sort().reverse();
   if (dates.length === 0) {
@@ -223,7 +246,9 @@ export function renderHistory(box, items, data, onPick) {
       if (num(v, "steps") != null) parts.push(`${v.steps.toLocaleString()}歩`);
       if (num(v, "water") != null) parts.push(`水${v.water}ml`);
       if (checks.length) parts.push(`達成${checks.filter((i) => v[i.id] === true).length}/${checks.length}`);
-      return `<button class="hist-row" data-date="${d}"><span class="hist-d">${dt.getMonth() + 1}/${dt.getDate()}（${w}）</span><span class="hist-v">${parts.join(" ・ ")}</span></button>`;
+      const texts = items.filter(item => item.type === "text" && v[item.id] != null && v[item.id] !== "")
+        .map(item => `<span class="hist-text"><strong>${escapeHtml(item.label)}</strong>：${escapeHtml(v[item.id])}</span>`).join("");
+      return `<button class="hist-row" data-date="${d}"><span class="hist-d">${dt.getMonth() + 1}/${dt.getDate()}（${w}）</span><span class="hist-v">${parts.join(" ・ ")}${texts}</span></button>`;
     })
     .join("");
   box.querySelectorAll(".hist-row").forEach((b) => b.addEventListener("click", () => onPick(b.dataset.date)));

@@ -59,10 +59,10 @@ export function queue(op, delayMs = 0, { durableRecovery = false } = {}) {
     }
     return flushAll();
   }, (error) => {
-    // Most callers need the in-memory guard after enqueue failure. Memo's
-    // repository writes a durable recovery marker first, so a successful retry
+    // Most callers need the in-memory guard after enqueue failure. Memo and
+    // habit text write a durable recovery marker first, so a successful retry
     // must not leave this failed attempt permanently staged.
-    if (durableRecovery && (op.type === "memo_upsert" || op.type === "memo_delete")) {
+    if (durableRecovery && (op.type === "memo_upsert" || op.type === "memo_delete" || op.type === "habit_day_upsert")) {
       staging.set(key, staging.get(key) - 1);
     }
     throw error;

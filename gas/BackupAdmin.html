@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>システム手帳・バックアップ管理</title>
+  <style>
+    :root{color-scheme:light dark;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;line-height:1.7;color:#193d31;background:#f3f7f2}
+    *{box-sizing:border-box}body{margin:0;padding:24px 16px 60px}main{max-width:680px;margin:auto}h1{font-size:24px;margin:0 0 8px}h2{font-size:18px;margin:0 0 12px}p{margin:8px 0}section{background:#fff;border:1px solid #d8e3d9;border-radius:16px;padding:20px;margin:20px 0}.muted{color:#597064;font-size:14px}.notice{background:#fff6df;border:1px solid #eadcae;border-radius:12px;padding:14px;font-size:14px}label{display:flex;align-items:flex-start;gap:12px;font-weight:600}input{margin-top:7px;width:20px;height:20px;flex:none}.actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}button{font:inherit;min-height:46px;border:1px solid #b5c9bc;border-radius:10px;background:#f3f7f2;color:inherit;padding:8px 16px;cursor:pointer}button.primary{background:#245d46;color:white;border-color:#245d46}button:disabled{opacity:.5;cursor:wait}#message{min-height:1.7em;white-space:pre-wrap}#message.error{color:#a32929}ul{list-style:none;padding:0;margin:0}li{border-top:1px solid #d8e3d9;padding:14px 0;overflow-wrap:anywhere}li:first-child{border-top:0}a{color:#185b44;text-underline-offset:3px}.copy-note{font-size:13px;color:#597064}.status-row{display:flex;flex-wrap:wrap;gap:6px 20px;margin:10px 0}strong{font-weight:650}@media(prefers-color-scheme:dark){:root{color:#e1ede4;background:#15251f}section{background:#20362c;border-color:#395344}.muted,.copy-note{color:#b3c7bb}.notice{background:#3c3422;border-color:#6d5b31}button{background:#294b3b;border-color:#668571}a{color:#9fdbba}li{border-color:#395344}#message.error{color:#ffb5af}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>バックアップ管理</h1>
+  <p class="muted">システム手帳を管理しているGoogleアカウント専用の画面です。初回は管理者によるGoogleの権限許可が必要です。連携キーの入力はありません。</p>
+  <section>
+    <h2>自動バックアップ</h2>
+    <label><input id="automatic" type="checkbox" disabled><span>毎日3時台（日本時間）にコピーする</span></label>
+    <p class="muted">ONにすると最初のコピーも作成します。その後は手帳を閉じていても実行します。Google側の実行時刻には幅があり、通信・権限・容量によって失敗する場合があります。</p>
+    <div class="status-row"><span>状態：<strong id="enabled">確認中</strong></span><span>最終成功：<strong id="last-success">確認中</strong></span></div>
+    <p id="last-error" class="muted"></p>
+    <div class="actions"><button id="copy-now" class="primary" disabled>今すぐコピー</button><button id="refresh" disabled>状態を更新</button></div>
+    <p id="message" role="status" aria-live="polite"></p>
+  </section>
+  <div class="notice">
+    <p><strong>最初のコピーで共有設定を確認してください</strong></p>
+    <p>保存先・共有範囲はGoogleの通常のコピー動作に従います。この画面では共有設定を変更しません。コピーを開いて「共有」で閲覧できる人を確認してください。非公開を確認するまでは、本人だけが見られるとは保証できません。</p>
+  </div>
+  <section>
+    <h2>保存される内容</h2>
+    <p>Googleに保存済みのタスク、メモ、習慣、食事、目標と写真を含む、手帳のスプレッドシート全体をコピーします。</p>
+    <p class="muted">端末の未送信・編集中の内容、画面の色・タブ順、ヘルスケア連携キー、Googleカレンダー側の予定は含みません。先に手帳で保存・同期を完了してください。</p>
+    <p class="muted">古いコピーは自動削除しません。Google側の保存容量を確認し、不要なコピーは管理者が確認して整理してください。</p>
+  </section>
+  <section>
+    <h2>作成したコピー</h2>
+    <p id="copy-count" class="muted">確認中</p>
+    <p class="muted">復旧が必要なときはコピーを開き、内容と日付を確認してください。ここに表示するのは、この機能で記録した直近100件までです。Drive側で削除したコピーが一覧に残る場合があります。</p>
+    <ul id="copies"></ul>
+  </section>
+</main>
+<script>
+(function(){
+  'use strict';
+  var state = null;
+  var busy = false;
+  var automatic = document.getElementById('automatic');
+  var copyNow = document.getElementById('copy-now');
+  var refresh = document.getElementById('refresh');
+  var message = document.getElementById('message');
+  var errorLabels = {
+    STATE_INVALID:'設定の記録を確認できません。管理者がApps Script側の設定を確認してください。',
+    STATE_WRITE_FAILED:'設定の記録を保存できませんでした。',
+    COPY_FAILED:'前回はコピーを作成できませんでした。以前のコピーは残っています。',
+    VERIFY_FAILED:'前回のコピーは構成を確認できませんでした。一覧の「構成未確認」を確認してください。',
+    REGISTRY_FAILED:'コピーの記録を保存できませんでした。Google Driveも確認してください。',
+    TRIGGER_SETUP_FAILED:'自動実行の設定が完了しませんでした。作成済みのコピーは残っています。',
+    STATUS_UNAVAILABLE:'状態を確認できません。少し待って再試行してください。'
+  };
+  function text(id,value){document.getElementById(id).textContent=value;}
+  function setBusy(value){busy=value;automatic.disabled=busy||!state;copyNow.disabled=busy||!state;refresh.disabled=busy;}
+  function say(value,error){message.textContent=value;message.classList.toggle('error',!!error);}
+  function render(value){
+    state=value;
+    automatic.checked=!!value.enabled;
+    text('enabled',value.enabled?'ON':'OFF');
+    text('last-success',value.lastSuccessAt?value.lastSuccessAt+'（日本時間）':'まだありません');
+    text('last-error',errorLabels[value.lastErrorCode]||'');
+    text('copy-count','記録されたコピー：'+Number(value.backupCount||0)+'件');
+    var list=document.getElementById('copies');list.replaceChildren();
+    (value.backups||[]).forEach(function(record){
+      var item=document.createElement('li');
+      var link=document.createElement('a');
+      link.textContent=record.createdAt+'（日本時間）のコピーを開く';
+      // Build links only from the server's registered, validated copy ID.
+      if(typeof record.id==='string'&&/^[A-Za-z0-9_-]+$/.test(record.id))link.href='https://docs.google.com/spreadsheets/d/'+encodeURIComponent(record.id)+'/edit';
+      link.target='_blank';link.rel='noopener noreferrer';item.appendChild(link);
+      var detail=document.createElement('div');detail.className='copy-note';
+      var cause={manual:'手動',daily:'自動',setup:'初回設定'}[record.cause]||'コピー';
+      detail.textContent=cause+'・'+(record.status==='verified'?'構成確認済み':'構成未確認（成功には数えていません）');
+      item.appendChild(detail);list.appendChild(item);
+    });
+    if(!value.backups||!value.backups.length){var item=document.createElement('li');item.textContent='作成済みのコピーはまだありません。';list.appendChild(item);}
+  }
+  function errorText(error){return String(error&&error.message||'状態を確認できませんでした。').slice(0,500);}
+  function load(keepMessage){
+    setBusy(true);
+    google.script.run.withSuccessHandler(function(value){render(value);setBusy(false);if(!keepMessage)say('状態を確認しました。',false);})
+      .withFailureHandler(function(error){setBusy(false);say(errorText(error),true);}).getBackupAdminState();
+  }
+  function perform(kind,argument){
+    if(busy)return;
+    setBusy(true);say(kind==='configure'?'設定とコピーを処理しています…':'コピーを作成しています…',false);
+    var runner=google.script.run.withSuccessHandler(function(value){render(value);setBusy(false);say(kind==='configure'?(value.enabled?'自動バックアップをONにしました。最初のコピーも作成しました。':'自動バックアップをOFFにしました。保存済みのコピーは残っています。'):'コピーを作成し、構成を確認しました。',false);})
+      .withFailureHandler(function(error){say(errorText(error),true);if(state)automatic.checked=!!state.enabled;load(true);});
+    if(kind==='configure')runner.configureAutomaticBackups(argument);else runner.runBackupNow();
+  }
+  automatic.addEventListener('change',function(){perform('configure',automatic.checked);});
+  copyNow.addEventListener('click',function(){perform('copy');});
+  refresh.addEventListener('click',function(){if(!busy)load(false);});
+  load(false);
+})();
+</script>
+</body>
+</html>

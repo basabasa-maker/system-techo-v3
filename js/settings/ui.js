@@ -1,6 +1,7 @@
 import { createAppUpdater } from './updater.js';
 import { createUpdateSafety } from './safety.js';
 import { THEMES, currentThemeId, selectTheme } from '../theme.js';
+import { getBackupStatus, backupAdminUrl, backupTimeLabel } from '../backup/client.js';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function currentAppBuild() {
@@ -34,6 +35,15 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
         <button type="button" class="btn-primary settings-update-button" id="settings-apply-update">アプリを最新版に更新</button>
         <p id="settings-update-status" class="settings-update-status" role="status" aria-live="polite">未送信の記録や処理中の操作がある場合は、更新を止めてお知らせします。</p>
       </section>
+      <section class="settings-section" aria-labelledby="settings-backup-title">
+        <h2 id="settings-backup-title">自動バックアップ</h2>
+        <p>Googleに保存済みの記録と添付画像を、スプレッドシートごとGoogleドライブへ複製します。毎日、日本時間の3時台に動作します。</p>
+        <p id="settings-backup-status" class="settings-update-status" role="status" aria-live="polite">バックアップの状態を確認しています…</p>
+        <button type="button" class="btn-primary settings-update-button" id="settings-open-backup">Googleでバックアップを設定</button>
+        <button type="button" class="btn-ghost" id="settings-refresh-backup">状態を再確認</button>
+        <p class="settings-small">管理者のGoogleアカウントで有効化・停止・保存したコピーの確認ができます。初回はGoogleの許可が必要です。管理画面から戻ると状態を確認します。</p>
+        <p class="settings-small">過去のコピーは自動削除しません。この端末だけの設定・未送信の記録・外部カレンダーは対象外です。</p>
+      </section>
       <section class="settings-section" aria-labelledby="settings-health-title">
         <h2 id="settings-health-title">ヘルスケア連携</h2>
         <p>体重・体脂肪率・アクティブエネルギー・歩数の設定と、連携の停止を行えます。</p>
@@ -57,6 +67,9 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
   let updating = false;
   const close = () => {
     if (updating) return;
+    backupRequest++;
+    window.removeEventListener('focus', refreshBackupOnReturn);
+    document.removeEventListener('visibilitychange', refreshBackupOnReturn);
     backdrop.remove();
     if (previous?.isConnected) previous.focus({preventScroll:true});
   };
@@ -64,11 +77,47 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
   const updateButton = backdrop.querySelector('#settings-apply-update');
   const closeButton = backdrop.querySelector('#settings-close');
   const healthButton = backdrop.querySelector('#settings-open-health');
+  const backupButton = backdrop.querySelector('#settings-open-backup');
+  const backupRefreshButton = backdrop.querySelector('#settings-refresh-backup');
+  const backupStatus = backdrop.querySelector('#settings-backup-status');
+  let backupRequest = 0;
+  let backupLoading = false;
+  async function refreshBackupStatus() {
+    if (updating || !backdrop.isConnected) return;
+    const request = ++backupRequest;
+    backupLoading = true;
+    backupRefreshButton.disabled = true;
+    backupStatus.classList.remove('settings-error');
+    backupStatus.textContent = 'バックアップの状態を確認しています…';
+    try {
+      const value = await getBackupStatus();
+      if (!backdrop.isConnected || request !== backupRequest) return;
+      const lines = [value.enabled ? '自動バックアップ：有効（毎日・日本時間3時台）' : '自動バックアップ：停止中'];
+      if (value.lastSuccessAt) lines.push('最終成功：' + backupTimeLabel(value.lastSuccessAt));
+      else lines.push(value.hasBackups ? '保存したコピーがあります。最終成功日時は確認できません。' : 'バックアップはまだ作成されていません。');
+      if (value.lastErrorCode) { lines.push('前回の処理は完了していません。Googleの管理画面で確認してください。'); backupStatus.classList.add('settings-error'); }
+      backupStatus.textContent = lines.join(' ／ ');
+    } catch (error) {
+      if (!backdrop.isConnected || request !== backupRequest) return;
+      backupStatus.classList.add('settings-error');
+      backupStatus.textContent = error.message;
+    } finally {
+      if (backdrop.isConnected && request === backupRequest) {
+        backupLoading = false;
+        backupRefreshButton.disabled = updating;
+      }
+    }
+  }
+  function refreshBackupOnReturn() {
+    if (document.visibilityState !== 'hidden' && !backupLoading) refreshBackupStatus();
+  }
   function setBusy(value) {
     updating = value;
     updateButton.disabled = value;
     closeButton.disabled = value;
     healthButton.disabled = value;
+    backupButton.disabled = value;
+    backupRefreshButton.disabled = value || backupLoading;
     backdrop.querySelectorAll('.theme-swatch').forEach(button => { button.disabled = value; });
     backdrop.querySelector('[role="dialog"]').setAttribute('aria-busy', String(value));
   }
@@ -102,6 +151,11 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
       button.querySelector('.theme-chip').textContent = selected ? '✓' : '';
     });
   });
+  backupButton.addEventListener('click', () => {
+    if (updating) return;
+    window.open(backupAdminUrl(), '_blank', 'noopener');
+  });
+  backupRefreshButton.addEventListener('click', refreshBackupStatus);
   closeButton.addEventListener('click', close);
   healthButton.addEventListener('click',()=>{close();onOpenHealthSettings?.();});
   backdrop.addEventListener('click',event=>{if(event.target===backdrop)close();});
@@ -115,5 +169,8 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
   });
   document.body.appendChild(backdrop);
   backdrop.querySelector('[role="dialog"]').focus({preventScroll:true});
+  window.addEventListener('focus', refreshBackupOnReturn);
+  document.addEventListener('visibilitychange', refreshBackupOnReturn);
+  refreshBackupStatus();
   return {close};
 }
