@@ -89,3 +89,7 @@ flowchart TD
 ## 全体設定・安全なアプリ更新（2026-11-25）
 
 `js/settings/ui.js` は全体設定、`updater.js` は版と静的ファイルの検証・同一画面の再読み込み、`safety.js` は入力/保存/写真/Health待機/未送信の検査を担当。`version.json` は `build/write-version.py` で静的資産から生成する。保存APIのpayloadや既存DB/schemaは変更せず、gas-clientと添付/目標には更新を止めるための読み取り専用busy情報だけを追加した。詳しくは [app-settings.md](app-settings.md)。
+
+## メモ改修の完了記録（2026-11-26）
+
+現行公開版は20261126-154700。本人の肯定返答を受けて完了を記録した。[メモ改修の振り返り](memo-retrospective-2026-11-26.md)に、失敗した方法、有効だった改善、検証範囲、次回の作業順をまとめた。
