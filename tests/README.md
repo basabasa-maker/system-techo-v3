@@ -133,3 +133,27 @@ PLAYWRIGHT_PATH=/path/to/playwright node tests/app-update-service-worker.cjs
 ## Shortcut名に空白がある場合（2026-11-25）
 
 Health bridgeのNode9件とmodel8件。名前のqueryを生のpercent decodingで照合し、空白が`+`へ化ける修正前の失敗を確認する。Healthブラウザは18件で、`system-techo-health 2`という複製名の起動と設定/キー不変、対象日だけの保存を追加した。URLSearchParams.getは`+`を空白へ戻すので、それだけでネイティブ起動名の正しさを判断しない。
+
+
+## メモ本文面の再構成（2026-11-26）
+
+```sh
+node --test tests/*.test.mjs tests/app-update-worker.test.cjs
+PLAYWRIGHT_PATH=/path/to/playwright MEMO_ENGINE=chromium node tests/memo-editor.cjs
+PLAYWRIGHT_PATH=/path/to/playwright PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers MEMO_ENGINE=webkit node tests/memo-editor.cjs
+PLAYWRIGHT_PATH=/path/to/playwright node tests/races.cjs
+PLAYWRIGHT_PATH=/path/to/playwright node tests/app-settings.cjs
+PLAYWRIGHT_PATH=/path/to/playwright node tests/app-update-service-worker.cjs
+```
+
+`MEMO_ARTIFACT_DIR` でメモ試験のJSON/画面保存先、`MEMO_TEST` でケース名の部分一致を指定できる。WebKitはPlaywright用WebKitのインストールが必要。通常のブラウザや本番サービスは使用しない。
+
+公開候補 `20261126-104155`。Node全122件（本文11・復旧13を含む）、メモ20ケースをChrome/WebKit両方、設定16件、目標16件、実SW4件が成功。メモ20件は19件の一括実行と追加削除失敗1件の個別実行を両ブラウザで行い、CSSタイル変更後は影響する長文ケースを再実行した。GAS/client隔離試験も目標12群・Health11群、既存Shortcut構造7件が成功。既存入力13件も全件成功。ブラウザ試験はメモ40＋設定16＋既存13＝69件が成功し、さらに目標16・実SW4件も確認した。
+
+新しい本文面で、チェック/Undo/改行、罫線ON/OFF、長い日本語/絵文字/折返し、単なる開閉でCRLF・空白・末尾改行・添付・メタデータが不変なこと、入力途中/保存拒否での離脱保護、遅い保存/取得/添付、同じメモを開き直した後の添付、削除後の古いGET非復活、オフライン再送を確認する。IndexedDBへのenqueueだけを失敗させ、再読込後も新本文を保持・削除を復活させず、同じ画面での再試行後も送信待ちが解除されることを確認する。
+
+取り消し線の実文字の座標は32pxスクロールに対し−32px動く。下部の可視16行の罫線をON/OFF画像の画素で比較し、全行で差があることも確認する。DOMのline-height/gradient属性だけで描画成功と判断しない。長い背景のrepeating gradientはWebKitのテスト環境で折返し部分に描画されないため、通常のlinear-gradientを32pxタイルとして繰り返す。
+
+iOS 27のiPhone 17 Simulator Safariでもlocalhost合成本文で録画・フレーム計測を行う。実iPhoneの日本語IME、指フリック慣性、ホーム画面PWAは未確認。保存形式・公開判断・検証の範囲は [memo-editor.md](../docs/memo-editor.md) を参照。
+
+2026-11-26に公開承認を受け、配信用版 `20261126-134727` を生成。候補版から本文ロジック・CSS・vendorの変更はなく、承認後もNode122件、構文・配信55ファイルのSHAを再確認した。

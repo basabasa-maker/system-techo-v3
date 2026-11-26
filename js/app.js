@@ -38,7 +38,7 @@ function init() {
 
 function switchTab(tab) {
   if (!TABS.includes(tab)) return;
-  TAB_DEFINITIONS[appState.activeTab]?.dispose?.();
+  if (TAB_DEFINITIONS[appState.activeTab]?.dispose?.() === false) return;
   appState.activeTab = tab;
   localStorage.setItem(LS_KEY_ACTIVE_TAB, tab);
   document.querySelectorAll(".tab-btn").forEach((b) => {
@@ -67,8 +67,8 @@ function resetScrollOffset() {
 }
 document.addEventListener("focusout", () => {
   setTimeout(() => {
-    const t = document.activeElement && document.activeElement.tagName;
-    if (!/^(INPUT|TEXTAREA|SELECT)$/.test(t || "")) resetScrollOffset();
+    const active = document.activeElement;
+    if (!active?.isContentEditable && !/^(INPUT|TEXTAREA|SELECT)$/.test(active?.tagName || "")) resetScrollOffset();
   }, 120);
 });
 window.addEventListener("pageshow", resetScrollOffset);
@@ -85,7 +85,7 @@ document.addEventListener("visibilitychange", () => {
   if (!hiddenAt || Date.now() - hiddenAt < 20000) return;
   hiddenAt = 0;
   const a = document.activeElement;
-  const typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+  const typing = a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
   if (typing || document.querySelector(".modal-backdrop")) return;
   switchTab(appState.activeTab);
 });

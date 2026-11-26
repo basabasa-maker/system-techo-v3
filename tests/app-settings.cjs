@@ -15,6 +15,9 @@ const server=http.createServer((req,res)=>{
 let browser,base,passed=0,failed=0;
 async function until(check,message,timeout=8000){const deadline=Date.now()+timeout;while(Date.now()<deadline){if(await check())return;await delay(30);}assert.fail(message);}
 const weight=page=>page.locator('[data-id="weight"] input');
+const memoInput=page=>page.locator('#d-text .cm-content');
+const memoValue=page=>memoInput(page).evaluate(el=>Array.from(el.querySelectorAll('.cm-line')).map(line=>line.textContent).join('\n'));
+async function replaceMemoText(page,text){await memoInput(page).focus();await memoInput(page).press('Meta+a');await page.keyboard.insertText(text);}
 function readBuild(){const index=fs.readFileSync(path.join(root,'index.html'),'utf8');return index.match(/name="app-build"\s+content="([^"]+)"/)?.[1]||fs.readFileSync(path.join(root,'sw.js'),'utf8').match(/const BUILD_VERSION = "([^"]+)"/)[1];}
 function release(build){
  let index=fs.readFileSync(path.join(root,'index.html'),'utf8');
@@ -165,11 +168,21 @@ async function scenario(name,fn){
   await finishedMessage(page,/未送信|送信待ち/,'outbox refusal');
   assert.equal(navigations(),before);assert.equal(assetGets.length,0);assert.deepEqual(await page.evaluate(async()=>(await import('/js/outbox.js')).listAll()),beforeRows);
  });
+ await scenario('durable memo recovery blocks upgrade before any cache replacement',async({page,opts,assetGets,navigations})=>{
+  opts.available=true;
+  const recovery=JSON.stringify([{id:'settings-protected-memo',type:'memo_upsert',token:'settings-synthetic-recovery'}]);
+  const memo=JSON.stringify([{id:'settings-protected-memo',body:'未送信の本文を保持',deleted:0}]);
+  await page.evaluate(({recovery,memo})=>{localStorage.setItem('sth_v3_memo_recovery',recovery);localStorage.setItem('sth_v3_memo_all',memo);},{recovery,memo});
+  const before=navigations();await openSettings(page);await page.locator('#settings-apply-update').click();
+  await finishedMessage(page,/未送信|送信待ち/,'durable recovery marker prevents update');
+  assert.equal(navigations(),before);assert.equal(assetGets.length,0);
+  assert.deepEqual(await page.evaluate(()=>[localStorage.getItem('sth_v3_memo_recovery'),localStorage.getItem('sth_v3_memo_all')]),[recovery,memo]);
+ });
  await scenario('memo detail editing blocks reload and keeps unsaved text in its editor',async({page,opts,assetGets,navigations})=>{
-  opts.available=true;opts.failPosts=true;await page.locator('[data-tab="memo"]').click();await page.locator('#btn-new-memo').click();await page.locator('#d-text').fill('消してはいけない入力途中のメモ');
+  opts.available=true;opts.failPosts=true;await page.locator('[data-tab="memo"]').click();await page.locator('#btn-new-memo').click();await replaceMemoText(page,'消してはいけない入力途中のメモ');
   const before=navigations();await openSettings(page);await page.locator('#settings-apply-update').click();
   await finishedMessage(page,/メモ|編集/,'memo detail refusal');
-  assert.equal(navigations(),before);assert.equal(assetGets.length,0);await page.locator('#settings-close').click();assert.equal(await page.locator('#d-text').inputValue(),'消してはいけない入力途中のメモ');
+  assert.equal(navigations(),before);assert.equal(assetGets.length,0);await page.locator('#settings-close').click();assert.equal(await memoValue(page),'消してはいけない入力途中のメモ');
  });
  await scenario('direct API save in progress blocks upgrade until its synthetic response finishes',async({page,opts,posts,assetGets,navigations})=>{
   opts.available=true;opts.postDelay=1500;
@@ -209,10 +222,10 @@ async function scenario(name,fn){
   assert.equal(await page.evaluate(()=>localStorage.getItem('sth_v3_health_settings')),before);
  });
  await scenario('opening Health settings from a memo keeps the memo editor and its draft intact',async({page,opts})=>{
-  opts.failPosts=true;await page.locator('[data-tab="memo"]').click();await page.locator('#btn-new-memo').click();await page.locator('#d-text').fill('ヘルスケア設定を開いても残すメモ');
+  opts.failPosts=true;await page.locator('[data-tab="memo"]').click();await page.locator('#btn-new-memo').click();await replaceMemoText(page,'ヘルスケア設定を開いても残すメモ');
   await openSettings(page);await page.locator('#settings-open-health').click();await page.locator('.health-modal').waitFor();
   assert.equal(await page.locator('.memo-detail').count(),1,'Health settings do not force a tab switch');
-  await page.locator('#health-settings-close').click();assert.equal(await page.locator('#d-text').inputValue(),'ヘルスケア設定を開いても残すメモ');
+  await page.locator('#health-settings-close').click();assert.equal(await memoValue(page),'ヘルスケア設定を開いても残すメモ');
  });
  await browser.close();await new Promise(resolve=>server.close(resolve));console.log('App settings browser checks: '+passed+' passed, '+failed+' failed');process.exitCode=failed?1:0;
 })().catch(async error=>{console.error(error);await browser?.close();server.close();process.exitCode=1;});

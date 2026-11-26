@@ -1,7 +1,7 @@
 // tabs.js - タブの入口を登録する。入力中・取得中の状態は各機能が管理する。
 import { renderTaskTab, pullAndRender as pullTask } from "./task.js";
 import { renderDailyTab, pullAndRender as pullDaily } from "./daily.js";
-import { renderMemoTab, pullAndRender as pullMemo } from "./memo.js";
+import { renderMemoTab, pullAndRender as pullMemo, disposeMemoTab } from "./memo.js";
 import { renderHabitTab, pullAndRender as pullHabit, resumeHealthSync } from "./habit.js";
 import { renderMealTab, pullAndRender as pullMeal } from "./meal.js";
 import { daysAgoYmd } from "./date-util.js";
@@ -24,6 +24,6 @@ export const TAB_DEFINITIONS = Object.freeze({
   },
   habit: { render: renderHabitTab, refresh: () => pullHabit(), resume: resumeHealthSync },
   meal: { render: renderMealTab, refresh: () => pullMeal() },
-  memo: { render: renderMemoTab, refresh: () => pullMemo() },
+  memo: { render: renderMemoTab, refresh: () => pullMemo(), dispose: disposeMemoTab },
   goals: { render: renderGoalsTab, refresh: () => pullGoals(), dispose: disposeGoalsTab },
 });

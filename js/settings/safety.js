@@ -6,6 +6,7 @@ import { hasPendingGoalPhotos } from '../goals.js';
 import { healthBridge } from '../health/bridge.js';
 import { pendingKeys } from '../sync.js';
 import { count as outboxCount } from '../outbox.js';
+import { readMemoRecoveryIds } from '../memo/repository.js';
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function boundedRead(read, timeoutMs) {
@@ -26,6 +27,7 @@ export function createUpdateSafety(options = {}) {
   const goalUploadBusy = options.goalUploadBusy || hasPendingGoalPhotos;
   const readPending = options.pendingKeys || pendingKeys;
   const readCount = options.outboxCount || outboxCount;
+  const readRecovery = options.memoRecoveryIds || (() => readMemoRecoveryIds(globalThis.localStorage));
   const delay = options.delay || wait;
   const settleMs = options.settleMs ?? 1000;
   const readTimeoutMs = options.readTimeoutMs ?? 5000;
@@ -58,13 +60,14 @@ export function createUpdateSafety(options = {}) {
       settled = true;
     }
     assertIdle(doc);
+    const recovery = checkPending(readRecovery());
     const firstPending = checkPending(await boundedRead(readPending, readTimeoutMs));
     const queued = await boundedRead(readCount, readTimeoutMs);
     if (!Number.isInteger(queued) || queued < 0) throw new Error('未送信の記録を確認できないため、更新していません。');
     // A write may have entered staging while the IndexedDB count was awaited.
     const lastPending = checkPending(await boundedRead(readPending, readTimeoutMs));
     assertIdle(doc);
-    if (firstPending || queued || lastPending) {
+    if (recovery || checkPending(readRecovery()) || firstPending || queued || lastPending) {
       throw new Error('未送信の記録が残っています。同期が完了してからアプリを更新してください。記録は端末に残しています。');
     }
     return true;

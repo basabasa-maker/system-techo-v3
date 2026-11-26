@@ -10,7 +10,10 @@
 // - 種別の選択は廃止。メモは1種類（ロディアのブロックメモ風の罫線入り）
 //   新規は保存時に種別 "note" として記録する
 
-import { splitBody, joinBody } from "./memo/body.js";
+import { splitBody } from "./memo/body.js";
+import { createMemoDocument } from "./memo/document.js";
+import { createMemoEditor } from "./memo/editor.js";
+import { createMemoRepository } from "./memo/repository.js";
 import { uploadFile, loadAttachment } from "./memo/attachments.js";
 import * as store from "./store.js";
 import * as gas from "./gas-client.js";
@@ -31,8 +34,16 @@ const state = {
 
 let rootEl = null;
 let swipeCtx = null; // 現在スワイプ中の行情報
+let detailSession = null;
+const RULED_KEY = "sth_v3_memo_ruled";
+const memoRepository = createMemoRepository({
+  storage: { getItem: key => localStorage.getItem(key), setItem: (key, value) => localStorage.setItem(key, value) },
+  queue: (op, delay) => sync.queue(op, delay, { durableRecovery: true }),
+  loadMemo: findEntry,
+});
 
 export function renderMemoTab(container) {
+  if (disposeDetail() === false) return;
   rootEl = container;
   paintRoot();
   syncQuietly();
@@ -40,11 +51,12 @@ export function renderMemoTab(container) {
 
 // タブを開いたとき、画面を止めずに最新の一覧へ入れ替える（失敗しても手元の表示のまま）
 async function syncQuietly() {
+  const revisions = memoRevisions();
   try {
     // 送信待ちが送れなくても、取得は続ける
     await flushOutbox().catch(() => {});
     const res = await gas.pullMemoAll("2000-01-01", 2000);
-    await applyPulledMemos(res.entries || []);
+    await applyPulledMemos(res.entries || [], revisions);
     if (rootEl && state.view === "list" && rootEl.querySelector("#memo-body")) {
       paintBody();
     }
@@ -55,6 +67,7 @@ async function syncQuietly() {
 
 function paintRoot() {
   if (!rootEl?.isConnected) return;
+  if (disposeDetail() === false) return;
   if (state.view === "detail") {
     rootEl.innerHTML = renderDetail();
     bindDetail();
@@ -212,15 +225,8 @@ async function onReorderMemos(ids) {
     }
   });
   paintBody();
-  for (const en of changed) {
-    try {
-      await gas.pushMemoUpsert(en);
-    } catch (e) {
-      await outbox.enqueue({ type: "memo_upsert", payload: en });
-      toast("オフライン：送信キューに追加", "warn");
-      break;
-    }
-  }
+  const results = await Promise.allSettled(changed.map(en => memoRepository.queue({ type: "memo_upsert", payload: en }, 300)));
+  if (results.some(result => result.status === "rejected")) toast("並び順を端末に保存しました。送信は待機中です。", "warn");
 }
 
 function memoRowHtml(en) {
@@ -400,7 +406,6 @@ function renderDetail() {
   }
   const hhmm = extractHhMmFromCreated(en.created_at);
   const taken = takenLabel(en);
-  const { text } = splitBody(en.body);
   return `
     <div class="memo-detail">
       <div class="memo-detail-header">
@@ -408,14 +413,15 @@ function renderDetail() {
         <span class="memo-detail-time">${escapeHtml(en.date || "")} ${escapeHtml(hhmm)}${taken ? ` ・ ${escapeHtml(taken)}` : ""}</span>
       </div>
       <div class="memo-tools">
-        <button class="memo-tool" id="d-check">☑ チェック</button>
+        <button class="memo-tool" id="d-check">チェック</button>
+        <button class="memo-tool" id="d-lines" aria-pressed="${memoRuled()}">${memoRuled() ? "罫線あり" : "罫線なし"}</button>
         <button class="memo-tool" id="d-attach">📎 添付</button>
         <button class="memo-tool" id="d-copy">コピー</button>
         <button class="memo-tool" id="d-take">取込む</button>
         <input type="file" id="d-file" multiple hidden />
       </div>
       ${en.title ? `<input type="text" id="d-title" class="memo-detail-title-input" value="${escapeAttr(en.title)}" autocomplete="off" placeholder="タイトル" />` : ""}
-      <div class="memo-wrap"><textarea id="d-text" class="memo-paper memo-paper-input memo-detail-text" placeholder="ここにメモ" spellcheck="false">${escapeHtml(text)}</textarea><div id="d-strike" class="memo-strike" aria-hidden="true"></div></div>
+      <div class="memo-wrap"><div id="d-text" class="memo-editor-host"></div></div>
       <div id="d-atts" class="memo-atts"></div>
       <div class="memo-detail-footer">
         ${findEntry(en.id) ? `<button class="btn-ghost" id="d-archive">${en.archived ? "メモに戻す" : "アーカイブ"}</button>` : ""}
@@ -425,214 +431,197 @@ function renderDetail() {
   `;
 }
 
+function memoRuled() {
+  try { return localStorage.getItem(RULED_KEY) !== "0"; } catch (_) { return true; }
+}
+
+function disposeDetail() {
+  const session = detailSession;
+  if (!session) return true;
+  try {
+    // Serialization and the local write run synchronously, so failure keeps
+    // the current editor in place instead of discarding unsaved text.
+    const saving = session.persist(true);
+    detailSession = null;
+    session.destroy();
+    saving.catch(error => toast("保存待ち：" + error.message, "warn"));
+    return true;
+  } catch (error) {
+    toast("保存待ち：" + error.message, "warn");
+    return false;
+  }
+}
+
+export function disposeMemoTab() {
+  if (disposeDetail() === false) return false;
+  rootEl = null;
+  return true;
+}
+
 function bindDetail() {
   const en0 = currentEntry();
   if (!en0) {
-    const back = rootEl.querySelector("#d-back");
-    if (back) back.addEventListener("click", backToList);
+    rootEl.querySelector("#d-back")?.addEventListener("click", backToList);
     return;
   }
-  const ta = rootEl.querySelector("#d-text");
+  const entryId = en0.id;
+  const host = rootEl.querySelector("#d-text");
+  const detail = rootEl.querySelector(".memo-detail");
   const titleEl = rootEl.querySelector("#d-title");
-  let atts = splitBody(en0.body).atts;
+  const document = createMemoDocument(en0.body);
+  let atts = document.atts;
+  let text = document.text;
+  let title = en0.title || "";
+  let lastBody = en0.body || "";
+  let lastTitle = title;
+  let entry = en0;
+  let wasSaved = !!findEntry(entryId);
+  let discarded = false;
+  let active = true;
+  let composing = false;
   let saveTimer = null;
-  let lastSaved = en0.body || "";
-
-  const strikeEl = rootEl.querySelector("#d-strike");
-  // チェック済み（☑）の行に取り消し線を引く。文字は透明で、線だけが入力欄に重なる
-  const paintStrike = () => {
-    if (!strikeEl) return;
-    // カーソル位置（文字を選んでいない、入力中のときだけ描く）
-    const pos = document.activeElement === ta && ta.selectionStart === ta.selectionEnd ? ta.selectionStart : -1;
-    let off = 0;
-    strikeEl.innerHTML = ta.value
-      .split("\n")
-      .map((ln) => {
-        const start = off;
-        off += ln.length + 1;
-        const at = pos >= start && pos <= start + ln.length ? pos - start : -1;
-        // ☑の行は、チェック印（2文字）のあとの文字だけに取り消し線を引く
-        const parts = ln.startsWith("☑")
-          ? [{ t: ln.slice(0, 2), done: false }, { t: ln.slice(2), done: true }]
-          : [{ t: ln, done: false }];
-        let idx = 0;
-        let placed = false;
-        return parts
-          .map((pt) => {
-            let h = "";
-            const end = idx + pt.t.length;
-            let body;
-            if (at >= 0 && !placed && at >= idx && at <= end) {
-              placed = true;
-              body = escapeHtml(pt.t.slice(0, at - idx)) + '<span class="caret"></span>' + escapeHtml(pt.t.slice(at - idx));
-            } else {
-              body = escapeHtml(pt.t);
-            }
-            h = pt.done ? '<span class="done">' + body + "</span>" : body;
-            idx = end;
-            return h;
-          })
-          .join("");
-      })
-      .join("\n");
+  let saveRevision = 0;
+  let retry = false;
+  let editor;
+  const session = {
+    id: entryId,
+    persist,
+    async addAttachment(attachment) {
+      if (discarded) return;
+      atts = [...atts, attachment];
+      if (isVisible()) paintAtts();
+      await persist(true);
+    },
+    destroy() {
+      active = false;
+      clearTimeout(saveTimer);
+      viewportCleanup();
+      window.removeEventListener("pagehide", onLeave);
+      globalThis.document.removeEventListener("visibilitychange", onVisibility);
+      editor.destroy();
+    },
+    discard() { discarded = true; },
+    isComposing: () => composing || editor.isComposing(),
   };
-  // 入力欄は画面の残りいっぱいに広げ、長いメモは入力欄の中だけでスクロールさせる。
-  // （入力欄の下端がキーボードに隠れると、iPhoneが画面ごと持ち上げてしまうため）
-  const fit = () => {
-    paintStrike();
-    syncStrike();
-  };
-  const syncStrike = () => {
-    if (strikeEl) strikeEl.scrollTop = ta.scrollTop;
-    if (ta.parentElement) ta.parentElement.style.setProperty("--paper-scroll", -ta.scrollTop + "px");
-  };
-  ta.addEventListener("scroll", syncStrike, { passive: true });
-  const repaintCaret = () => {
-    paintStrike();
-    syncStrike();
-  };
-  const onSelChange = () => {
-    if (!document.contains(ta)) return document.removeEventListener("selectionchange", onSelChange);
-    if (document.activeElement === ta) repaintCaret();
-  };
-  document.addEventListener("selectionchange", onSelChange);
-  ["focus", "blur", "keyup", "click", "touchend"].forEach((ev) => ta.addEventListener(ev, () => setTimeout(repaintCaret, 0)));
-  const compose = () => joinBody(ta.value, atts);
-  const persist = async () => {
+  const isVisible = () => active && detailSession === session && host.isConnected;
+  function persist(force = false) {
     clearTimeout(saveTimer);
-    const cur = currentEntry();
-    if (!cur) return;
-    const body = compose();
-    const title = titleEl ? titleEl.value.trim() : cur.title || "";
-    if (body === lastSaved && title === (cur.title || "")) return;
-    if (!title && !splitBody(body).text && atts.length === 0 && !findEntry(cur.id)) return; // 空の新規は作らない
-    lastSaved = body;
+    if (discarded || (!force && (composing || editor?.isComposing()))) return Promise.resolve();
+    const current = findEntry(entryId);
+    if (wasSaved && !current) return Promise.resolve();
+    const cur = current || entry;
+    if (cur.deleted) return Promise.resolve();
+    const body = document.serialize(text, atts);
+    if (!retry && body === lastBody && title === lastTitle) return Promise.resolve();
+    if (!title && !text && atts.length === 0 && !wasSaved) return Promise.resolve();
     const next = { ...cur, title, body, updated_at: nowJst(), deleted: 0 };
     delete next._isNew;
-    state.draft = next;
-    await saveQuiet(next);
-  };
-  const schedule = () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(persist, 700);
-  };
-  detailPersist = persist;
-
-  ta.addEventListener("input", () => {
-    fit();
-    schedule();
-  });
-  if (titleEl) titleEl.addEventListener("input", schedule);
-  fit();
-
-  // 空の行をタップしたら、その行まで改行を足してカーソルを置く／チェック欄のタップで切り替え
-  const tapAt = bindPaperTap(ta, fit, schedule);
-  bindFocusWithoutScroll(ta, (cx, cy) => {
-    const idx = caretIndexAt(ta, cx, cy);
-    ta.setSelectionRange(idx, idx);
-    tapAt(cx, cy);
-    fit();
-  });
-  if (titleEl) {
-    bindFocusWithoutScroll(titleEl, () => {
-      const n = titleEl.value.length;
-      titleEl.setSelectionRange(n, n);
+    // saveQuiet writes the local record before returning its queue promise.
+    // A failed local write cannot mark a new record as already saved/deleted.
+    const saving = saveQuiet(next);
+    const revision = ++saveRevision;
+    entry = next;
+    wasSaved = true;
+    lastBody = body;
+    lastTitle = title;
+    retry = false;
+    if (isVisible()) state.draft = next;
+    return saving.catch(error => {
+      if (revision === saveRevision) retry = true;
+      throw error;
     });
   }
-
-  // Enterでチェックを引き継ぐ
-  ta.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || e.isComposing) return;
-    const pos = ta.selectionStart;
-    const ls = ta.value.lastIndexOf("\n", pos - 1) + 1;
-    const line = ta.value.slice(ls, pos);
-    const m = line.match(/^([☐☑]) (.*)$/);
-    if (!m || ta.selectionEnd !== pos) return;
-    e.preventDefault();
-    if (!m[2]) {
-      // 中身が空のチェック行でEnter → チェックを外す
-      ta.value = ta.value.slice(0, ls) + ta.value.slice(pos);
-      ta.setSelectionRange(ls, ls);
-    } else {
-      ta.setRangeText("\n☐ ", pos, pos, "end");
-    }
-    fit();
-    schedule();
+  function safePersist(force = false) {
+    try { return persist(force).catch(error => toast("保存待ち：" + error.message, "warn")); }
+    catch (error) { toast("保存待ち：" + error.message, "warn"); return Promise.resolve(); }
+  }
+  function schedule() {
+    clearTimeout(saveTimer);
+    if (composing || editor?.isComposing()) return;
+    saveTimer = setTimeout(() => safePersist(), 700);
+  }
+  editor = createMemoEditor(host, {
+    text,
+    ruled: memoRuled(),
+    onChange(value) { text = value; schedule(); },
+    onCompositionChange(value) {
+      composing = value;
+      if (value) clearTimeout(saveTimer);
+      else queueMicrotask(schedule);
+    },
+    onFiles: addFiles,
   });
+  detailSession = session;
+  const viewportCleanup = bindMemoViewport(detail);
+  const onLeave = () => safePersist(true);
+  const onVisibility = () => { if (globalThis.document.visibilityState === "hidden") onLeave(); };
+  window.addEventListener("pagehide", onLeave);
+  globalThis.document.addEventListener("visibilitychange", onVisibility);
+  if (titleEl) titleEl.addEventListener("input", () => { title = titleEl.value.trim(); schedule(); });
 
   rootEl.querySelector("#d-back").addEventListener("click", async () => {
-    await persist();
-    backToList();
+    try { await persist(true); } catch (error) { toast("保存待ち：" + error.message, "warn"); return; }
+    if (isVisible()) backToList();
   });
-  rootEl.querySelector("#d-delete").addEventListener("click", () => confirmDelete(state.detailId));
+  rootEl.querySelector("#d-delete").addEventListener("click", () => confirmDelete(entryId));
   const archBtn = rootEl.querySelector("#d-archive");
-  if (archBtn) {
-    archBtn.addEventListener("click", async () => {
-      await persist();
-      const id = state.detailId;
-      const cur = findEntry(id);
-      backToList();
-      if (cur) setArchived(id, !cur.archived);
-    });
-  }
-  rootEl.querySelector("#d-take").addEventListener("click", async () => {
-    await persist();
-    inboxEntry(state.detailId);
+  if (archBtn) archBtn.addEventListener("click", async () => {
+    try {
+      await persist(true);
+      const cur = findEntry(entryId);
+      if (isVisible()) backToList();
+      if (cur) setArchived(entryId, !cur.archived);
+    } catch (error) { toast("保存待ち：" + error.message, "warn"); }
   });
-  rootEl.querySelector("#d-copy").addEventListener("click", () => copyText(ta.value));
-  rootEl.querySelector("#d-check").addEventListener("click", () => {
-    const pos = ta.selectionStart;
-    const ls = ta.value.lastIndexOf("\n", pos - 1) + 1;
-    const head = ta.value.slice(ls, ls + 2);
-    if (head === "☐ " || head === "☑ ") {
-      ta.setRangeText("", ls, ls + 2, "preserve");
-      ta.setSelectionRange(Math.max(ls, pos - 2), Math.max(ls, pos - 2));
-    } else {
-      ta.setRangeText("☐ ", ls, ls, "preserve");
-      ta.setSelectionRange(pos + 2, pos + 2);
-    }
-    ta.focus({ preventScroll: true });
-    fit();
-    schedule();
+  rootEl.querySelector("#d-take").addEventListener("click", async () => {
+    try { await persist(true); await inboxEntry(entryId); }
+    catch (error) { toast("保存待ち：" + error.message, "warn"); }
+  });
+  rootEl.querySelector("#d-copy").addEventListener("click", () => copyText(text));
+  rootEl.querySelector("#d-check").addEventListener("click", () => editor.toggleChecklist());
+  rootEl.querySelector("#d-lines").addEventListener("click", event => {
+    const ruled = event.currentTarget.getAttribute("aria-pressed") !== "true";
+    editor.setRuled(ruled);
+    event.currentTarget.setAttribute("aria-pressed", String(ruled));
+    event.currentTarget.textContent = ruled ? "罫線あり" : "罫線なし";
+    try { localStorage.setItem(RULED_KEY, ruled ? "1" : "0"); } catch (_) {}
   });
 
-  // 添付
   const fileEl = rootEl.querySelector("#d-file");
   rootEl.querySelector("#d-attach").addEventListener("click", () => fileEl.click());
-  fileEl.addEventListener("change", async () => {
+  fileEl.addEventListener("change", () => {
     const files = Array.from(fileEl.files || []);
     fileEl.value = "";
-    await addFiles(files);
-  });
-  ta.addEventListener("paste", (e) => {
-    const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
-    if (files.length === 0) return; // 文字の貼り付けはそのまま
-    e.preventDefault();
     addFiles(files);
   });
   async function addFiles(files) {
-    for (const f of files) {
+    for (const file of files) {
       try {
         showSpinner();
-        const up = await uploadFile(f);
-        atts = [...atts, up];
-        paintAtts();
-        await persist();
-      } catch (err) {
-        toast("添付に失敗：" + err.message, "error");
-      } finally {
-        hideSpinner();
-      }
+        const up = await uploadFile(file);
+        if (discarded || (wasSaved && !findEntry(entryId))) continue;
+        const attachment = { ...up, name: up.name.replace(/[|\]\r\n]/g, "_") };
+        if (detailSession?.id === entryId && detailSession !== session) {
+          await detailSession.addAttachment(attachment);
+        } else if (!isVisible() && findEntry(entryId)) {
+          const current = findEntry(entryId);
+          const latest = createMemoDocument(current.body);
+          await saveQuiet({ ...current, body: latest.serialize(latest.text, [...latest.atts, attachment]), updated_at: nowJst() });
+        } else {
+          await session.addAttachment(attachment);
+        }
+      } catch (error) { toast("添付に失敗：" + error.message, "error"); }
+      finally { hideSpinner(); }
     }
   }
   function paintAtts() {
-    const box = rootEl.querySelector("#d-atts");
-    if (!box) return;
-    box.innerHTML = "";
+    if (!isVisible()) return;
+    const box = detail.querySelector("#d-atts");
+    box.replaceChildren();
     atts.forEach((a, i) => {
-      const item = document.createElement("div");
+      const item = globalThis.document.createElement("div");
       item.className = "memo-att";
-      const rm = document.createElement("button");
+      const rm = globalThis.document.createElement("button");
       rm.className = "memo-att-rm";
       rm.textContent = "×";
       rm.setAttribute("aria-label", "添付を外す");
@@ -640,106 +629,69 @@ function bindDetail() {
         if (!confirm(`「${a.name}」を外しますか？`)) return;
         atts = atts.filter((_, j) => j !== i);
         paintAtts();
-        persist();
+        safePersist(true);
       });
       if (/^image\//.test(a.mime)) {
-        const img = document.createElement("img");
-        img.alt = a.name;
-        img.className = "memo-att-img";
-        item.appendChild(img);
-        loadAttachment(a).then((url) => {
-          img.src = url;
-          img.addEventListener("click", () => openViewer(url));
+        const img = globalThis.document.createElement("img");
+        img.alt = a.name; img.className = "memo-att-img"; item.appendChild(img);
+        loadAttachment(a).then(url => {
+          if (!img.isConnected) return;
+          img.src = url; img.addEventListener("click", () => openViewer(url));
         }).catch(() => {
-          item.insertBefore(Object.assign(document.createElement("span"), { textContent: "画像を読めません：" + a.name }), rm);
+          if (!img.isConnected) return;
+          item.insertBefore(Object.assign(globalThis.document.createElement("span"), { textContent: "画像を読めません：" + a.name }), rm);
           img.remove();
         });
       } else {
-        const b = document.createElement("button");
-        b.className = "memo-att-file";
-        b.textContent = "📎 " + a.name;
-        b.addEventListener("click", async () => {
+        const button = globalThis.document.createElement("button");
+        button.className = "memo-att-file"; button.textContent = "📎 " + a.name;
+        button.addEventListener("click", async () => {
           try {
             const url = await loadAttachment(a);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = a.name;
-            link.click();
-          } catch (err) {
-            toast("開けません：" + err.message, "error");
-          }
+            const link = globalThis.document.createElement("a");
+            link.href = url; link.download = a.name; link.click();
+          } catch (error) { toast("開けません：" + error.message, "error"); }
         });
-        item.appendChild(b);
+        item.appendChild(button);
       }
-      item.appendChild(rm);
-      box.appendChild(item);
+      item.appendChild(rm); box.appendChild(item);
     });
   }
   paintAtts();
-  // 新規メモも、既存メモと同じ見た目・同じ位置で開く。
-  // （自動で入力欄を選ぶと、キーボードが出ないまま画面だけ縮んでしまうため、タップで始める）
-  bindKeyboardFit(ta, titleEl);
 }
 
-// 入力欄を、キーボードが出ても動かない大きさにしておく。
-// 書く欄の下端を「キーボードの上端」に合わせて最初から決めるので、
-// タップしてもキーボードが出ても、画面の大きさや位置は変わらない（せり上がりが起きない）。
-// キーボードの高さは、前回の実測値を覚えて使う
-const KB_KEY = "techo-kb-h";
-const ACC_H = 64;
-function bindKeyboardFit(...fields) {
-  const vv = window.visualViewport;
-  const wrap = rootEl.querySelector(".memo-detail .memo-wrap");
-  if (!wrap) return () => {};
-  let kbH = 0;
-  try {
-    kbH = Number(localStorage.getItem(KB_KEY)) || 0;
-  } catch (_) {}
-  if (kbH < 200 || kbH > 600) kbH = 340;
-  // 書く画面の上端は、一覧のオレンジの線と同じ位置（見出しとタブの真下）にそろえる
-  const sc = document.getElementById("scroll-container");
-  const detailEl = rootEl.querySelector(".memo-detail");
-  const topPx = sc ? Math.round(sc.getBoundingClientRect().top) : 0;
-  if (detailEl && sc) detailEl.style.top = topPx + "px";
-  const sizeWrap = () => {
-    const top = wrap.getBoundingClientRect().top;
-    // キーボードの高さ（入力補助バーを含む実測値）の上に収める。一度決めたら、タップ中は変えない
-    wrap.style.height = Math.max(120, Math.round(window.innerHeight - top - kbH - 8)) + "px";
+// Only the document scroller moves. Keep the editor inside the visible viewport
+// without mirrored text, a fake caret or scroll-position correction loops.
+function bindMemoViewport(detail) {
+  const viewport = window.visualViewport;
+  let frame = 0;
+  const measure = () => {
+    frame = 0;
+    if (!detail.isConnected) return;
+    const top = Math.max(0, globalThis.document.getElementById("scroll-container")?.getBoundingClientRect().top || 0);
+    const bottom = viewport ? viewport.height + viewport.offsetTop : window.innerHeight;
+    detail.style.top = top + "px";
+    detail.style.height = Math.max(120, bottom - top) + "px";
+    detail.classList.toggle("memo-keyboard-open", !!viewport && window.innerHeight - viewport.height > 120);
   };
-  sizeWrap();
-  const baseH = window.innerHeight;
-  // キーボードの実際の高さを覚える（次回から使う。今の画面は動かさない）
-  const learn = () => {
-    const real = baseH - vv.height;
-    if (real > 200 && real < 600) {
-      try {
-        localStorage.setItem(KB_KEY, String(Math.round(real)));
-      } catch (_) {}
-    }
+  const request = () => { if (!frame) frame = requestAnimationFrame(measure); };
+  measure();
+  viewport?.addEventListener("resize", request);
+  window.addEventListener("resize", request);
+  window.addEventListener("orientationchange", request);
+  return () => {
+    cancelAnimationFrame(frame);
+    viewport?.removeEventListener("resize", request);
+    window.removeEventListener("resize", request);
+    window.removeEventListener("orientationchange", request);
   };
-  if (vv) vv.addEventListener("resize", learn);
-  // 入力を終えたとき、念のため画面の位置を元へ戻す
-  fields.filter(Boolean).forEach((f) => {
-    f.addEventListener("blur", () => setTimeout(() => window.scrollTo(0, 0), 80));
-  });
-  return sizeWrap;
 }
-
-let detailPersist = null;
 
 function backToList() {
+  if (disposeDetail() === false) return;
   state.view = "list";
   state.detailId = null;
   state.draft = null;
-  detailPersist = null;
-  const shell = document.getElementById("app-shell");
-  if (shell) {
-    shell.classList.remove("kb-on");
-    shell.style.transform = "";
-    shell.style.top = "";
-    shell.style.bottom = "";
-    shell.style.height = "";
-  }
   paintRoot();
 }
 
@@ -797,145 +749,14 @@ function newEntry() {
   };
 }
 
-// 罫線の空き行をタップしたら、その行まで改行を足してカーソルを置く。
-// 行頭のチェック欄（☐/☑）をタップしたら、チェックを切り替える
-function bindPaperTap(ta, fit, schedule) {
-  const LINE = 32;
-  const PAD = 16;
-  const mirror = document.createElement("div");
-  const renderedHeight = () => {
-    const cs = getComputedStyle(ta);
-    mirror.style.cssText =
-      "position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre-wrap;word-wrap:break-word;" +
-      `width:${ta.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)}px;` +
-      `font:${cs.font};line-height:${LINE}px;`;
-    mirror.textContent = ta.value + "\n";
-    document.body.appendChild(mirror);
-    const h = mirror.offsetHeight - LINE; // 末尾の改行ぶんを除く
-    mirror.remove();
-    return h;
-  };
-  const tapAt = (clientX, clientY) => {
-    const rect = ta.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top + ta.scrollTop;
-    const pos = ta.selectionStart;
-    const ls = ta.value.lastIndexOf("\n", pos - 1) + 1;
-    const mark = ta.value.slice(ls, ls + 2);
-    if ((mark === "☐ " || mark === "☑ ") && x < PAD + 44 && pos <= ls + 2) {
-      ta.setRangeText(mark === "☐ " ? "☑ " : "☐ ", ls, ls + 2, "preserve");
-      fit();
-      schedule();
-      return;
-    }
-    const usedLines = Math.max(1, Math.round(renderedHeight() / LINE));
-    const tapLine = Math.floor(y / LINE);
-    if (tapLine < usedLines) return; // 文字がある行は、ふつうに位置が決まる
-    const add = tapLine - usedLines + 1;
-    ta.value = ta.value + "\n".repeat(add);
-    const end = ta.value.length;
-    ta.setSelectionRange(end, end);
-    ta.focus({ preventScroll: true });
-    fit();
-    schedule();
-  };
-  ta.addEventListener("click", (e) => tapAt(e.clientX, e.clientY));
-  return tapAt;
-}
-
-// タップした位置の文字の境目を求める（標準の選択を使わず、自分でカーソルを置くため）
-function caretIndexAt(ta, cx, cy) {
-  const rect = ta.getBoundingClientRect();
-  const cs = getComputedStyle(ta);
-  const m = document.createElement("div");
-  m.style.cssText =
-    "position:fixed;left:" + rect.left + "px;top:" + (rect.top - ta.scrollTop) + "px;width:" + ta.clientWidth + "px;" +
-    "padding:" + cs.paddingTop + " " + cs.paddingRight + " " + cs.paddingBottom + " " + cs.paddingLeft + ";" +
-    "box-sizing:border-box;white-space:pre-wrap;overflow-wrap:break-word;word-wrap:break-word;" +
-    "font:" + cs.font + ";line-height:32px;color:transparent;z-index:2147483647;";
-  m.textContent = ta.value || "";
-  document.body.appendChild(m);
-  let idx = ta.value.length;
-  try {
-    const r = document.caretRangeFromPoint(cx, cy);
-    if (r && m.contains(r.startContainer) && r.startContainer.nodeType === 3) idx = r.startOffset;
-  } catch (_) {}
-  m.remove();
-  return Math.min(idx, ta.value.length);
-}
-
-// 入力欄をタップしたとき、iPhoneの標準の動き（画面を持ち上げて、また戻す）を避けるため、
-// 標準の選択をやめて「画面を動かさない選び方」で入力欄を選ぶ。
-// 指を動かした（スクロール・スワイプ）ときや、長押しは、これまでどおり標準に任せる
-function bindFocusWithoutScroll(field, onTap) {
-  let sx = 0;
-  let sy = 0;
-  let t0 = 0;
-  let moved = false;
-  field.addEventListener(
-    "touchstart",
-    (e) => {
-      const t = e.touches[0];
-      if (!t) return;
-      sx = t.clientX;
-      sy = t.clientY;
-      t0 = performance.now();
-      moved = false;
-    },
-    { passive: true }
-  );
-  field.addEventListener(
-    "touchmove",
-    (e) => {
-      const t = e.touches[0];
-      if (t && (Math.abs(t.clientX - sx) > 8 || Math.abs(t.clientY - sy) > 8)) moved = true;
-    },
-    { passive: true }
-  );
-  field.addEventListener(
-    "touchend",
-    (e) => {
-      if (moved || document.activeElement === field || performance.now() - t0 > 400) return;
-      const t = e.changedTouches[0];
-      if (!t) return;
-      e.preventDefault();
-      field.focus({ preventScroll: true });
-      onTap(t.clientX, t.clientY);
-    },
-    { passive: false }
-  );
-}
-
 // ---------- Save / Delete / Pin / Inbox ----------
 
 // 書いている最中の自動保存（画面は作り直さない・音も出さない）
-async function saveQuiet(entry) {
+function saveQuiet(entry) {
   store.upsertMemoAllLocal(entry);
-  try {
-    const saved = await gas.pushMemoUpsert(entry);
-    store.upsertMemoAllLocal({ ...saved, body: entry.body, title: entry.title });
-  } catch (e) {
-    await outbox.enqueue({ type: "memo_upsert", payload: entry });
-  }
-}
-
-async function saveEntry(entry) {
-  store.upsertMemoAllLocal(entry);
-  if (state.view === "list") paintBody();
-  else paintRoot();
-  try {
-    showSpinner();
-    const saved = await gas.pushMemoUpsert(entry);
-    store.upsertMemoAllLocal(saved);
-    if (state.view === "list") paintBody();
-    else paintRoot();
-    toast("保存しました", "success");
-  } catch (e) {
-    await outbox.enqueue({ type: "memo_upsert", payload: entry });
-    toast("オフライン：送信キューに追加", "warn");
-  } finally {
-    hideSpinner();
-  }
+  // Persist the operation before sending; older server replies never repaint
+  // the editor or overwrite a newer local memo.
+  return memoRepository.queue({ type: "memo_upsert", payload: entry }, 1);
 }
 
 function confirmDelete(id) {
@@ -966,65 +787,47 @@ function confirmDelete(id) {
 }
 
 async function deleteEntry(id) {
-  store.deleteMemoAllLocal(id);
-  if (state.view === "detail") backToList();
-  else paintBody();
   try {
-    showSpinner();
-    await gas.pushMemoDelete(id);
-    toast("削除しました", "success");
-  } catch (e) {
-    await outbox.enqueue({ type: "memo_delete", payload: { id } });
-    toast("オフライン：削除キューに追加", "warn");
-  } finally {
-    hideSpinner();
-  }
+    // A failed local delete must leave the live editor writable and saveable.
+    store.deleteMemoAllLocal(id);
+    if (detailSession?.id === id) detailSession.discard();
+    if (state.view === "detail") backToList();
+    else paintBody();
+    await memoRepository.queue({ type: "memo_delete", payload: { id } }, 1);
+    await sync.flushAll();
+    toast((await sync.pendingKeys()).has("memo:" + id) ? "オフライン：削除キューに追加" : "削除しました", "success");
+  } catch (error) { toast("削除待ち：" + error.message, "warn"); }
 }
 
-// アーカイブする／戻す。消さずに、一覧から外す（データは残る）
-async function setArchived(id, flag) {
-  const en = findEntry(id);
-  if (!en) return;
-  const updated = { ...en, archived: flag ? 1 : 0, updated_at: nowJst() };
+async function updateMemoFlag(id, field, value, message) {
+  const current = findEntry(id);
+  if (!current) return;
+  const updated = { ...current, [field]: value, updated_at: nowJst() };
   store.upsertMemoAllLocal(updated);
-  paintBody();
+  if (state.view === "list") paintBody();
   try {
-    showSpinner();
-    const saved = await gas.pushMemoUpsert(updated);
-    store.upsertMemoAllLocal(saved);
-    paintBody();
-    toast(flag ? "アーカイブしました" : "メモに戻しました", "success");
-  } catch (e) {
-    await outbox.enqueue({ type: "memo_upsert", payload: updated });
-    toast("オフライン：送信キューに追加", "warn");
-  } finally {
-    hideSpinner();
-  }
+    await memoRepository.queue({ type: "memo_upsert", payload: updated }, 1);
+    await sync.flushAll();
+    toast((await sync.pendingKeys()).has("memo:" + id) ? "オフライン：送信キューに追加" : message, "success");
+  } catch (error) { toast("保存待ち：" + error.message, "warn"); }
 }
 
-async function togglePin(id) {
-  const en = findEntry(id);
-  if (!en) return;
-  const updated = { ...en, pinned: en.pinned ? 0 : 1, updated_at: nowJst() };
-  store.upsertMemoAllLocal(updated);
-  paintBody();
-  try {
-    showSpinner();
-    const saved = await gas.pushMemoUpsert(updated);
-    store.upsertMemoAllLocal(saved);
-    paintBody();
-    toast(updated.pinned ? "ピン留めしました" : "ピンを外しました", "success");
-  } catch (e) {
-    await outbox.enqueue({ type: "memo_upsert", payload: updated });
-    toast("オフライン：送信キューに追加", "warn");
-  } finally {
-    hideSpinner();
-  }
+function setArchived(id, flag) {
+  return updateMemoFlag(id, "archived", flag ? 1 : 0, flag ? "アーカイブしました" : "メモに戻しました");
+}
+
+function togglePin(id) {
+  const current = findEntry(id);
+  if (!current) return;
+  return updateMemoFlag(id, "pinned", current.pinned ? 0 : 1, current.pinned ? "ピンを外しました" : "ピン留めしました");
 }
 
 async function inboxEntry(id) {
   try {
     showSpinner();
+    await flushOutbox();
+    if (memoRepository.getProtectedIds().has(id) || (await sync.pendingKeys()).has("memo:" + id)) throw new Error("本文の保存が待機中です。通信が戻ってから取り込んでください。");
+    if (!findEntry(id)) throw new Error("メモが見つかりません。");
     const res = await gas.pushMemoInboxWrite(id, "");
     const en = findEntry(id);
     if (en) {
@@ -1032,7 +835,10 @@ async function inboxEntry(id) {
       store.upsertMemoAllLocal(en);
     }
     if (state.view === "list") paintBody();
-    else paintRoot();
+    else if (detailSession?.id === id && en) {
+      const label = rootEl?.querySelector(".memo-detail-time");
+      if (label) label.textContent = `${en.date || ""} ${extractHhMmFromCreated(en.created_at)} ・ ${takenLabel(en)}`;
+    }
     toast(`取込みました（${res.taken || 0}件）`, "success");
   } catch (e) {
     toast("取込失敗：" + e.message, "error");
@@ -1045,16 +851,17 @@ async function inboxEntry(id) {
 
 export async function pullAndRender() {
   const view = rootEl;
-  if (detailPersist) await detailPersist();
   showSpinner();
   try {
+    if (detailSession) await detailSession.persist();
+    const revisions = memoRevisions();
     await flushOutbox().catch(() => {});
     const res = await gas.pullMemoAll("2000-01-01", 2000);
-    await applyPulledMemos(res.entries || []);
-    const typing = view?.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+    await applyPulledMemos(res.entries || [], revisions);
+    const typing = view?.contains(document.activeElement) && (document.activeElement.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName));
     if (view === rootEl && view?.isConnected && !typing && !document.querySelector(".modal-backdrop")) {
       if (state.view === "list") paintBody();
-      else paintRoot();
+      // A live editor owns its document until closed, including while blurred.
     }
     toast("最新化しました" + (await sync.pendingNote()), "success");
   } catch (e) {
@@ -1066,20 +873,28 @@ export async function pullAndRender() {
 }
 
 async function flushOutbox() {
+  // Enqueue failures retain a small durable marker across reloads. Recover from
+  // the latest local record before fetching any server snapshot.
+  await memoRepository.replay();
   return sync.flushAll();
 }
 
 // 取得した一覧で手元の一覧を置き換える。ただし、まだ送っていないメモは手元の版を残す
-async function applyPulledMemos(entries) {
+function memoRevisions() {
+  return new Map(store.loadMemoAll().map(entry => [entry.id, sync.revision("memo:" + entry.id)]));
+}
+
+async function applyPulledMemos(entries, revisions = memoRevisions()) {
   const keys = await sync.pendingKeys();
-  if (keys.size === 0) {
-    store.saveMemoAll(entries);
-    return;
-  }
+  for (const id of memoRepository.getProtectedIds()) keys.add("memo:" + id);
   const local = store.loadMemoAll();
-  const keep = local.filter((e) => keys.has("memo:" + e.id));
-  const keepIds = new Set(keep.map((e) => e.id));
-  store.saveMemoAll([...keep, ...entries.filter((e) => !keepIds.has(e.id))]);
+  const keep = local.filter(entry => keys.has("memo:" + entry.id)
+    || sync.revision("memo:" + entry.id) !== (revisions.get(entry.id) || 0)
+    || detailSession?.id === entry.id);
+  const keepIds = new Set(keep.map(entry => entry.id));
+  store.saveMemoAll([...keep, ...entries.filter(entry => !keepIds.has(entry.id)
+    && !keys.has("memo:" + entry.id)
+    && sync.revision("memo:" + entry.id) === (revisions.get(entry.id) || 0))]);
 }
 
 // ---------- helpers ----------

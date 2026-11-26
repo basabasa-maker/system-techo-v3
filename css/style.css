@@ -1877,33 +1877,6 @@ textarea {
   font-weight: 700;
   border-radius: 0;
 }
-textarea.memo-detail-text {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0 16px;
-  border: none;
-  border-radius: 0;
-  outline: none;
-  resize: none;
-  overflow: hidden;
-  font: 16px/32px -apple-system, "Hiragino Sans", sans-serif;
-  color: var(--paper-ink);
-  background-color: var(--paper);
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 31px,
-    var(--paper-line) 31px,
-    var(--paper-line) 32px
-  );
-  background-origin: padding-box;
-  background-position: 0 0;
-  background-attachment: scroll;
-  -webkit-appearance: none;
-  appearance: none;
-}
 .memo-atts {
   display: flex;
   flex-direction: column;
@@ -2070,183 +2043,81 @@ textarea.memo-detail-text {
   display: none;
 }
 
-.memo-wrap {
-  position: relative;
-}
-.memo-strike {
-  position: absolute;
-  inset: 0;
-  padding: 0 16px;
-  box-sizing: border-box;
-  overflow: hidden;
-  pointer-events: none;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  word-wrap: break-word;
-  font: 16px/32px -apple-system, "Hiragino Sans", sans-serif;
-  color: transparent;
-}
-.memo-strike .done {
-  text-decoration: line-through;
-  text-decoration-color: var(--paper-ink);
-  text-decoration-thickness: 1.5px;
-}
-
-/* メモ詳細：入力欄を画面の残りいっぱいに。入力欄の中だけがスクロールする */
+/* Memo detail uses one document surface; only its own scroller moves. */
 #scroll-container:has(.memo-detail) {
   overflow: hidden;
 }
 .memo-detail {
-  position: absolute;
-  inset: 0;
+  position: fixed;
+  top: 190px;
+  left: 0;
+  right: 0;
+  z-index: 100;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--paper-ink);
 }
 .memo-detail > * {
   flex: 0 0 auto;
 }
-.memo-detail .memo-tools {
+.memo-detail .memo-detail-header {
   position: static;
-}
-.memo-detail .memo-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.memo-detail textarea.memo-detail-text {
-  position: absolute;
-  inset: 0;
-  height: 100%;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.memo-detail .memo-strike {
-  overflow: hidden;
-}
-.memo-detail .memo-atts {
-  max-height: 30%;
-  overflow-y: auto;
-}
-/* キーボードが出ている間は、削除ボタンを隠す（誤タップ防止） */
-#app-shell.kb-on .memo-detail-footer {
-  display: none;
-}
-
-/* 罫線は入力欄の外側の枠に描き、文字のスクロールに合わせて動かす
-   （入力欄の中の背景は、入力中にiPhoneが描き損ねるため） */
-.memo-detail .memo-wrap {
-  background-color: var(--paper);
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 31px,
-    var(--paper-line) 31px,
-    var(--paper-line) 32px
-  );
-  background-position: 0 var(--paper-scroll, 0px);
-}
-.memo-detail textarea.memo-detail-text {
-  background: transparent;
-}
-
-/* メモ詳細の上2段を詰めて、書く欄を広げる（キーボードが出ても7行ほど見える） */
-.memo-detail .memo-detail-header {
-  padding: 4px 12px;
-}
-.memo-detail .memo-detail-header .btn-back {
-  min-height: 32px;
-}
-.memo-detail .memo-tools {
-  padding: 4px 12px;
-}
-.memo-detail .memo-tool {
-  min-height: 32px;
-}
-.memo-detail .memo-atts:empty {
-  display: none;
-}
-/* キーボードが出ている間は、下の余白をなくして書く欄に回す */
-#app-shell.kb-on .memo-detail {
-  padding-bottom: 0;
-}
-
-/* ===== メモ詳細：画面いっぱいの書く画面 =====
-   上の見出しとタブを隠し、メモだけを全面に出す。
-   書く欄の高さは最初から「キーボードの上端まで」に決めてあり、キーボードが出ても動かない */
-.memo-detail {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  background: var(--paper);
-  overflow: hidden;
-  /* 上の位置は、一覧のオレンジの線と同じ高さ（見出しとタブの下）。JSが測って入れる */
-  top: 190px;
-  box-sizing: border-box;
-}
-.memo-detail .memo-detail-header {
   padding: 6px 12px;
+  background: var(--paper);
 }
 .memo-detail .memo-detail-header .btn-back {
   min-height: 40px;
   font-size: 16px;
 }
 .memo-detail .memo-tools {
+  position: static;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 6px 12px;
-  gap: 8px;
+  gap: 6px;
+  background: var(--paper);
 }
 .memo-detail .memo-tool {
+  min-width: 0;
   min-height: 40px;
-  font-size: 15px;
+  padding: 0 2px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.memo-detail #d-lines[aria-pressed="true"] {
+  border-color: var(--paper-ink);
 }
 .memo-detail .memo-wrap {
-  flex: 0 0 auto;
-}
-.memo-detail .memo-atts,
-.memo-detail .memo-detail-footer {
-  flex: 0 0 auto;
-}
-.memo-detail .memo-detail-footer {
-  padding: 12px 16px;
-}
-
-/* チェック欄（☐ ☑）だけを大きく表示する。他の文字は変えない */
-@font-face {
-  font-family: "TechoCheck";
-  src: local("Apple Symbols"), local("Hiragino Sans"), local("Arial Unicode MS");
-  unicode-range: U+2610-2611;
-  size-adjust: 165%;
-}
-textarea.memo-detail-text,
-.memo-strike {
-  font-family: "TechoCheck", -apple-system, "Hiragino Sans", sans-serif;
-}
-/* カーソル（青い棒）：iPhone標準は高さが罫線と合わないため隠し、罫線の幅（32px）ぴったりの棒を自前で描く */
-textarea.memo-detail-text {
-  caret-color: transparent;
-}
-.memo-strike .caret {
-  display: inline-block;
   position: relative;
-  width: 0;
-  height: 32px;
-  vertical-align: top;
+  flex: 1 1 0;
+  min-height: 64px;
+  overflow: hidden;
+  background: var(--paper);
 }
-.memo-strike .caret::after {
-  content: "";
-  position: absolute;
-  left: -1px;
-  top: 0;
-  width: 2px;
-  height: 32px;
-  background: #1a7aff;
-  animation: techo-caret 1.1s step-end infinite;
+.memo-editor-host {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
-@keyframes techo-caret {
-  50% {
-    opacity: 0;
-  }
+.memo-detail .memo-atts {
+  flex: 0 0 auto;
+  max-height: 25%;
+  overflow-y: auto;
+}
+.memo-detail .memo-atts:empty {
+  display: none;
+}
+.memo-detail .memo-detail-footer {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+}
+.memo-detail.memo-keyboard-open .memo-detail-footer {
+  display: none;
 }
 
 /* ===== アーカイブ：左スワイプで「アーカイブ」と「削除」の2つ（削除は端に離して置く） ===== */

@@ -16,7 +16,7 @@ function fixture(overrides = {}) {
   const guard = createUpdateSafety({
     document: doc, healthPending: () => state.health, apiBusy: () => state.api,
     uploadBusy: () => state.upload, goalUploadBusy: () => state.photo,
-    pendingKeys: async () => state.staged, outboxCount: async () => state.queued,
+    pendingKeys: async () => state.staged, outboxCount: async () => state.queued, memoRecoveryIds: () => new Set(),
     delay: async ms => { state.delays.push(ms); }, settleMs: 1000,
     ...overrides,
   });
@@ -131,4 +131,17 @@ test('attachment upload stays busy through the response and returns the original
     assert.equal(hasPendingUploads(), false); assert.equal(gas.hasPendingWrites(), false);
     URL.revokeObjectURL(await loadAttachment(uploaded));
   } finally { globalThis.FileReader = oldReader; globalThis.fetch = oldFetch; }
+});
+
+test('memo recovery metadata blocks app reload until durable queue persistence succeeds', async () => {
+  const recovery = new Set(['synthetic-memo']);
+  const { guard } = fixture({ memoRecoveryIds: () => recovery });
+  await assert.rejects(guard(), /未送信/);
+  assert.deepEqual([...recovery], ['synthetic-memo']);
+  recovery.clear();
+  assert.equal(await guard(), true);
+});
+test('corrupt memo recovery metadata blocks update instead of treating it as saved', async () => {
+  const { guard } = fixture({ memoRecoveryIds: () => { throw new Error('復旧情報を確認できません'); } });
+  await assert.rejects(guard(), /復旧情報/);
 });

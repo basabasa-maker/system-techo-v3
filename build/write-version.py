@@ -13,6 +13,7 @@ if not sw or not page or sw[1] != page[1]:
 paths = [root/name for name in ['index.html','sw.js','manifest.json','privacy.html','support.html']]
 paths += list((root/'js').rglob('*.js')) + list((root/'css').glob('*.css'))
 paths += [p for p in (root/'icons').iterdir() if p.is_file()]
+paths += list((root/'vendor').rglob('*.js'))
 paths += [root/'shortcuts/health-bridge'/name for name in ['system-techo-health.shortcut','system-techo-health.zip']]
 assets = [{'path':p.relative_to(root).as_posix(),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in sorted(set(paths))]
 assert len(assets) <= 128

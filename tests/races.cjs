@@ -8,11 +8,16 @@ const server = http.createServer((req,res)=>{
  fs.readFile(f,(e,b)=>{if(e){res.writeHead(404).end();return;} res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html');res.end(b);});
 });
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
+async function until(check,message){const end=Date.now()+7000;while(Date.now()<end){if(await check())return;await delay(30);}assert.fail(message);}
+// The memo keeps the same plain-text contract with either legacy textarea or
+// the rebuilt contenteditable editor. These fixtures are short, nonvirtual rows.
+const memoInput=page=>page.locator('#d-text .cm-content, textarea#d-text');
+const memoValue=page=>memoInput(page).evaluate(el=>el.tagName==='TEXTAREA'?el.value:Array.from(el.querySelectorAll('.cm-line')).map(line=>line.textContent).join('\n'));
 const items=[{id:'count',label:'試験累計',type:'cumulative',icon:'⭐',unit:'件'},{id:'n',label:'試験数値',type:'integer',icon:'⭐',unit:'件'},{id:'t',label:'試験時刻',type:'time',icon:'⭐',unit:''}];
 let browser, failures=0;
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;
  browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
- async function scenario(name,fn){let ctx;try{
+ async function scenario(name,fn){if(process.env.RACE_TEST&&!name.includes(process.env.RACE_TEST))return;let ctx;try{
  ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'});
  const page=await ctx.newPage();page.setDefaultTimeout(5000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
  let opts={getDelay:600,postDelay:0,offline:false},values={count:100},days={},posts=[],gets=[];
@@ -34,7 +39,7 @@ let browser, failures=0;
  await page.addInitScript(({items})=>{localStorage.setItem('sth_v3_active_tab','habit');localStorage.setItem('sth_v3_habit_items',JSON.stringify(items));},{items});
  await page.goto(base);await page.locator('[data-id="count"]').waitFor();
  await fn({page,opts,values,days,posts,gets,base});assert.deepEqual(errors,[]);console.log('PASS',name);
- }catch(e){failures++;console.log('FAIL',name,e.message);}finally{await ctx?.close();}}
+ }catch(e){failures++;console.log('FAIL',name,e.stack||e.message);}finally{await ctx?.close();}}
  await scenario('late habit response cannot overwrite any other tab',async({page})=>{
  for(const tab of ['meal','task','daily','memo']){await page.click('[data-tab="habit"]');await delay(50);await page.click(`[data-tab="${tab}"]`);await delay(750);assert.equal(await page.locator(`#tab-content .${tab}-tab`).count(),1,tab);assert.equal(await page.locator('#tab-content .habit-tab').count(),0,tab);}
  });
@@ -180,14 +185,14 @@ let browser, failures=0;
  await page.evaluate(async()=> (await import('/js/memo.js')).pullAndRender());
  assert.equal(await row.count(),1,'failed initial GET keeps cached memo');
  await row.click();
- assert.equal(await page.locator('#d-text').inputValue(),'編集前の本文\n[[future:保全|v1]]');
+ assert.equal(await memoValue(page),'編集前の本文\n[[future:保全|v1]]');
  assert.equal(await page.locator('.memo-att-file').textContent(),'📎 日本語.pdf');
  assert((await page.locator('.memo-detail-time').textContent()).includes('取込済'));
  opts.offline=false;opts.failPosts=true;opts.postDelay=0;
  const start=posts.length;
  const text='追記後の本文\n[[future:保全|v1]]';
  const body=text+'\n[[att:attachment-preserve|日本語.pdf|application/pdf]]';
- await page.locator('#d-text').fill(text);
+ await memoInput(page).fill(text);
  await delay(200);
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('sth_v3_memo_all'))[0].body),entry.body,'autosave remains debounced');
  // Poll IndexedDB from Node: waitForFunction treats the Promise itself as truthy.
@@ -210,6 +215,8 @@ let browser, failures=0;
  assert(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(saved.entry.updated_at));
  assert.equal(saved.rows.length,1);assert.equal(saved.rows[0].op.type,'memo_upsert');
  assert.deepStrictEqual(saved.rows[0].op.payload,expected,'failed API save queues the complete preserved memo');
+ // A durable outbox row is visible before queue-first sending starts on its timer.
+ await until(()=>posts.slice(start).some(post=>post.type==='memo_upsert'&&post.entry.id===entry.id&&post.entry.body===body),'durably queued memo reaches its synthetic failed API attempt');
  const sent=posts.slice(start);assert.equal(sent.length,1);assert.equal(sent[0].type,'memo_upsert');
  assert.deepStrictEqual(sent[0].entry,expected);
  opts.offline=true;
@@ -283,7 +290,7 @@ let browser, failures=0;
    return canvas.toDataURL('image/png').split(',')[1];
  });
  await page.click('[data-tab="memo"]');await page.locator('#btn-new-memo').waitFor();
- await page.click('#btn-new-memo');await page.locator('#d-text').fill('画像添付の試験');
+ await page.click('#btn-new-memo');await memoInput(page).fill('画像添付の試験');
  await page.locator('#d-file').setInputFiles({name:'縮小試験.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
  const token='[[att:'+attachmentId+'|縮小試験.jpg|image/jpeg]]';
  await until(()=>!!uploaded&&!!savedMemo&&savedMemo.body.includes(token),'attachment upload and memo persistence should complete');
@@ -321,7 +328,7 @@ let browser, failures=0;
  await page.reload();await page.locator('[data-id="count"] input').waitFor();
  await page.click('[data-tab="memo"]');await page.locator('.memo-row[data-id="'+memoId+'"]').click();
  await waitForImage();assert.equal(attachmentGets,1,'offline reload must use sth-att without another attachment GET');
- assert.equal(await page.locator('#d-text').inputValue(),'画像添付の試験');
+ assert.equal(await memoValue(page),'画像添付の試験');
  assert.deepStrictEqual(await imageSize(),[{complete:true,width:1280,height:640}]);
  const body=await page.evaluate(id=>JSON.parse(localStorage.getItem('sth_v3_memo_all')).find(entry=>entry.id===id).body,memoId);
  assert.equal(body,'画像添付の試験\n'+token);

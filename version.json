@@ -1,5 +1,5 @@
 {
-  "build": "20261125-233946",
+  "build": "20261126-134727",
   "assets": [
     {
       "path": "css/goals.css",
@@ -14,12 +14,16 @@
       "sha256": "ed07aee651787e83a87b2a4525ad606bb5e0a20371e02f2342a16436d15d843e"
     },
     {
+      "path": "css/memo-editor.css",
+      "sha256": "52c91b8ebab3cb34301aa218be649c02795d9076bacff9307f62aa04ac856ac4"
+    },
+    {
       "path": "css/settings.css",
       "sha256": "7176743d22949cba2fa405c2d8203c08a47e707f3aa11b2d10acd4b3d2c82413"
     },
     {
       "path": "css/style.css",
-      "sha256": "0a5599c7199b44854219b579780c446fd971ca2e2140d320d48b40b6926bf933"
+      "sha256": "d1cb78286381c99cfd42e53aa32e2a9a02128fa72675334970a729966371b26e"
     },
     {
       "path": "icons/eraser.png",
@@ -43,11 +47,11 @@
     },
     {
       "path": "index.html",
-      "sha256": "dc98c76b0e18c6a486e04ec006e7b60fea1f95503414838eb41e167eb41ddc1b"
+      "sha256": "d5d7ec5f70faa848db1c0d8265bd3656e715272e79c52708866cea7f83107e48"
     },
     {
       "path": "js/app.js",
-      "sha256": "20ff2311417f5880f13a770cdb80ac468da9b719c899e2ae7337dcc32394c461"
+      "sha256": "a4db87026f6de0b987ad28812645b3e537e5d48b599d230eae556f23c52f9dd2"
     },
     {
       "path": "js/config.js",
@@ -122,8 +126,20 @@
       "sha256": "0efb8f0fb8c809949cff2252de060e0cea5f208669a6012ce3235be74a356017"
     },
     {
+      "path": "js/memo/document.js",
+      "sha256": "99085878e3375b676ea5a0cde0a2e442f6b805456c630084e73a0dcdcccf9c70"
+    },
+    {
+      "path": "js/memo/editor.js",
+      "sha256": "dab505a255b19b5860ce95de53a07df8446f00bac71d1ce25bfae9e639b7fd06"
+    },
+    {
+      "path": "js/memo/repository.js",
+      "sha256": "fe3bec148919a1335ac5ee9f244a186ec380327eac71db37c060abd45c8c77ff"
+    },
+    {
       "path": "js/memo.js",
-      "sha256": "db4263df4a665a39a84a23fd5b1906a6fa8e01df89e0f54961353778a1e3abd8"
+      "sha256": "2c634aab99726ce04a2840f4e260882f11937c50015cd5acf5eedfc81fdf449a"
     },
     {
       "path": "js/outbox.js",
@@ -135,7 +151,7 @@
     },
     {
       "path": "js/settings/safety.js",
-      "sha256": "bffe3b0ab71ca0a2f39bb7ab7e9f69015ecb00498ec0e8a04c55b44faa4b1c11"
+      "sha256": "01995074a202ba21bec6a2156e4d7cee7b3457ec812889cd2844cea8be8aee11"
     },
     {
       "path": "js/settings/ui.js",
@@ -155,7 +171,7 @@
     },
     {
       "path": "js/sync.js",
-      "sha256": "5b6c77624581b4c90c6332e7c08bb4aad14e3cf5e78923f84932ef8eacd00508"
+      "sha256": "928dd86e9df9060a848ab15b2e6ed975187ae37573cac55574d8c93f8794f8ee"
     },
     {
       "path": "js/tab-navigation.js",
@@ -163,7 +179,7 @@
     },
     {
       "path": "js/tabs.js",
-      "sha256": "8d53249f61771f80ef350f1ab561084399591c50bb3620c5d2cc8e3a1e5f07cf"
+      "sha256": "d18366682c53fbf7f02216b93d8f669f16920bf42224ef754eee94c1b0569d87"
     },
     {
       "path": "js/task.js",
@@ -199,7 +215,11 @@
     },
     {
       "path": "sw.js",
-      "sha256": "b10baf33c1cb2a482c1e6294a457f46ced28bbbfa7f13459f71020a4f3d44f1e"
+      "sha256": "b587745a1e54577a554547f229a7c45199f4d9216f1e5c709b02c5214240a83b"
+    },
+    {
+      "path": "vendor/codemirror/codemirror.js",
+      "sha256": "24bcc88577169c6fd6b7a36ec599d52bcec370f3db182f3ed3c70c301883e461"
     }
   ]
 }

@@ -1,0 +1,91 @@
+/* One document surface owns text, check marks, strikes and the ruled background. */
+.memo-editor {
+  --memo-line-height: 32px;
+  height: 100%;
+  min-height: 0;
+  background: var(--paper, #fffdf0);
+  color: var(--paper-ink, #202124);
+  font-size: 16px;
+}
+.memo-editor.cm-focused { outline: none; }
+.memo-editor .cm-scroller {
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: 16px;
+  line-height: var(--memo-line-height);
+}
+.memo-editor .cm-content {
+  box-sizing: border-box;
+  min-height: 100%;
+  flex-grow: 1;
+  padding: 0;
+  color: var(--paper-ink, #202124);
+  caret-color: var(--accent, #1a7aff);
+  background-color: var(--paper, #fffdf0);
+  background-image: none;
+  line-height: var(--memo-line-height);
+  overflow-wrap: anywhere;
+}
+.memo-editor.memo-editor-ruled .cm-content {
+  /* A fixed-size tile avoids tall-content gradient rasterization differences in WebKit. */
+  background-image: linear-gradient(to bottom, transparent 0, transparent calc(var(--memo-line-height) - 1px), var(--paper-line, #d7d1c3) calc(var(--memo-line-height) - 1px), var(--paper-line, #d7d1c3) var(--memo-line-height));
+  background-size: 100% var(--memo-line-height);
+  background-repeat: repeat-y;
+  background-position: 0 0;
+}
+.memo-editor .cm-line {
+  padding: 0 16px;
+  margin: 0;
+  border: 0;
+  line-height: var(--memo-line-height);
+}
+.memo-editor .cm-placeholder { color: var(--text-muted, #929292); }
+.memo-editor .memo-editor-done {
+  text-decoration: line-through;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1.5px;
+}
+.memo-editor .memo-editor-check-wrap {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+  line-height: 0;
+}
+.memo-editor .memo-editor-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-block;
+  box-sizing: border-box;
+  position: relative;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  max-width: 20px;
+  max-height: 20px;
+  padding: 0;
+  margin: 0;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--paper-ink, #202124);
+  vertical-align: top;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.memo-editor .memo-editor-checkbox[aria-checked="true"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  width: 5px;
+  height: 10px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.memo-editor .memo-editor-checkbox:focus-visible { outline: 2px solid var(--accent, #1a7aff); outline-offset: 2px; }
