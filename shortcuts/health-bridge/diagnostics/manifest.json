@@ -1,0 +1,17 @@
+{
+  "revision": "20261127-R2",
+  "purpose": "Read-only Steps source diagnosis; not a fix for step aggregation",
+  "shortcut_name": "歩数の取得元確認",
+  "shortcut_sha256": "821c6a93cc0cdf826aeab4a912a5db4ac918d1c4c58b88b86db2576043e7628f",
+  "zip_sha256": "07184437cfbb1422e7acee9588561922b7305171f53f531475af84cf5bc9ead2",
+  "source_sha256": "db59c30a71c8cf41b1692eede33f80a3fddce1bf6fa160c3283713975e43f06b",
+  "actions": 152,
+  "health_queries": 2,
+  "only_metric": "Steps",
+  "health_writes": 0,
+  "network_actions": 0,
+  "persistent_write_actions": 0,
+  "contains_pair_key": false,
+  "native_synthetic_cases_passed": 8,
+  "real_iphone_health_query": "not_verified"
+}

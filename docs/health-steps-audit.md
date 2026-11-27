@@ -1,5 +1,7 @@
 # 歩数の不一致調査（2026-11-27、集計値の原因は未確定）
 
+> 11/27夜の新証拠：本人の同日・ほぼ同時点の画像で、保存なし確認に届いた歩数がHealthの「今日」の合計を上回ることを確認した。今回の差は手帳への保存前に存在する。データソース一覧はWatch複数、iPhone複数、第三者アプリで、Watchが上位。ただし登録済み旧機器が全て今日の値を出している証拠ではなく、複数ソース重複を原因と断定しない。以下の「同時点照合待ち」は受領前の経緯。個人実値・機器名は公開資料へ載せない。
+
 依頼：iPhone Shortcutで歩数は取得できるが、Healthの日別合計と毎回違う。歩数以外と過去の記録を変えずに調査する。
 
 ## 現在の確定事項
@@ -21,7 +23,7 @@
 
 ## Apple一次資料
 
-- [Apple DTS 759709](https://developer.apple.com/forums/thread/759709)：生サンプルの単純合算は多重計上になり得る。HKStatisticsQueryは重複排除し、同じ時間範囲のHealth表示と一致することを案内。
+- [Apple DTS 759709](https://developer.apple.com/forums/thread/759709)：生サンプルの単純合算は多重計上になり得る。HKStatisticsQueryは重複調整され、同じ時間範囲のHealth表示と一致するはず、とApple DTSが説明。Shortcutsに対する保証ではない。
 - [WWDC20 Getting started with HealthKit](https://developer.apple.com/videos/play/wwdc2020/10664/)：14分台の統計説明で、iPhone/Watch重複を除き、Watchを外した時間のiPhone分は足す挙動を説明。単にWatchだけを選ぶ・ソース別最大を選ぶ方法と同じではない。
 - [HKStatistics](https://developer.apple.com/documentation/healthkit/hkstatistics.md)：統計クエリは通常複数ソースをmergeする。
 - [Shortcuts Find/Filter](https://support.apple.com/guide/shortcuts/intro-to-find-and-filter-actions-apd3c845e881/ios)：入力がある場合のfilterと、ライブラリから探すFindの違い。
@@ -76,3 +78,13 @@ UUIDを除く検索パラメータが配布版と完全一致：Type=Steps、Gro
 架空データ試験：再openと同値読取2件、保存・再送9件、Healthブラウザ31件、Node149件、設定17件、バックアップ設定8件。観測画面はChrome/WebKit×320/390幅×2テーマで8条件成功。ソースのplain-data検証はApple Shortcuts実行器での証明にはならない。標準Shortcut内の別統計アクションも一次資料と構造化metadataを調べたが、Health日別合計と同一と証明できる代替は未発見。Watchのみ、ソース別最大値、一定量の減算などを根拠なく採用しない。
 
 成果物は作業フォルダ内 `reopen-growth/`。`storage-replay-results.json`、`shortcut-source-results.json`、`observation-ui/observation-ui-results.json` をそれぞれ使用する。初稿で衝突した共通名results.jsonは根拠に使わない。実iPhoneでの同時点照合は未完了。
+
+## 次の検証と範囲
+
+受信値とHealth合計の同時点比較、およびHealthのデータソース一覧は本人から受領済み。次は同じSteps日別検索の採用値・候補数・日付窓と、GroupByだけを外した検索のSource表示名別件数・合計を、送信・保存しない別診断で比較する。これは診断用の生サンプル合計であり、Healthの正しい合計やその代替値として手帳へ保存しない。同名Source表示は複数機器を区別できない可能性もある。既存のキー・通常Shortcut・Health記録・過去記録は変更しない。
+
+### ソース別診断 R2 の配布
+
+[診断のiPhone手順](../shortcuts/health-bridge/diagnostics/README.md)。これは別名のキー不要診断で、通常のShortcut・アプリの連携設定を差し替えない。公開sourceは元の本人用Shortcutを読み出したものではなく、キーなしbuilderから生成したもの。2つのqueryはGroupByの有無だけが異なる。最終出力は画面だけで、HTTP・ファイル書込み・Health書込み・他のShortcut呼出しを含まない。
+
+親のApple実行器試験で初稿の空Text判定が期待と異なることを発見。日付とSourceの判定をregexの一致結果へ変更したR2で、JSON入力8ケースすべて成功。取得元行の順序は保証しない。実SourceプロパティとHealth queryは辞書置換しており、その成功は未検証。自作の一時fixtureだけを追加・実行後に削除し、元の5件が保たれたことをCUAで確認。個人のHealth読取・連携送信・保存記録の操作は0。
