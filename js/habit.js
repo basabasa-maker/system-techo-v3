@@ -11,7 +11,7 @@ import { bindHabitTextInput, persistHabitText, replayHabitTextRecovery, getHabit
 import { latestMealTime } from "./meal-time.js";
 import { healthBridge, loadHealthSettings, saveHealthSettings, REQUEST_TTL_MS } from "./health/bridge.js";
 import { selectHealthPatch } from "./health/model.js";
-import { showHealthSettings, confirmHealthValues } from "./health/ui.js";
+import { confirmHealthValues } from "./health/ui.js";
 import {
   HABIT_DEFAULT_ITEMS,
   LS_KEY_HABIT_DAY_PREFIX,
@@ -37,7 +37,8 @@ let healthPollUntil = 0;
 let healthReady = null;
 let healthMessage = "";
 let healthSaving = false;
-let healthToolsExpanded = false;
+let healthPaintPending = false;
+export const HEALTH_SYNC_EVENT = "system-techo:health-sync";
 let textInputs = [];
 function flushTextInputs() {
   // Commit the original date/id before any DOM or navigation change.
@@ -256,12 +257,11 @@ async function paintStats() {
 function paint() {
   if (!rootEl?.isConnected || !flushTextInputs()) return;
   textInputs = [];
-  const disclosure = rootEl.querySelector("#health-disclosure");
-  if (disclosure) healthToolsExpanded = disclosure.open;
   if (state.sub !== "input") {
     paintStats();
     return;
   }
+  healthPaintPending = false;
   rootEl.innerHTML = `
     <div class="habit-tab">
       ${subTabsHtml()}
@@ -272,7 +272,6 @@ function paint() {
         <button id="h-today" class="habit-today">今日</button>
         <button id="h-edit" class="habit-edit-btn">${state.editMode ? "完了" : "編集"}</button>
       </div>
-      ${healthToolsHtml()}
       <section class="habit-card">
         <h2>睡眠</h2>
         <div class="habit-sleep">
@@ -295,7 +294,6 @@ function paint() {
 
 function bind() {
   bindSubTabs();
-  bindHealthTools();
   rootEl.querySelector("#h-prev").addEventListener("click", () => moveDate(-1));
   rootEl.querySelector("#h-next").addEventListener("click", () => moveDate(1));
   rootEl.querySelector("#h-today").addEventListener("click", () => {
@@ -744,7 +742,7 @@ export async function pullAndRender() {
           && pending.issued_at - Date.now() <= 120000) {
         // A successful Shortcut upload is bound to this nonce. Retrying the
         // receive step must not orphan it by launching a different request.
-        toast("前回の読み取り結果を確認しています。最初からやり直す場合は連携欄で中止してください。");
+        toast("前回の読み取り結果を確認しています。最初からやり直す場合は設定のヘルスケア連携で中止してください。");
         resumeHealthSync();
         return;
       }
@@ -752,7 +750,7 @@ export async function pullAndRender() {
       healthReady = null;
       const { url } = healthBridge.prepare(state.date, state.values);
       healthMessage = "ショートカットで読み取り中です。完了したら元の手帳へ戻ってください。";
-      updateHealthTools();
+      notifyHealthSyncChange();
       // Must stay synchronous with this user gesture on iPhone.
       window.location.assign(url);
       healthPollUntil = Date.now() + 60000;
@@ -773,33 +771,43 @@ export async function pullAndRender() {
 
 
 // ---------- iPhone Health bridge (only an explicitly requested day) ----------
-function healthToolsHtml() {
-  return `<details id="health-disclosure" class="health-disclosure" ${healthToolsExpanded ? "open" : ""}><summary>ヘルスケア連携</summary>${healthToolsContentsHtml()}</details>`;
+// Settings reads only this presentation state; credentials and measurements stay private.
+export function getHealthSyncView() {
+  try {
+    const settings = loadHealthSettings();
+    const request = healthBridge.pending();
+    const last = healthBridge.lastSync();
+    let message = (healthSaving ? "読み取り結果を保存しています…" : healthMessage)
+      || (request ? `${request.date} の読み取り待ちです。`
+        : last ? `${last.date}：前回${last.keys.length}項目を取り込みました。`
+          : settings.enabled ? "習慣の入力画面の更新でヘルスケアを読み取ります。"
+            : "ヘルスケア連携は停止中です。");
+    if (request && !message.includes(request.date)) message = `${request.date}：${message}`;
+    return { message, pending: !!request, saving: healthSaving, enabled: settings.enabled };
+  } catch (_) {
+    return { message: "連携設定を確認してください。", pending: false, saving: healthSaving, enabled: false };
+  }
 }
-function healthToolsContentsHtml() {
-  let settings, request, last;
-  try { settings=loadHealthSettings();request=healthBridge.pending();last=healthBridge.lastSync(); }
-  catch (_) { return '<div class="health-tools"><p id="health-status">連携設定を確認してください。</p><button id="h-health-setup">ヘルスケア連携</button></div>'; }
-  const note = (healthSaving ? "読み取り結果を保存しています…" : healthMessage) || (request ? `${request.date} の読み取り待ちです。` : last ? `${last.date}：前回${last.keys.length}項目を取り込みました。` : settings.enabled ? "更新でヘルスケアを読み取ります。" : "iPhoneの体重・体脂肪率・活動分・歩数を連携できます。");
-  return `<div class="health-tools"><p id="health-status" role="status">${escapeHtml(note)}</p><button id="h-health-setup" ${healthSaving ? "disabled" : ""}>ヘルスケア連携</button><button id="h-health-cancel" ${request ? "" : "hidden"} ${healthSaving ? "disabled" : ""}>中止</button></div>`;
-}
-function bindHealthTools() {
-  const disclosure = rootEl?.querySelector("#health-disclosure");
-  if (disclosure) disclosure.ontoggle = () => {
-    if (disclosure.isConnected) healthToolsExpanded = disclosure.open;
-  };
-  rootEl?.querySelector("#h-health-setup")?.addEventListener("click",()=>showHealthSettings(healthSettingsChanged));
-  rootEl?.querySelector("#h-health-cancel")?.addEventListener("click",()=>{
-    healthBridge.cancel();healthReady=null;clearTimeout(healthTimer);healthMessage="取り込みを中止しました。";updateHealthTools();
-  });
+export function cancelHealthSync() {
+  if (healthSaving) return false;
+  healthBridge.cancel();
+  healthReady = null;
+  clearTimeout(healthTimer);
+  healthMessage = "取り込みを中止しました。";
+  notifyHealthSyncChange();
+  return true;
 }
 export function healthSettingsChanged() {
-  healthMessage="";healthReady=null;clearTimeout(healthTimer);updateHealthTools();
+  healthMessage="";healthReady=null;clearTimeout(healthTimer);notifyHealthSyncChange();
 }
-function updateHealthTools() {
-  const tools=rootEl?.querySelector(".health-tools");
-  if (!tools || !rootEl.isConnected) return;
-  tools.outerHTML=healthToolsContentsHtml();bindHealthTools();
+function notifyHealthSyncChange() {
+  document.dispatchEvent(new CustomEvent(HEALTH_SYNC_EVENT));
+}
+export function resumeHealthAfterSettings() {
+  // A save can complete while Settings covers the input screen. Catch up only
+  // that deferred paint after the modal closes, without reloading any records.
+  if (healthPaintPending && rootEl?.isConnected && state.sub === "input" && !healthInputBusy()) paint();
+  return resumeHealthSync();
 }
 function healthInputBusy() {
   return rootEl?.contains(document.activeElement) && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)
@@ -816,10 +824,10 @@ function scheduleHealth(request, delay=1500) {
 export function resumeHealthSync(internal = false) {
   let request;
   try { request=healthBridge.pending(); }
-  catch (error) { healthMessage=error.message;updateHealthTools();return false; }
+  catch (error) { healthMessage=error.message;notifyHealthSyncChange();return false; }
   if (!request || !loadHealthSettings().enabled || !rootEl?.isConnected || state.sub !== "input" || document.visibilityState === "hidden") return false;
   if (request.date !== state.date) {
-    healthBridge.cancel();healthReady=null;healthMessage="表示日が変わったため、取り込んでいません。対象日で更新してください。";updateHealthTools();return false;
+    healthBridge.cancel();healthReady=null;healthMessage="表示日が変わったため、取り込んでいません。対象日で更新してください。";notifyHealthSyncChange();return false;
   }
   if (healthResumePromise) return true;
   if (!internal) healthPollUntil=Date.now()+60000;
@@ -833,9 +841,9 @@ export function resumeHealthSync(internal = false) {
     else { scheduleHealth(request); }
     // Background fetches can fail while iPhone switches apps. Retain the
     // explicit request (and any already checked result) for resume events.
-    healthMessage=message;updateHealthTools();
+    healthMessage=message;notifyHealthSyncChange();
     if (changed && document.visibilityState !== "hidden") toast(healthMessage,"error");
-  }).finally(()=>{healthResumePromise=null;healthSaving=false;updateHealthTools();});
+  }).finally(()=>{healthResumePromise=null;healthSaving=false;notifyHealthSyncChange();});
   return true;
 }
 async function receiveHealth(request) {
@@ -853,7 +861,7 @@ async function receiveHealth(request) {
     if (!healthContext(request)) return;
     if (!accepted) {
       await healthBridge.finish(request,[],receivedKeys);
-      healthReady=null;healthMessage="ヘルスケアの取り込みを中止しました。記録は変更していません。";updateHealthTools();return;
+      healthReady=null;healthMessage="ヘルスケアの取り込みを中止しました。記録は変更していません。";notifyHealthSyncChange();return;
     }
     settings=loadHealthSettings();
     saveHealthSettings({...settings,verifiedKeys:[...new Set([...settings.verifiedKeys,...receivedKeys])]});
@@ -874,7 +882,7 @@ async function receiveHealth(request) {
   const appliedKeys=Object.keys(patch);
   const skipped=receivedKeys.filter(key=>!appliedKeys.includes(key) && !Object.is(before[key],values[key]));
   if (appliedKeys.length) {
-    healthSaving=true;updateHealthTools();
+    healthSaving=true;notifyHealthSyncChange();
     // Persist to the existing queue before announcing success or discarding the temporary result.
     await sync.queue({type:"habit_day_upsert",payload:{date:request.date,set:patch,del:[]}},300);
     const fresh=loadDay(request.date), stillPending=healthBridge.pending();
@@ -882,11 +890,15 @@ async function receiveHealth(request) {
     const safePatch=Object.fromEntries(Object.entries(patch).filter(([key])=>!stillPending?.editedKeys?.includes(key) && Object.is(fresh[key],before[key])));
     const merged={...fresh,...safePatch};
     saveDayLocal(request.date,merged);
-    if (rootEl?.isConnected && state.date===request.date) { state.values=merged;if(!healthInputBusy())paint(); }
+    if (rootEl?.isConnected && state.date===request.date) {
+      state.values=merged;
+      if (!healthInputBusy()) paint();
+      else healthPaintPending=true;
+    }
     await sync.flushAll();
   }
   if (!await healthBridge.finish(request,appliedKeys,skipped)) return;
   healthReady=null;
   healthMessage=!receivedKeys.length ? "この日のヘルスケア値を取得できませんでした。読み取り許可・条件を確認してください。保存済みの4項目は変更していません。" : skipped.length ? `${appliedKeys.length}項目を取り込み、変更中などの${skipped.length}項目はそのまま残しました。` : appliedKeys.length ? `ヘルスケア${appliedKeys.length}項目を取り込みました。` : "ヘルスケアの値を確認しました。変更はありません。";
-  updateHealthTools();toast(healthMessage + await sync.pendingNote(),"success");
+  notifyHealthSyncChange();toast(healthMessage + await sync.pendingNote(),"success");
 }

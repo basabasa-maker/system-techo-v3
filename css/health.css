@@ -1,13 +1,6 @@
-/* iPhone Health bridge controls stay in the scrolling body, folded by default. */
-.health-disclosure { margin:8px 0 4px; border-bottom:1px solid rgb(var(--ov) / .15); }
-.health-disclosure > summary { box-sizing:border-box; min-height:44px; padding:12px 0; color:var(--muted); font-size:13px; font-weight:600; line-height:20px; cursor:pointer; }
-.health-disclosure > summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-.health-disclosure .health-tools { margin:0 0 8px; flex-wrap:wrap; }
-.health-disclosure .health-tools p { flex-basis:180px; min-width:0; }
-.health-tools { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:8px 0 4px; }
-.health-tools button { min-height:44px; padding:8px 12px; border:1px solid rgb(var(--ov) / .25); border-radius:18px; background:var(--field); color:var(--fg); font-size:13px; }
-.health-tools p { flex:1; font-size:12px; line-height:1.6; color:var(--muted); }
-.health-tools [hidden] { display:none; }
+/* Health controls are grouped inside app Settings, never in the Habit body. */
+.settings-health-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.settings-health-actions button:disabled { opacity:.55; cursor:wait; }
 .health-modal p,.health-modal li { font-size:14px; line-height:1.7; color:var(--fg); }
 .health-modal .health-small { font-size:12px; color:var(--muted); }
 .health-modal input { font-size:16px; min-width:0; }
@@ -22,5 +15,3 @@
 .health-preview div { display:flex; justify-content:space-between; gap:16px; padding:10px 0; border-bottom:1px solid rgb(var(--ov) / .15); }
 .health-preview dt { color:var(--muted); font-size:14px; }
 .health-preview dd { margin:0; font-size:18px; font-weight:600; }
-
-.health-tools button:disabled { opacity:.55; cursor:wait; }

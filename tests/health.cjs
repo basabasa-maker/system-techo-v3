@@ -1,6 +1,6 @@
 // Isolated browser + synthetic GAS only. Never accesses HealthKit or production data.
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const {chromium}=require(process.env.PLAYWRIGHT_PATH||'playwright');
+const {chromium,webkit}=require(process.env.PLAYWRIGHT_PATH||'playwright');
 const vm=require('node:vm');
 const root=process.env.APP_ROOT||path.resolve(__dirname,'..'),clone=x=>JSON.parse(JSON.stringify(x)),delay=ms=>new Promise(r=>setTimeout(r,ms));
 const TODAY='2027-01-01',PREV='2026-12-31',NEXT='2027-01-02',PAIR_KEY='a'.repeat(43);
@@ -77,10 +77,11 @@ async function begin(page,posts){
  await until(()=>Promise.resolve(healthReads(posts).length>0),'Health result polling starts');return request;
 }
 async function openHealthTools(page){
- const disclosure=page.locator('#health-disclosure');
- if(!await disclosure.evaluate(el=>el.open))await disclosure.locator('summary').click();
+ if(!await page.locator('.app-settings-modal').count())await page.locator('#btn-settings').click();
+ await page.locator('#settings-health-status').waitFor();
 }
-async function openHealthSettings(page){await openHealthTools(page);await page.locator('#h-health-setup').click();}
+async function closeHealthTools(page){await page.locator('#settings-close').click();}
+async function openHealthSettings(page){await openHealthTools(page);await page.locator('#settings-open-health').click();}
 async function done(page,posts){await until(async()=>!await pending(page),'Health import finishes');await until(()=>Promise.resolve(posts.some(p=>p.type==='health_bridge_ack')),'temporary result acknowledged');}
 async function scenario(name,fn,{enabled=true,verified=true}={}){
  if(process.env.HEALTH_TEST&&!name.includes(process.env.HEALTH_TEST))return;
@@ -127,6 +128,10 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   await page.addInitScript(({values,days,items,enabled,verified,key,settingsKey})=>{
    // Stub the OS handoff boundary only; never launch the host's actual Shortcuts app.
    window.testShortcutLaunches=[];
+   window.testHealthListeners=new Set();
+   const addListener=document.addEventListener.bind(document),removeListener=document.removeEventListener.bind(document);
+   document.addEventListener=function(type,listener,...options){if(type==='system-techo:health-sync')window.testHealthListeners.add(listener);return addListener(type,listener,...options);};
+   document.removeEventListener=function(type,listener,...options){if(type==='system-techo:health-sync')window.testHealthListeners.delete(listener);return removeListener(type,listener,...options);};
    window.navigation?.addEventListener('navigate',event=>{
     if(event.destination.url.startsWith('shortcuts:')){
      window.testShortcutLaunches.push(event.destination.url);event.preventDefault();
@@ -142,35 +147,36 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   await page.goto(base);await field(page,'weight').waitFor();await until(()=>Promise.resolve(gets.some(p=>p.type==='habit_day')),'initial habit data');await delay(100);
   await fn({page,values,days,opts,posts,gets});
   assert.deepEqual(errors,[]);assert.equal(await page.evaluate(()=>localStorage.getItem('preserve:health-test')),' { "unchanged":[0,false] } ');
+  assert.equal(await page.evaluate(()=>window.testHealthListeners.size),await page.locator('.app-settings-modal').count(),'Settings removes its Health listener when closed');
   assert.deepEqual(values[PREV],initialValues[PREV],'previous date remains unchanged');assert.deepEqual(values[NEXT],initialValues[NEXT],'next date remains unchanged');assert.deepEqual(days,initialDays,'all meal records remain unchanged');
   passed++;console.log('PASS '+name);
- }catch(e){failed++;console.log('FAIL '+name+': '+e.message);if(process.env.HEALTH_DIAGNOSTICS&&page){console.log('DIAG',await page.evaluate(()=>({status:document.querySelector('#health-status')?.textContent,modals:Array.from(document.querySelectorAll('.health-modal')).map(e=>e.textContent),pending:!!localStorage.getItem('sth_v3_health_pending'),verified:JSON.parse(localStorage.getItem('sth_v3_health_settings')||'{}').verifiedKeys,visibility:document.visibilityState,hasFocus:document.hasFocus(),launches:window.testShortcutLaunches?.length,active:document.activeElement?.outerHTML.slice(0,180)})));}}finally{await ctx?.close();}
+ }catch(e){failed++;console.log('FAIL '+name+': '+e.message);if(process.env.HEALTH_DIAGNOSTICS&&page){console.log('DIAG',await page.evaluate(()=>({status:document.querySelector('#settings-health-status')?.textContent,modals:Array.from(document.querySelectorAll('.health-modal')).map(e=>e.textContent),pending:!!localStorage.getItem('sth_v3_health_pending'),verified:JSON.parse(localStorage.getItem('sth_v3_health_settings')||'{}').verifiedKeys,visibility:document.visibilityState,hasFocus:document.hasFocus(),launches:window.testShortcutLaunches?.length,active:document.activeElement?.outerHTML.slice(0,180)})));}}finally{await ctx?.close();}
 }
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));base='http://127.0.0.1:'+server.address().port;
- browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
- await scenario('Health controls start folded and keep their disclosure state without changing records',async({page,posts,values})=>{
-  const disclosure=page.locator('#health-disclosure'),summary=disclosure.locator('summary');
-  assert.equal(await disclosure.count(),1,'Health controls have a disclosure');
-  assert.equal(await disclosure.evaluate(el=>el.open),false,'closed by default');
-  assert.equal(await summary.isVisible(),true);assert.equal(await page.locator('#h-health-setup').isVisible(),false);
-  assert.equal(await page.locator('#health-status').isVisible(),false,'routine status is hidden');
-  const closed=await disclosure.boundingBox();
-  if(process.env.HEALTH_COLLAPSED_SCREENSHOT)await page.screenshot({path:process.env.HEALTH_COLLAPSED_SCREENSHOT});
-  await summary.press('Space');await until(()=>disclosure.evaluate(el=>el.open),'keyboard opens disclosure');
-  assert.equal(await page.locator('#h-health-setup').isVisible(),true);
-  const expanded=await disclosure.boundingBox();assert(expanded.height>closed.height,'only opened details occupy extra height');
-  assert(closed.x>=0&&closed.x+closed.width<=390,'disclosure fits mobile viewport');
-  if(process.env.HEALTH_EXPANDED_SCREENSHOT)await page.screenshot({path:process.env.HEALTH_EXPANDED_SCREENSHOT});
-  await page.locator('#btn-refresh').click();await delay(300);
-  assert.equal(await disclosure.evaluate(el=>el.open),true,'normal refresh preserves open choice');
-  await summary.click();await until(async()=>!await disclosure.evaluate(el=>el.open),'disclosure closes');
-  await page.locator('#btn-refresh').click();await delay(300);
-  assert.equal(await disclosure.evaluate(el=>el.open),false,'normal refresh keeps controls folded');
-  await page.reload();await field(page,'weight').waitFor();
-  assert.equal(await disclosure.evaluate(el=>el.open),false,'new page starts folded');
+ const engine=process.env.BROWSER_ENGINE==='webkit'?webkit:chromium;
+ browser=await engine.launch({headless:true,...(engine===chromium?{executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'}:{})});
+ await scenario('Health controls live only in Settings and preserve record keys across mobile layouts',async({page,posts,values})=>{
+  assert.equal(await page.locator('#health-disclosure,.health-tools').count(),0,'Habit top has no Health panel');
+  const saved=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>/^(sth_v3_(habitday_|mealday_|health_settings)|preserve:health-test)/.test(key))));
+  const shotDir=process.env.HEALTH_UI_SCREENSHOT_DIR;
+  if(shotDir)fs.mkdirSync(shotDir,{recursive:true});
+  for(const width of [320,390])for(const theme of ['navy','cream']){
+   await page.setViewportSize({width,height:844});
+   await openHealthTools(page);
+   await page.locator(`#settings-theme-grid [data-theme-id="${theme}"]`).click();
+   await page.locator('#settings-health-title').scrollIntoViewIfNeeded();
+   assert.equal(await page.locator('#settings-health-status').isVisible(),true);
+   assert.equal(await page.locator('#settings-open-health').isEnabled(),true);
+   assert.equal(await page.locator('#settings-cancel-health').isVisible(),false,'no pending read means no cancel action');
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Settings fit viewport');
+   if(shotDir)await page.screenshot({path:path.join(shotDir,`settings-${process.env.BROWSER_ENGINE||'chromium'}-${width}-${theme}.png`)});
+   await closeHealthTools(page);
+   assert.equal(await page.locator('#health-disclosure,.health-tools').count(),0);
+   if(shotDir)await page.screenshot({path:path.join(shotDir,`habit-${process.env.BROWSER_ENGINE||'chromium'}-${width}-${theme}.png`)});
+  }
+  assert.deepEqual(await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>/^(sth_v3_(habitday_|mealday_|health_settings)|preserve:health-test)/.test(key)))),saved);
   assert.equal(healthReads(posts).length,0);assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
-  console.log('Disclosure mobile heights: '+closed.height+' closed / '+expanded.height+' open');
  },{enabled:false});
  await scenario('setup downloads a ZIP containing the signed shortcut without navigating away',async({page,posts,values})=>{
   await openHealthSettings(page);
@@ -251,7 +257,9 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   assert.deepEqual(values[TODAY],{...initialValues[TODAY],weight:62.3,bodyFat:21.2,kcal:420,steps:8040});
   assert.equal(await field(page,'weight').inputValue(),'62.3');assert.equal(await field(page,'steps').inputValue(),'8040');
   assert.deepEqual(await page.evaluate(key=>JSON.parse(localStorage.getItem(key)).verifiedKeys.sort(),SETTINGS),['bodyFat','kcal','steps','weight']);
-  await until(async()=>(await page.locator('#health-status').textContent()).includes('取り込みました'),'completed import is announced');
+  await openHealthTools(page);
+  await until(async()=>(await page.locator('#settings-health-status').textContent()).includes('取り込みました'),'completed import is announced in Settings');
+  await closeHealthTools(page);
   const shot=process.env.HEALTH_SCREENSHOT;
   if(shot){await until(async()=>(await page.locator('.toast').count())===0,'transient messages clear for review',5000);fs.mkdirSync(path.dirname(shot),{recursive:true});await page.screenshot({path:shot,fullPage:true});}
  },{enabled:false});
@@ -323,7 +331,7 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   opts.healthValues={};opts.healthUnits={};await begin(page,posts);await done(page,posts);
   assert.deepEqual(values,initialValues);assert.equal(habitWrites(posts).length,0);
   await openHealthTools(page);
-  const status=await page.locator('#health-status').textContent();
+  const status=await page.locator('#settings-health-status').textContent();
   assert(status.includes('取得できませんでした'));assert(!status.includes('データはありません'));
  });
  for(const invalid of ['day','unit'])await scenario('invalid Health '+invalid+' cannot mutate any saved habit',async({page,opts,posts,values})=>{
@@ -358,13 +366,50 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   assert.equal(metricWrites(posts).length,0,'an expired Health result must not enqueue a patch after awaited normal refresh');
   assert.deepEqual(values,initialValues);
  });
- await scenario('save in progress prevents misleading cancel or settings changes',async({page,opts,posts})=>{
-  opts.habitPostDelay=500;await begin(page,posts);
+ await scenario('Settings opened during saving blocks cancel and shows fresh Habit values after close',async({page,opts,posts,values})=>{
+  opts.habitPostDelay=650;
+  // Open synchronously at the saving transition, before the durable queue await
+  // returns and the Habit DOM can be repainted. Opening after the network POST
+  // starts would miss this boundary and would not reproduce stale hidden inputs.
+  await page.evaluate(async()=>{
+   const {getHealthSyncView,HEALTH_SYNC_EVENT}=await import('/js/habit.js');
+   function openAtSave(){if(!getHealthSyncView().saving)return;document.removeEventListener(HEALTH_SYNC_EVENT,openAtSave);document.querySelector('#btn-settings').click();}
+   document.addEventListener(HEALTH_SYNC_EVENT,openAtSave);
+  });
+  await begin(page,posts);
+  await page.locator('.app-settings-modal').waitFor();
   await until(()=>Promise.resolve(metricWrites(posts).length===1),'Health save request begins');
-  assert.equal(await page.locator('#h-health-cancel').isDisabled(),true,'cannot cancel after durable saving has begun');
-  assert.equal(await page.locator('#h-health-setup').isDisabled(),true,'cannot change pairing while saving');
-  await done(page,posts);await until(()=>page.locator('#h-health-setup').isEnabled(),'settings re-enabled after save');
-  assert.equal(metricWrites(posts).length,1,'one Health result saves once');
+  assert.equal(await field(page,'weight').inputValue(),'61.5','underlying input is still the old value while Settings covers it');
+  assert.equal(await page.locator('#settings-cancel-health').isDisabled(),true,'cannot cancel after durable saving has begun');
+  assert.equal(await page.locator('#settings-open-health').isDisabled(),true,'cannot change pairing while saving');
+  await done(page,posts);await until(()=>page.locator('#settings-open-health').isEnabled(),'settings re-enabled after save');
+  assert((await page.locator('#settings-health-status').textContent()).includes('取り込みました'));
+  await closeHealthTools(page);
+  assert.equal(await field(page,'weight').inputValue(),'62.3','deferred Health paint is applied after Settings closes');
+  assert.equal(await field(page,'steps').inputValue(),'8040');
+  assert.equal(values[TODAY].weight,62.3);assert.equal(metricWrites(posts).length,1,'one Health result saves once');
+ });
+ await scenario('Settings pauses an arrived result and resumes it after closing without a second launch',async({page,opts,posts,values})=>{
+  opts.readDelay=600;const request=await begin(page,posts);
+  await openHealthTools(page);await delay(900);
+  assert.equal(habitWrites(posts).length,0,'Settings do not let an arrived result overwrite the underlying input');
+  assert.equal((await pending(page)).request_id,request.request_id);
+  await closeHealthTools(page);await done(page,posts);
+  assert.equal(values[TODAY].steps,8040);
+  assert.equal(await field(page,'steps').inputValue(),'8040');
+  assert.equal(await page.evaluate(()=>window.testShortcutLaunches.length),1);
+ });
+ await scenario('a pending Health read can be cancelled from Settings on another tab',async({page,opts,posts,values})=>{
+  opts.healthStatus='waiting';const request=await begin(page,posts);
+  await page.locator('[data-tab="task"]').click();await openHealthTools(page);
+  assert((await page.locator('#settings-health-status').textContent()).includes(request.date));
+  assert.equal(await page.locator('#settings-cancel-health').isEnabled(),true);
+  await page.locator('#settings-cancel-health').click();
+  assert.equal(await pending(page),null);
+  assert((await page.locator('#settings-health-status').textContent()).includes('中止'));
+  await closeHealthTools(page);opts.healthStatus='ready';
+  await page.locator('[data-tab="habit"]').click();await delay(500);
+  assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
  });
  await scenario('failed pending edits are not replaced by fresh Health values',async({page,opts,posts,values})=>{
   opts.failPosts=true;opts.healthValues={weight:62.3};opts.healthUnits={weight:'kg'};const input=field(page,'weight');await input.fill('64');await input.blur();await delay(150);

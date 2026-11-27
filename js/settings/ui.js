@@ -2,6 +2,7 @@ import { createAppUpdater } from './updater.js';
 import { createUpdateSafety } from './safety.js';
 import { THEMES, currentThemeId, selectTheme } from '../theme.js';
 import { getBackupStatus, backupAdminUrl, backupTimeLabel } from '../backup/client.js';
+import { getHealthSyncView, cancelHealthSync, resumeHealthAfterSettings, HEALTH_SYNC_EVENT } from '../habit.js';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 export function currentAppBuild() {
@@ -47,7 +48,11 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
       <section class="settings-section" aria-labelledby="settings-health-title">
         <h2 id="settings-health-title">ヘルスケア連携</h2>
         <p>体重・体脂肪率・アクティブエネルギー・歩数の設定と、連携の停止を行えます。</p>
-        <button type="button" class="btn-ghost" id="settings-open-health">ヘルスケア連携を設定</button>
+        <p id="settings-health-status" class="settings-update-status" role="status" aria-live="polite"></p>
+        <div class="settings-health-actions">
+          <button type="button" class="btn-ghost" id="settings-open-health">ヘルスケア連携を設定</button>
+          <button type="button" class="btn-ghost" id="settings-cancel-health" hidden>取り込みを中止</button>
+        </div>
         <p class="settings-small">iPhoneに追加したショートカットは、この更新ボタンでは変更されません。修正版は連携設定の手順から追加してください。</p>
       </section>
       <section class="settings-section" aria-labelledby="settings-data-title">
@@ -65,18 +70,30 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
     <footer><button type="button" class="btn-primary" id="settings-close">閉じる</button></footer>
   </section>`;
   let updating = false;
-  const close = () => {
+  const close = ({resumeHealth = true} = {}) => {
     if (updating) return;
     backupRequest++;
     window.removeEventListener('focus', refreshBackupOnReturn);
     document.removeEventListener('visibilitychange', refreshBackupOnReturn);
+    document.removeEventListener(HEALTH_SYNC_EVENT, refreshHealthStatus);
     backdrop.remove();
-    if (previous?.isConnected) previous.focus({preventScroll:true});
+    if (resumeHealth) resumeHealthAfterSettings();
+    if (previous?.isConnected && !document.querySelector(".modal-backdrop")) previous.focus({preventScroll:true});
   };
   const status = backdrop.querySelector('#settings-update-status');
   const updateButton = backdrop.querySelector('#settings-apply-update');
   const closeButton = backdrop.querySelector('#settings-close');
   const healthButton = backdrop.querySelector('#settings-open-health');
+  const healthCancelButton = backdrop.querySelector('#settings-cancel-health');
+  const healthStatus = backdrop.querySelector('#settings-health-status');
+  function refreshHealthStatus() {
+    if (!backdrop.isConnected) return;
+    const view = getHealthSyncView();
+    healthStatus.textContent = view.message;
+    healthButton.disabled = updating || view.saving;
+    healthCancelButton.hidden = !view.pending;
+    healthCancelButton.disabled = updating || view.saving;
+  }
   const backupButton = backdrop.querySelector('#settings-open-backup');
   const backupRefreshButton = backdrop.querySelector('#settings-refresh-backup');
   const backupStatus = backdrop.querySelector('#settings-backup-status');
@@ -115,7 +132,7 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
     updating = value;
     updateButton.disabled = value;
     closeButton.disabled = value;
-    healthButton.disabled = value;
+    refreshHealthStatus();
     backupButton.disabled = value;
     backupRefreshButton.disabled = value || backupLoading;
     backdrop.querySelectorAll('.theme-swatch').forEach(button => { button.disabled = value; });
@@ -157,7 +174,15 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
   });
   backupRefreshButton.addEventListener('click', refreshBackupStatus);
   closeButton.addEventListener('click', close);
-  healthButton.addEventListener('click',()=>{close();onOpenHealthSettings?.();});
+  healthButton.addEventListener('click',()=>{
+    if (updating || getHealthSyncView().saving) return;
+    close({resumeHealth:false});onOpenHealthSettings?.();
+  });
+  healthCancelButton.addEventListener('click',()=>{
+    if (updating || getHealthSyncView().saving) return;
+    try { cancelHealthSync(); }
+    catch (error) { healthStatus.textContent=error.message || '取り込みを中止できませんでした。もう一度お試しください。'; }
+  });
   backdrop.addEventListener('click',event=>{if(event.target===backdrop)close();});
   backdrop.addEventListener('keydown',event=>{
     if(event.key==='Escape'){event.preventDefault();close();return;}
@@ -168,6 +193,8 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
     else if(!event.shiftKey&&document.activeElement===fields.at(-1)){event.preventDefault();fields[0].focus({preventScroll:true});}
   });
   document.body.appendChild(backdrop);
+  document.addEventListener(HEALTH_SYNC_EVENT, refreshHealthStatus);
+  refreshHealthStatus();
   backdrop.querySelector('[role="dialog"]').focus({preventScroll:true});
   window.addEventListener('focus', refreshBackupOnReturn);
   document.addEventListener('visibilitychange', refreshBackupOnReturn);
