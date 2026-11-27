@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getBackupStatus, backupAdminUrl, backupTimeLabel } from '../js/backup/client.js';
 
+import { GAS_URL, BACKUP_ADMIN_URL } from '../js/config.js';
+
 const response = data => ({ ok: true, text: async () => JSON.stringify({ ok: true, data }) });
 test('backup status is a read-only request and exposes only public state', async () => {
   let sent;
@@ -10,6 +12,7 @@ test('backup status is a read-only request and exposes only public state', async
     return response({ enabled: true, hasBackups: true, lastSuccessAt: '2026-11-26T03:00:00+09:00', lastErrorCode: null, privateCopyId: 'do-not-copy', ownerEmail: 'do-not-copy@example.test' });
   }});
   assert.equal(new URL(sent.url).searchParams.get('type'), 'backup_status');
+  assert.equal(new URL(sent.url).pathname, new URL(GAS_URL).pathname);
   assert.equal(sent.options.method, 'GET'); assert.equal(sent.options.cache, 'no-store');
   assert.equal(sent.options.body, undefined);
   assert.deepEqual(Object.keys(result).sort(), ['enabled','hasBackups','lastSuccessAt','lastErrorCode'].sort());
@@ -25,6 +28,9 @@ test('Google management link does not carry record data, pairing keys or command
   const url = new URL(backupAdminUrl());
   assert.deepEqual([...url.searchParams.entries()], [['type','backup_admin']]);
   assert(!url.hash);
+  assert.equal(url.pathname, new URL(BACKUP_ADMIN_URL).pathname);
+  assert.notEqual(url.pathname, new URL(GAS_URL).pathname, 'management uses the Google-restricted owner deployment');
+  assert(!url.pathname.endsWith('/dev'), 'never administer against mutable development HEAD');
 });
 test('backup status times are shown in Japan time and invalid dates stay explicit', () => {
   assert.equal(backupTimeLabel(null), 'まだありません');

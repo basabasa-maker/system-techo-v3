@@ -26,7 +26,7 @@ test('GET routes read-only public status and owner HTML directly', () => {
   assert.deepEqual(h.calls,['status','admin']);
 });
 test('REST parameters cannot configure, copy, delete or restore backups', () => {
-  for (const type of ['configureAutomaticBackups','runBackupNow','backup_enable','backup_restore','backup_delete']) {
+  for (const type of ['configureAutomaticBackups','runBackupNow','backup_enable','backup_restore','backup_delete','authorizeBackupSetup']) {
     const h=fixture();
     assert.equal(JSON.parse(h.context.doGet({parameter:{type,enabled:'true'}}).text).ok,false);
     assert.equal(JSON.parse(h.context.doPost({postData:{contents:JSON.stringify({type,enabled:true})}}).text).ok,false);
@@ -35,9 +35,16 @@ test('REST parameters cannot configure, copy, delete or restore backups', () => 
 });
 test('editor authorization check requests trigger scope without data copies or trigger creation', () => {
   const h=fixture();
-  assert.equal(h.context.authorizeBackupSetup_().authorized,true);
+  assert.equal(h.context.authorizeBackupSetup().authorized,true);
   assert.deepEqual(h.calls,[{mode:'FULL',scopes:['https://www.googleapis.com/auth/script.scriptapp']},'owner','triggers']);
   const manifest=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'../gas/appsscript.json'),'utf8'));
   assert(manifest.oauthScopes.includes('https://www.googleapis.com/auth/script.scriptapp'));
   assert(!manifest.oauthScopes.includes('https://www.googleapis.com/auth/drive'));
+});
+
+test('authorization helper denies a different account before listing triggers', () => {
+  const h=fixture();
+  h.context.backupOwner_ = () => {throw new Error('owner only');};
+  assert.throws(() => h.context.authorizeBackupSetup(), /owner only/);
+  assert.deepEqual(h.calls,[{mode:'FULL',scopes:['https://www.googleapis.com/auth/script.scriptapp']}]);
 });

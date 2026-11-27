@@ -3,6 +3,9 @@
 export const GAS_URL =
   "https://script.google.com/macros/s/AKfycbwSm0NCuVXkLU0CErNYn8EXR8spop6D5Fycv7JiFAAL2vipQ3PB_yBUEzw0a-zPTDDw/exec";
 
+// Google本人限定 (MYSELF) のバックアップ管理用。通常APIとは別deployment。
+export const BACKUP_ADMIN_URL = "https://script.google.com/a/macros/en-conect.com/s/AKfycbzbxOkhfeObf9LE0SBbM-TpOjlWBoidtWlj8JLrsujQtEcVS9CmbwWdCSpdBM8EQLMV/exec";
+
 export const LS_KEY_TASKS = "sth_v3_tasks_cache";
 export const LS_KEY_ACTIVE_TAB = "sth_v3_active_tab";
 export const LS_KEY_TASK_SORT = "sth_v3_task_sort"; // タスクの並び方（手動を含む）を覚える

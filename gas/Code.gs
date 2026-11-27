@@ -40,8 +40,8 @@ function authorizeOnce() {
   return results;
 }
 
-/** Editor-only authorization check; never copies data or creates triggers. */
-function authorizeBackupSetup_() {
+/** Owner authorization check, callable from the editor; no REST route or data copies. */
+function authorizeBackupSetup() {
   ScriptApp.requireScopes(ScriptApp.AuthMode.FULL, [
     "https://www.googleapis.com/auth/script.scriptapp",
   ]);

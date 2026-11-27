@@ -9,7 +9,7 @@
 - 追加20種類：自転車・水泳・掃除・洗濯・歯みがき・入浴・休息・水分補給・牛乳・お茶・卵・野菜・果物・ペット・植物・パソコン・書く・家計・映画・パズル。
 - 設定に自動バックアップを追加。Google保存済みのスプレッドシートを全体コピーする。既存ソースにバックアップ実装はなかった。旧仕様の「3時バックアップ」の記述だけで実装済みとは扱わない。
 
-画像はimagegen内蔵ツールでA/B/Cの3案を生成し、選定待ち。現時点の `icons/habit-icons.png` は試作用のA案。候補と生成プロンプトは作業成果物 `habit-text-backup/habit-icons-{a,b,c}.png` / `icon-prompts.json` に保存。Aは塗り、Bは太い輪郭、Cは淡色。画像の選定前に正式公開しない。
+画像はimagegen内蔵ツールでA/B/Cの3案を生成・提示した。現時点の `icons/habit-icons.png` はA案。Aを候補へ適用している旨を本人へ伝えた後、完成後に公開する指示を受領したため、この案を公開対象とする。候補と生成プロンプトは作業成果物 `habit-text-backup/habit-icons-{a,b,c}.png` / `icon-prompts.json` に保存。Aは塗り、Bは太い輪郭、Cは淡色。A/B/Cの文字による明示的な選択回答は受領していないので、特定案を明示選択したという記録にはしない。
 
 ## 文章の保存と既存データ保護
 
@@ -37,7 +37,7 @@
 
 1. 実装と画像選定を完了し、本人の公開承認を得る。
 2. 新source・manifestをApps Scriptへ保存する。現行deploymentはこの段階で切り替えない。
-3. 管理者本人がApps Script editorで `Backup.gs` の `getBackupStatus` を選び、Googleの追加認可を確認する。末尾underscoreの `authorizeBackupSetup_` はeditorの選択一覧に表示されないことを実UIで確認したため、状態だけを読む関数を入口にする。新規権限の許可はその場で本人へ確認する。状態取得は本文の取得、コピーやトリガーの作成・削除を行わない。
+3. 管理者本人がApps Script editorで `Backup.gs` の `getBackupStatus` を選び、Googleの追加認可を確認する。末尾underscoreの関数はeditorの選択一覧に表示されないため、本人確認を維持した公開関数名 `authorizeBackupSetup` を用意した。状態確認の後はこの関数も実行し、requireScopesとgetProjectTriggersが成功することを確認する。REST経由の呼出しは追加しない。新規権限の許可はその場で本人へ確認する。状態取得は本文の取得、コピーやトリガーの作成・削除を行わない。
 4. 再実行が成功してから同じdeploymentを新versionへ切り替える。認可前に切り替えると既存APIも止まる可能性があるため順序を守る。
 5. 管理ページの本人認識と状態表示を確認する。Google Drive保存先の選択が確定した後、管理画面からONにし、初回コピーと共有範囲、最終成功を確認する。
 6. GAS反映を待って画面側を公開し、公開ファイルのSHAを確認する。
@@ -80,3 +80,13 @@ Apps Scriptへ新しい4ファイルを未公開HEADとして保存済み。既�
 11/27、本人から自動実行のGoogle追加権限の許可と、必要な本人操作は具体的に示すよう指示を受領。許可はチャットで受領済みだが、Google画面での反映はまだ未実施。新しい共通ブラウザ規則に合わせ、デスクトップ1の指定AIウィンドウ確認待ちで止めている。認可と本番配信が済むまでは公開完了と報告しない。
 
 配信用候補 `20261127-141201` を生成し、61静的ファイルのSHA・HTML/SWの版一致、Node130件、実SW更新4件が成功。実SW試験はlocalhostの合成記録のみ。手帳の入力・添付・未知の送信待ちを保持し、欠損配信の拒否と旧版のオフライン起動を確認。
+
+## 11/27の実Google確認と管理専用配信
+
+本人から指定AIブラウザがデスクトップ1の正しい場所であることを確認後、その中の専用グループだけで作業した。Google追加権限を画面で許可し、`authorizeBackupSetup` の requireScopes・本人確認・getProjectTriggers の実行完了を確認。通常APIは従来のdeploymentをversion25へ更新した。
+
+本番UI確認で匿名公開URLのbackup_adminは、ログイン済み本人でもactive emailを受け取れず拒否された。fail-closedの本人照合は維持し、同じコードの管理専用version26をMYSELF/USER_DEPLOYINGとして別deploymentへ配置した。Google公式APIが返すドメイン付きwebApp URLを採用する。URL文字列を推測した汎用パスは使用しない。ローカルおよびremote HEADのmanifestはANYONE_ANONYMOUSへ復元済み。公開APIのURLは変更していない。
+
+実ブラウザで本人用HTMLとgetBackupAdminState RPCが成功し、OFF・コピー0件・状態確認成功を確認。匿名のpublic backup_statusもOFF・hasBackups=falseの4フィールドだけを返した。実コピー・有効化・トリガー登録は行っていない。実際のコピーの保存先・共有範囲と日次実行は未確認であり、状態取得の成功をバックアップ成功とは報告しない。管理画面の入口だけをBACKUP_ADMIN_URLへ切り替え、状態GETは既存GAS_URLを使う。自分のタブを閉じた後、専用グループが消え、元からあるタブが残ることを確認した。
+
+Google仕様の根拠：[Session](https://developers.google.com/apps-script/reference/base/session)、[Web app manifest](https://developers.google.com/apps-script/manifest/web-app-api-executable)。管理関数の本人認識は合成試験だけで判断しない。

@@ -1,5 +1,5 @@
 {
-  "build": "20261127-141201",
+  "build": "20261127-142548",
   "assets": [
     {
       "path": "css/goals.css",
@@ -59,7 +59,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "d341d09197766315cd92887b4a28d7a1080a219be2b306af1b68ddc3be3e802c"
+      "sha256": "8928ca0aa82f5b0b5faaabbf01b960db5c64c024a75119c4443f3abddf2d9148"
     },
     {
       "path": "js/app.js",
@@ -67,11 +67,11 @@
     },
     {
       "path": "js/backup/client.js",
-      "sha256": "7ec8a48d3da3cf3979a63854195b75f22cea9e873acf72c80726a31fe23aff2e"
+      "sha256": "fa99fcb41bc74f2eefae0a462c85565a28672b007075aed5f4cce20c729d1d6d"
     },
     {
       "path": "js/config.js",
-      "sha256": "c3285c5f30d2d559fee845afa179822e06efa466e51a2e70c3a3a4b24139bbc0"
+      "sha256": "aa18543315a62572176757fbb2f10310675a8f11bfc3dd856dc7ce867681f216"
     },
     {
       "path": "js/daily.js",
@@ -239,7 +239,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "f6fc9f6efac7aff784d8cba656236b100ce7bf6490327505fbcdf08c74d38fc5"
+      "sha256": "b91c718388d50e3a9a8be22c2b63bb5514df79df4cba4081a2e119f13e6cf52c"
     },
     {
       "path": "vendor/codemirror/codemirror.js",

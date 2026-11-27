@@ -1,8 +1,8 @@
 // Read-only app status. Backup management stays on the Google owner-only page.
-import { GAS_URL } from '../config.js';
+import { GAS_URL, BACKUP_ADMIN_URL } from '../config.js';
 
 export function backupAdminUrl() {
-  const url = new URL(GAS_URL);
+  const url = new URL(BACKUP_ADMIN_URL);
   url.searchParams.set('type', 'backup_admin');
   return url.href;
 }
