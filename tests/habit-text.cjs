@@ -174,6 +174,12 @@ async function scenario(name,fn){
  await scenario('image icons offer twenty new and fifty legacy selectable options',async({page,posts})=>{
   await page.locator('#h-add').click();assert.equal(await page.locator('.icon-opt').count(),70);assert.equal(await page.locator('.habit-image-grid .icon-opt').count(),20);
   const selected=await page.locator('.icon-opt').evaluateAll(buttons=>buttons.map(button=>{button.click();return button.classList.contains('sel')&&button.getAttribute('aria-pressed')==='true'&&document.querySelectorAll('.icon-opt.sel').length===1;}));assert(selected.every(Boolean));assert.equal(posts.length,0);
+  const styles=await page.locator('.icon-opt').evaluateAll(buttons=>buttons.map(button=>{const s=getComputedStyle(button),r=button.getBoundingClientRect();return{width:r.width,height:r.height,font:s.fontSize,background:s.backgroundColor};}));
+  assert(styles.every(s=>s.background==='rgb(255, 255, 255)'), 'new and existing picker backgrounds are white');
+  observations.iconPickerStyles=styles;
+  assert(styles.every(s=>Math.abs(s.width-styles[0].width)<0.1&&s.height===styles[0].height&&s.font===styles[0].font), 'all seventy options share the existing picker geometry and font');
+  const imageSize=await page.locator('.habit-image-icon').first().evaluate(el=>({width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height}));
+  assert.deepEqual(imageSize,{width:22,height:22},'image frame compensates for white padding rather than using the previous oversized 36px tile');
   await page.locator('[data-ic="habit-image:writing"]').click();
   const border=await page.locator('[data-ic="habit-image:writing"]').evaluate(el=>({style:getComputedStyle(el).borderTopStyle,width:getComputedStyle(el).borderTopWidth}));assert.deepEqual(border,{style:'solid',width:'2px'});
   assert(await page.locator('.habit-image-grid').evaluate(el=>el.clientHeight>=el.scrollHeight),'all twenty image options fit inside their unshrunk grid');
@@ -188,6 +194,23 @@ async function scenario(name,fn){
  await scenario('image change preserves the existing id metadata and every old daily value',async({page,posts})=>{
   const previous=await local(page,PREV);await page.locator('#h-edit').click();await page.locator('[data-id="count"] .habit-label').click();await page.locator('[data-ic="habit-image:bicycle"]').click();await page.locator('#e-save').click();
   const item=await page.evaluate(()=>JSON.parse(localStorage.getItem('sth_v3_habit_items')).find(i=>i.id==='count'));assert.deepEqual(item,{...ITEMS[1],icon:'habit-image:bicycle'});assert.deepEqual(await local(page),ORIGINAL);assert.deepEqual(await local(page,PREV),previous);assert.equal(posts.filter(p=>p.type==='habit_day_upsert').length,0);
+ });
+ await scenario('image artwork update reuses all twenty stored IDs without changing records',async({page,opts})=>{
+  opts.offline=true;
+  const original=await local(page),previous=await local(page,PREV);
+  const stored=await page.evaluate(async()=>{
+   const {IMAGE_HABIT_ICONS}=await import('/js/habit/icons.js');
+   const items=[...JSON.parse(localStorage.getItem('sth_v3_habit_items')),...IMAGE_HABIT_ICONS.map((icon,index)=>({id:'saved-image-'+index,label:icon.label,icon:icon.id,type:'integer',unit:'回',unknown:{keep:true}}))];
+   const raw=JSON.stringify(items);localStorage.setItem('sth_v3_habit_items',raw);return raw;
+  });
+  await page.reload();await until(async()=>await page.locator('.habit-list .habit-image-icon').count()===20,'all saved image IDs render the replacement artwork');
+  const rowStyles=()=>page.locator('.habit-icon').evaluateAll(elements=>elements.map(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return{width:r.width,height:r.height,font:s.fontSize,background:s.backgroundColor};}));
+  observations.iconRowStyles=await rowStyles();
+  assert(observations.iconRowStyles.every(s=>s.width===28&&s.height===30&&s.font==='22px'&&s.background==='rgb(255, 255, 255)'),'new and legacy row frames share white backgrounds and existing 22px type');
+  for(const kind of ['navy','cream']){await page.evaluate(async kind=>(await import('/js/theme.js')).applyTheme(kind),kind);await page.screenshot({path:path.join(output,engine+'-icon-rows-'+kind+'.png')});}
+  await page.locator('#h-edit').click();assert.deepEqual(await rowStyles(),observations.iconRowStyles,'edit mode preserves the same icon dimensions');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('sth_v3_habit_items')),stored,'existing twenty IDs and unknown metadata are byte-for-byte unchanged');
+  assert.deepEqual(await local(page),original);assert.deepEqual(await local(page,PREV),previous);
  });
  await scenario('late text session cannot replace a newer checkbox value after changing its type',async({page})=>{
   const old=await text(page).elementHandle();await page.locator('#h-edit').click();await page.locator('[data-id="journal"] .habit-label').click();await page.locator('#e-type').selectOption('check');await page.locator('#e-save').click();

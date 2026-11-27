@@ -1,5 +1,5 @@
 {
-  "build": "20261127-142548",
+  "build": "20261127-145130",
   "assets": [
     {
       "path": "css/goals.css",
@@ -7,7 +7,7 @@
     },
     {
       "path": "css/habit-icons.css",
-      "sha256": "d0075979376061452e6495f5648b7ca648f5e724aa6a0b43a76d518f64d55b0e"
+      "sha256": "ade2e755c84e53c4284a9d53cf573d58511257e501c5ba570f8aa607a24efa9d"
     },
     {
       "path": "css/habit-text.css",
@@ -47,7 +47,7 @@
     },
     {
       "path": "icons/habit-icons.png",
-      "sha256": "274d9f9cb75cbddb5c7a66e431f392c9532ca27d498381a64d5b7511141a70e1"
+      "sha256": "d97eaee0494844f902cc45a97e9da8a208c1978f8dea2fbc2015e3451550e6b6"
     },
     {
       "path": "icons/icon-192.png",
@@ -59,7 +59,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "8928ca0aa82f5b0b5faaabbf01b960db5c64c024a75119c4443f3abddf2d9148"
+      "sha256": "1dbcb81051e8be42d8f1e345c3ad66e35f4e533ea2249828ccb8d0106c6fd9e6"
     },
     {
       "path": "js/app.js",
@@ -239,7 +239,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "b91c718388d50e3a9a8be22c2b63bb5514df79df4cba4081a2e119f13e6cf52c"
+      "sha256": "98adec9bc137738d4ea5e4ff0692efe751788bfeb380dd3d58883ada7f27ac53"
     },
     {
       "path": "vendor/codemirror/codemirror.js",

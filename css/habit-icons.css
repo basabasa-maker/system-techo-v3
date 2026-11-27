@@ -1,4 +1,4 @@
-/* Generated image atlas: 4 columns x 5 rows. Legacy emoji values remain valid. */
+/* White emoji-style atlas: 4 columns x 5 rows. Saved IDs remain unchanged. */
 .habit-image-icon {
   display: inline-block;
   width: 28px;
@@ -7,18 +7,27 @@
   background-image: url('../icons/habit-icons.png');
   background-size: 400% 500%;
   background-repeat: no-repeat;
+  /* Flatten the generated near-white canvas to the same white as legacy cells. */
+  filter: contrast(1.04);
   pointer-events: none;
 }
-.habit-icon:has(.habit-image-icon) { flex-shrink: 0; line-height: 1; }
+.habit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 30px;
+  border-radius: 4px;
+  background: #fff;
+}
 .habit-image-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  max-height: 192px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  max-height: 150px;
   flex-shrink: 0;
   overscroll-behavior: contain;
 }
-.habit-image-grid .icon-opt { min-height: 44px; height: 44px; }
-.habit-image-grid .habit-image-icon { width: 36px; height: 36px; }
+.habit-image-grid .habit-image-icon { width: 22px; height: 22px; }
 
 /* Modal defaults must not erase the icon selection border or squeeze the image. */
-.modal .icon-opt { padding: 0; border: 2px solid transparent; }
+.modal .icon-opt { padding: 0; border: 2px solid transparent; background: #fff; }
 .modal .icon-opt.sel { border-color: var(--accent); }
