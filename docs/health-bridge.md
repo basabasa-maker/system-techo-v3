@@ -1,6 +1,10 @@
 # iPhoneヘルスケア連携
 
-> **未解決：iPhoneの「そんなファイルない」という呼出エラー。iPhoneミラーリングはTouch ID認証で止まっており、iPhone内の実名・手帳の呼出設定・実応答をまだ照合できていない。Macで保持している既存名 `system-techo-health 4` を、iPhoneでも正常に呼べる根拠にはしない。名前やキーを推測で変えて解決済みにしない。**
+> **現在：iPhoneの実PWAビルド `20261128-003214` で設定名と実Shortcuts登録名がともに `system-techo-health 4` と一致し、「歩数を確認（保存しない）」からの実起動を確認した。「そんなファイルない」は今回は再現せず、以前の原因は未断定。現在は送信のdownloadurlで、iOSの多数のHealth項目共有に関する許可制限に停止している。有効な応答版と保存成功は未確認。**
+>
+> 大量共有設定が全体設定へ影響することを説明し、本人からONと再試験の承認を受けた。ただし設定はまだ未変更で、端末操作の調整中。本人の承認と実際の設定適用を分けて記録する。[Apple公式の共有・プライバシー設定](https://support.apple.com/en-gb/guide/shortcuts/apd961a4fc65/ios)を参照。
+>
+> 旧状況：Touch ID認証で実機を確認できず、名前も未照合だった。これは現在の阻害状況ではない。Macの既存名も保持し、名前やキーを推測で変更していない。
 
 ## 明示版管理 1.0.1
 
@@ -12,7 +16,7 @@
 
 配布先は `shortcuts/health-bridge/releases/1.0.1/` の署名済みShortcut、ZIP、source.plist、manifest.json。manifestには公開名・版・protocol・source・各ファイルのSHA-256/byte数を記録し、実物と照合する。同versionの異なるhashは上書きせず拒否する。従来のlatest ZIPは互換用に維持し、設定リンクは版別URLを使う。生成 `js/health/release.js` も中央定義から作る。[版別manifest](../shortcuts/health-bridge/releases/1.0.1/manifest.json)を参照。今回の公開対象ビルドは `20261128-003214`、通常APIはGAS public版 `28` へ反映済み。本人限定バックアップ管理のprivate版 `26` も維持されていることをread-onlyで照合済み。
 
-1.0.1のmanifest自体のSHA-256は `5fe2f6153d0793b494ed3f0ed1440e239d5bbef22211014c1a2dc1b0bb90465b`。署名済みShortcut・ZIP・sourceのhashは[配布物のハッシュ表](../shortcuts/health-bridge/README.md#配布物とハッシュ)に記録。Apple公開証明書で署名を検証し、全176アクションとImportQuestionsが生成元と一致することを確認した。署名時の名前除去・clientVersion・QuickActionSurfacesの正規化だけは区別した。iPhoneでの呼出・取込成功の確認は別に必要。
+1.0.1のmanifest自体のSHA-256は `5fe2f6153d0793b494ed3f0ed1440e239d5bbef22211014c1a2dc1b0bb90465b`。署名済みShortcut・ZIP・sourceのhashは[配布物のハッシュ表](../shortcuts/health-bridge/README.md#配布物とハッシュ)に記録。Apple公開証明書で署名を検証し、全176アクションとImportQuestionsが生成元と一致することを確認した。署名時の名前除去・clientVersion・QuickActionSurfacesの正規化だけは区別した。iPhoneでの有効な応答版と取込成功は別に確認する。
 
 設定の「この端末が呼ぶ名前」「配布ショートカット版」「最後に応答した版」「応答を確認した時刻」を別々に表示する。応答版はこの端末が検証済み応答で受け取ったもの。時刻は応答取得時刻で、測定時刻や保存成功時刻ではない。版情報なしの旧形式はunknownとして「版情報なし（旧形式）」、応答前は「未確認」とする。名前の数字から版を推定しない。版が一致してもiPhone内の別名や個々の保存成功を保証しない。
 
@@ -26,7 +30,7 @@
 
 旧Shortcutからの合算値が再び保存されないよう、新テンプレートはstepsSource=apple_watchを付け、GAS一時Cache経由で受信側へ返す。Web側は印のない結果の歩数だけを除外し、他3項目は従来どおり処理する。保存なし観測では旧結果も表示できる。メタ情報は送信方式の識別子であり、暗号的な機器認証ではない。日付・手入力・未送信・他項目・過去の保護は維持し、既存記録の一括補正はしない。
 
-Mac側の本人用Shortcutは既存キーを再発行・ファイル書出しせず更新し、呼出名system-techo-health 4を維持。旧合算版は「【使用停止】旧ヘルスケア・合算版」と明記して保持した。新しい個人用Shortcutやキーを公開ZIPへ書き出していない。iPhoneへの同期と本来の更新からの保存は本人確認前。
+Mac側の本人用Shortcutは既存キーを再発行・ファイル書出しせず更新し、呼出名system-techo-health 4を維持。旧合算版は「【使用停止】旧ヘルスケア・合算版」と明記して保持した。新しい個人用Shortcutやキーを公開ZIPへ書き出していない。iPhoneでの名前照合と保存なし確認からの起動は確認済み。有効な応答版と通常更新による保存は未確認。
 
 Node155件、隔離Healthブラウザ34件、設定17件、GAS Health16群、backup24件、goals12群、Shortcut Python10件で成功。実StepsブロックのHealth処理だけを架空辞書へ置換し、Apple Shortcuts実行器で混在・Watch欠測・0・空Source・別日/別単位・複数Watch・空・大小文字の8ケース成功。初回CLI実行は待機したが独立再試行と8件の再実行は成功。実Healthと本番記録をテスト用に読み書きせず、実iPhoneの取込成功とは区別する。
 
