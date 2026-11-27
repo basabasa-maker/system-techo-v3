@@ -1,5 +1,5 @@
 {
-  "build": "20261127-145130",
+  "build": "20261127-161914",
   "assets": [
     {
       "path": "css/goals.css",
@@ -7,7 +7,7 @@
     },
     {
       "path": "css/habit-icons.css",
-      "sha256": "ade2e755c84e53c4284a9d53cf573d58511257e501c5ba570f8aa607a24efa9d"
+      "sha256": "d400f98a9105bba2a0f751b55a8cb7800068e9670d85e7cb062c557b082aa5ea"
     },
     {
       "path": "css/habit-text.css",
@@ -59,7 +59,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "1dbcb81051e8be42d8f1e345c3ad66e35f4e533ea2249828ccb8d0106c6fd9e6"
+      "sha256": "23dd9722e54e0caca6145b03340fc37a4ed6322f8292e55dc9cdf554cd06b641"
     },
     {
       "path": "js/app.js",
@@ -107,7 +107,7 @@
     },
     {
       "path": "js/habit/icons.js",
-      "sha256": "80bbda332f899af7bae674f3aeb4d9ea65be9351c49f9432f3996f256389e08d"
+      "sha256": "d14a14036bbd089cbd2bc046db1301ebc14a08a7b2fa9c8a03c07b021c3584c1"
     },
     {
       "path": "js/habit/text.js",
@@ -119,7 +119,7 @@
     },
     {
       "path": "js/habit.js",
-      "sha256": "60a68cac09f92be5ad52d326474d6666e771fc4b42d7312e622758c33b8b82ad"
+      "sha256": "82fc510424ff8decebfb5cdff7d9e57c79ddd57ea37969c3ae91a795000723db"
     },
     {
       "path": "js/health/bridge.js",
@@ -239,7 +239,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "98adec9bc137738d4ea5e4ff0692efe751788bfeb380dd3d58883ada7f27ac53"
+      "sha256": "1d063fc0892d2a9cd6ef6e1f5853b705a1046dddbef80ff0292a0352e09ee4b4"
     },
     {
       "path": "vendor/codemirror/codemirror.js",

@@ -5,7 +5,7 @@
 // - 旧アプリの過去データは取り込まない（白紙から開始）
 
 import * as gas from "./gas-client.js";
-import { habitIconContents, habitImageIconOptions } from "./habit/icons.js";
+import { habitIconContents, habitIconOptions } from "./habit/icons.js";
 import * as sync from "./sync.js";
 import { bindHabitTextInput, persistHabitText, replayHabitTextRecovery, getHabitTextRecoveryDates, markHabitValueChanged, invalidateHabitTextItem } from "./habit/text.js";
 import { latestMealTime } from "./meal-time.js";
@@ -512,14 +512,13 @@ function deleteItem(id) {
   pushItems(state.items);
 }
 
-const ICONS = ["🌙","☀️","💤","⏰","🍽️","💧","⚖️","📏","🔥","👣","📱","📊","📈","📉","🎯","✅","🧘","📋","📧","📅","🤸","💊","🏠","💝","🏃","🚶","🧠","💪","❤️","🩺","🌡️","💉","🍎","🥗","🍺","☕","📖","🎵","🎮","💰","🛒","📝","⭐","🔔","🕐","📸","🎨","🗂️","🌿","🎓"];
 
 // 項目の追加・編集（アイコン・名前・入力方式・単位）
 function openItemEditor(id) {
   if (!flushTextInputs()) return;
   const item = id ? state.items.find((x) => x.id === id) : null;
   if (id && !item) return;
-  let icon = item ? item.icon || "•" : ICONS[0];
+  let icon = item ? item.icon || "•" : "🌙";
   const type = item ? (item.type === "number" ? "decimal" : item.type) : "integer";
   const modal = document.createElement("div");
   modal.className = "modal-backdrop";
@@ -527,10 +526,7 @@ function openItemEditor(id) {
     <div class="modal">
       <header>${item ? "項目を編集" : "項目を追加"}</header>
       <div class="modal-body">
-        <div class="ed-label">追加の画像アイコン（20種類）</div>
-        <div class="icon-grid habit-image-grid">${habitImageIconOptions(icon)}</div>
-        <div class="ed-label">これまでのアイコン</div>
-        <div class="icon-grid">${ICONS.map((ic) => `<button type="button" class="icon-opt ${ic === icon ? "sel" : ""}" data-ic="${ic}">${ic}</button>`).join("")}</div>
+        <div class="icon-grid habit-icon-grid" role="group" aria-label="アイコン">${habitIconOptions(icon)}</div>
         <label>項目名
           <input type="text" id="e-label" autocomplete="off" placeholder="例：体温" value="${escapeHtml(item ? item.label : "")}" />
         </label>

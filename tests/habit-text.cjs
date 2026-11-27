@@ -171,8 +171,14 @@ async function scenario(name,fn){
   await delay(850);observations.rollbackFailureReplay={error,sent:posts.filter(p=>p.type==='habit_day_upsert').map(p=>p.set)};
   assert(error,'mismatched intended value must stop replay');assert.equal(posts.filter(p=>p.type==='habit_day_upsert').length,0,'stale cache must never be sent as the attempted new value');assert.equal(remote.get(TODAY).journal,'サーバー側の新しい記録');
  });
- await scenario('image icons offer twenty new and fifty legacy selectable options',async({page,posts})=>{
-  await page.locator('#h-add').click();assert.equal(await page.locator('.icon-opt').count(),70);assert.equal(await page.locator('.habit-image-grid .icon-opt').count(),20);
+ await scenario('image icons form one unlabeled picker with related choices together',async({page,posts})=>{
+  await page.locator('#h-add').click();assert.equal(await page.locator('.icon-grid').count(),1);assert.equal(await page.locator('.habit-icon-grid .icon-opt').count(),70);assert.equal(await page.locator('.habit-icon-grid .habit-image-icon').count(),20);
+  assert.equal(await page.locator('.modal-body .ed-label').count(),0,'no new/legacy or category headings');
+  const order=await page.locator('.icon-opt').evaluateAll(buttons=>buttons.map(button=>button.dataset.ic));
+  assert.equal(new Set(order).size,70,'no lost or duplicated choices');
+  assert.deepEqual(order.slice(0,4),['☀️','⏰','🕐','🔔'],'morning/time choices are together');
+  const sport=order.indexOf('🚶');assert.deepEqual(order.slice(sport,sport+5),['🚶','🏃','habit-image:bicycle','habit-image:swim','🤸'],'new and existing sport choices are interleaved');
+  const food=order.indexOf('🍽️');assert.deepEqual(order.slice(food,food+6),['🍽️','🍎','habit-image:grapes','🥗','habit-image:broccoli','habit-image:egg'],'food choices are together');
   const selected=await page.locator('.icon-opt').evaluateAll(buttons=>buttons.map(button=>{button.click();return button.classList.contains('sel')&&button.getAttribute('aria-pressed')==='true'&&document.querySelectorAll('.icon-opt.sel').length===1;}));assert(selected.every(Boolean));assert.equal(posts.length,0);
   const styles=await page.locator('.icon-opt').evaluateAll(buttons=>buttons.map(button=>{const s=getComputedStyle(button),r=button.getBoundingClientRect();return{width:r.width,height:r.height,font:s.fontSize,background:s.backgroundColor};}));
   assert(styles.every(s=>s.background==='rgb(255, 255, 255)'), 'new and existing picker backgrounds are white');
@@ -182,8 +188,9 @@ async function scenario(name,fn){
   assert.deepEqual(imageSize,{width:22,height:22},'image frame compensates for white padding rather than using the previous oversized 36px tile');
   await page.locator('[data-ic="habit-image:writing"]').click();
   const border=await page.locator('[data-ic="habit-image:writing"]').evaluate(el=>({style:getComputedStyle(el).borderTopStyle,width:getComputedStyle(el).borderTopWidth}));assert.deepEqual(border,{style:'solid',width:'2px'});
-  assert(await page.locator('.habit-image-grid').evaluate(el=>el.clientHeight>=el.scrollHeight),'all twenty image options fit inside their unshrunk grid');
-  for(const width of [320,390])for(const kind of ['dark','light']){await page.setViewportSize({width,height:844});await page.evaluate(async kind=>{(await import('/js/theme.js')).applyTheme(kind==='light'?'cream':'navy');document.querySelector('.modal-body').scrollTop=0;},kind);await delay(60);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,engine+'-icons-'+width+'-'+kind+'.png')});}
+  assert(await page.locator('.habit-icon-grid').evaluate(el=>el.scrollHeight>el.clientHeight),'all seventy choices share one scrolling region');
+  await page.locator('[data-ic="⭐"]').click();assert.equal(await page.locator('[data-ic="⭐"].sel').count(),1,'the last option is reachable and selectable by a real click');
+  for(const width of [320,390])for(const kind of ['dark','light']){await page.setViewportSize({width,height:844});await page.evaluate(async kind=>{(await import('/js/theme.js')).applyTheme(kind==='light'?'cream':'navy');document.querySelector('.modal-body').scrollTop=0;document.querySelector('.habit-icon-grid').scrollTop=0;},kind);await delay(60);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,engine+'-icons-'+width+'-'+kind+'.png')});}
   await page.locator('#e-cancel').click();assert.deepEqual(await local(page),ORIGINAL);
  });
  await scenario('image icon selected on a new text item survives reopening its editor',async({page})=>{

@@ -20,13 +20,13 @@
   border-radius: 4px;
   background: #fff;
 }
-.habit-image-grid {
+.habit-icon-grid {
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  max-height: 150px;
+  max-height: 240px;
   flex-shrink: 0;
   overscroll-behavior: contain;
 }
-.habit-image-grid .habit-image-icon { width: 22px; height: 22px; }
+.habit-icon-grid .habit-image-icon { width: 22px; height: 22px; }
 
 /* Modal defaults must not erase the icon selection border or squeeze the image. */
 .modal .icon-opt { padding: 0; border: 2px solid transparent; background: #fff; }
