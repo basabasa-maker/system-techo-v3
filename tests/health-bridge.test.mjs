@@ -286,3 +286,20 @@ test('actual pre-inspection bridge cannot see, read, finish or post an inspectio
   // the separate read-only request or turn it into an ordinary import.
   old.cancel();assert.equal(old.pending(),null);assert.equal(f.bridge.pending().mode,'inspect');assert.equal(f.storage.getItem(LAST_SYNC_KEY),previousRaw);
 });
+
+
+test('readSnapshot preserves Watch provenance and measurement precision without changing legacy read',async()=>{
+  const f=fixture();enable(f);const {request}=f.bridge.prepare('2026-11-25',{});
+  f.setResponse({status:'ready',date:request.date,issued_at:request.issued_at,values:{steps:450,weight:62.34},units:{steps:'count',weight:'kg'},stepsSource:'apple_watch'});
+  assert.deepEqual(await f.bridge.readSnapshot(request),{values:{steps:450,weight:62.3},stepsSource:'apple_watch'});
+  assert.deepEqual(await f.bridge.read(request),{steps:450,weight:62.3});
+  f.setResponse({status:'ready',date:request.date,issued_at:request.issued_at,values:{steps:900},units:{steps:'count'}});
+  assert.deepEqual(await f.bridge.readSnapshot(request),{values:{steps:900}});
+});
+test('readSnapshot rejects malformed provenance and retains pending without writes',async()=>{
+  for(const stepsSource of ['iphone','all',null,0,false,{},[]]){
+    const f=fixture();enable(f);const {request}=f.bridge.prepare('2026-11-25',{});const saved=[...f.map];
+    f.setResponse({status:'ready',date:request.date,issued_at:request.issued_at,values:{steps:450},units:{steps:'count'},stepsSource});
+    await assert.rejects(f.bridge.readSnapshot(request));assert.deepEqual([...f.map],saved);assert(!f.map.has(LAST_SYNC_KEY));
+  }
+});

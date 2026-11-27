@@ -100,12 +100,19 @@ export function createHealthBridge(options = {}) {
     url.search = url.searchParams.toString().replace(/\+/g, "%20");
     return { request, url: url.toString() };
   }
-  async function read(request) {
+  async function readSnapshot(request) {
     fresh(request);
     if (pending()?.request_id !== request.request_id) throw new Error("別の更新に切り替わりました");
     const result = await api.readHealthBridge(credentials(request));
     if (pending()?.request_id !== request.request_id) throw new Error("別の更新に切り替わりました");
-    return validateHealthResult(result, request, now());
+    const values = validateHealthResult(result, request, now());
+    if (values === null) return null;
+    if (Object.hasOwn(result, "stepsSource") && result.stepsSource !== "apple_watch") throw new Error("歩数の取得元が正しくありません");
+    return {values, ...(Object.hasOwn(result, "stepsSource") ? {stepsSource:result.stepsSource} : {})};
+  }
+  async function read(request) {
+    const result = await readSnapshot(request);
+    return result === null ? null : result.values;
   }
   async function finish(request, keys = [], skipped = [], { recordSync = true } = {}) {
     if (!validMode(request?.mode) || typeof recordSync !== "boolean") throw new Error("読み取り完了の設定が正しくありません。");
@@ -139,6 +146,6 @@ export function createHealthBridge(options = {}) {
     storage().removeItem(INSPECTION_PENDING_KEY);
   }
   function lastSync() { return jsonAt(storage(), LAST_SYNC_KEY); }
-  return { pending, prepare, read, finish, cancel, lastSync, markEdited };
+  return { pending, prepare, read, readSnapshot, finish, cancel, lastSync, markEdited };
 }
 export const healthBridge = createHealthBridge();

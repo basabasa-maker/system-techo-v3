@@ -1,4 +1,5 @@
 """Checks Shortcuts parameter serialization; no Health, user shortcuts, or network."""
+import hashlib, json
 import sys
 sys.dont_write_bytecode = True
 import importlib.util
@@ -117,6 +118,50 @@ class HealthShortcutTests(unittest.TestCase):
         self.assertFalse(any(a['WFWorkflowActionIdentifier'].startswith('is.workflow.actions.health.') for a in actions))
         self.assertNotIn(b'habit_day_upsert', plistlib.dumps(workflow))
         self.assertNotIn(b'Basal', plistlib.dumps(workflow))
+
+    def test_watch_steps_query_and_source_gate_are_explicit(self):
+        actions = builder.build(ENDPOINT)['WFWorkflowActions']
+        kind = lambda a: a['WFWorkflowActionIdentifier'].removeprefix('is.workflow.actions.')
+        params = lambda a: a['WFWorkflowActionParameters']
+        queries = [params(a) for a in actions if kind(a) == 'filter.health.quantity']
+        self.assertNotIn('WFHKSampleFilteringGroupBy', queries[-1])
+        self.assertEqual(queries[2]['WFHKSampleFilteringGroupBy'], 'Day')
+        source = next(a for a in actions if kind(a) == 'properties.health.quantity' and params(a)['WFContentItemPropertyName'] == 'Source')
+        match = next(a for a in actions if kind(a) == 'text.match' and params(a)['WFMatchTextPattern'] == 'Apple Watch')
+        self.assertFalse(params(match)['WFMatchTextCaseSensitive'])
+        self.assertLess(actions.index(source), actions.index(match))
+        guard = actions[actions.index(match)+1]
+        self.assertEqual(params(guard)['WFCondition'], 100)
+        self.assertEqual(params(guard)['WFInput']['Variable']['Value'], {'Type':'ActionOutput','OutputUUID':params(match)['UUID'],'OutputName':'Matches'})
+        steps_setters = [params(a) for a in actions if kind(a) == 'setvalueforkey' and params(a)['WFDictionaryKey'] == 'steps']
+        self.assertEqual(len(steps_setters), 2)
+        self.assertEqual(steps_setters[0]['WFDictionaryValue']['Value']['attachmentsByRange']['{0, 1}'], {'Type':'Variable','VariableName':'WatchStepsSum'})
+        self.assertTrue(any(kind(a) == 'math' and params(a)['WFMathOperation'] == '+' for a in actions))
+
+    def test_other_three_metrics_and_date_window_are_byte_equivalent_to_baseline(self):
+        # Snapshot captured from pre-Watch HEAD 2417aaecfdea66681c1f206407b4261ae6ec9d80.
+        # Includes the exact date bounds, all actions/UUIDs in the other three
+        # metric blocks, and their missing/latest/day/unit extraction gates.
+        actions = builder.build(ENDPOINT)['WFWorkflowActions']
+        kind = lambda a: a['WFWorkflowActionIdentifier'].removeprefix('is.workflow.actions.')
+        params = lambda a: a['WFWorkflowActionParameters']
+        start = next(i for i,a in enumerate(actions) if kind(a) == 'date')
+        query = next(i for i,a in enumerate(actions) if kind(a) == 'filter.health.quantity' and params(a)['WFContentItemFilter']['Value']['WFActionParameterFilterTemplates'][0]['Values']['Enumeration']['Value'] == 'Steps')
+        end = max(i for i in range(query) if kind(actions[i]) == 'comment')
+        digest = hashlib.sha256(json.dumps(actions[start:end],sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        self.assertEqual(digest, '0343a1735b2607e79dc7fa91b8a9a8e73cf3d2075600f0f7a8b3656c3c267481')
+
+    def test_payload_statically_identifies_watch_steps_without_changing_endpoint_or_input(self):
+        workflow = builder.build(ENDPOINT)
+        actions = workflow['WFWorkflowActions']
+        source = [a['WFWorkflowActionParameters'] for a in actions if a['WFWorkflowActionIdentifier'] == 'is.workflow.actions.setvalueforkey' and a['WFWorkflowActionParameters']['WFDictionaryKey'] == 'stepsSource']
+        self.assertEqual(len(source), 1)
+        self.assertEqual(source[0]['WFDictionaryValue']['Value']['string'], 'apple_watch')
+        self.assertEqual(source[0]['WFDictionary']['Value']['VariableName'], 'Payload')
+        send = next(a['WFWorkflowActionParameters'] for a in actions if a['WFWorkflowActionIdentifier'] == 'is.workflow.actions.downloadurl')
+        self.assertEqual(send['WFURL']['Value']['string'], ENDPOINT)
+        self.assertEqual(workflow['WFWorkflowInputContentItemClasses'], ['WFStringContentItem'])
+        self.assertEqual(len(workflow['WFWorkflowImportQuestions']), 1)
 
     def test_plist_round_trip_and_setup_question_keep_the_placeholder(self):
         workflow = builder.build(ENDPOINT)

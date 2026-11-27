@@ -100,4 +100,50 @@ test('date and key mismatches never disclose staged values even through unknown 
   const r = request(); ok(call('health_bridge_upload', { ...r, values: { steps: 4312 }, units: { steps: 'count' } }));
   const raw = call('health_bridge_read', { ...r, pair_key: wrongKey, values: { steps: 4312 } }); bad(raw, [key, wrongKey, '4312']);
 });
+test('Apple Watch provenance survives staging and read without changing any metric', () => {
+  const r = request(), values = { weight: 72.4, bodyFat: 18.1, kcal: 325, steps: 2468 }, units = { weight: 'kg', bodyFat: '%', kcal: 'kcal', steps: 'count' };
+  const uploaded = ok(call('health_bridge_upload', { ...r, values, units, stepsSource: 'apple_watch' }));
+  assert.deepEqual(uploaded, { status: 'ready', date: r.date, issued_at: r.issued_at });
+  assert.deepEqual(ok(call('health_bridge_read', r)), { status: 'ready', date: r.date, issued_at: r.issued_at, values, units, stepsSource: 'apple_watch' });
+});
+test('Watch provenance does not invent absent steps and retains a real zero', () => {
+  for (const values of [{ weight: 72.4 }, { steps: 0 }, {}]) {
+    const r = request(), units = Object.fromEntries(Object.keys(values).map(key => [key, key === 'steps' ? 'count' : 'kg']));
+    ok(call('health_bridge_upload', { ...r, values, units, stepsSource: 'apple_watch' }));
+    const read = ok(call('health_bridge_read', r));
+    assert.deepEqual(read.values, values); assert.deepEqual(read.units, units); assert.equal(read.stepsSource, 'apple_watch');
+  }
+});
+test('retry preserves the first provenance and values, including legacy absence', () => {
+  for (const first of [{ stepsSource: 'apple_watch' }, {}]) {
+    const r = request();
+    ok(call('health_bridge_upload', { ...r, values: { steps: 2468 }, units: { steps: 'count' }, ...first }));
+    ok(call('health_bridge_upload', { ...r, values: { steps: 9753 }, units: { steps: 'count' }, ...(first.stepsSource ? {} : { stepsSource: 'apple_watch' }) }));
+    const read = ok(call('health_bridge_read', r)); assert.equal(read.values.steps, 2468);
+    assert.equal(Object.hasOwn(read, 'stepsSource'), Object.hasOwn(first, 'stepsSource'));
+    if (first.stepsSource) assert.equal(read.stepsSource, first.stepsSource);
+    ok(call('health_bridge_ack', r));
+    const marker = JSON.parse(entries.get('health_bridge:' + r.request_id).value);
+    for (const field of ['values', 'units', 'stepsSource']) assert(!Object.hasOwn(marker, field), field + ' must be removed by ack');
+  }
+});
+test('invalid provenance rejects new and repeated uploads without changing cache', () => {
+  const r = request();
+  ok(call('health_bridge_upload', { ...r, values: { steps: 2468 }, units: { steps: 'count' }, stepsSource: 'apple_watch' }));
+  const before = entries.get('health_bridge:' + r.request_id).value;
+  for (const stepsSource of [null, false, 0, [], {}, '', 'all_sources', 'APPLE_WATCH', ' apple_watch', 'private-device-name']) {
+    const fresh = request();
+    for (const current of [fresh, r]) {
+      bad(call('health_bridge_upload', { ...current, values: { steps: 9753 }, units: { steps: 'count' }, stepsSource }), [key, 'private-device-name', '9753']);
+    }
+    assert(!entries.has('health_bridge:' + fresh.request_id));
+    assert.equal(entries.get('health_bridge:' + r.request_id).value, before);
+  }
+});
+test('invalid cached provenance is rejected instead of being relayed as trusted', () => {
+  const r = request(); ok(call('health_bridge_upload', { ...r, values: { steps: 2468 }, units: { steps: 'count' }, stepsSource: 'apple_watch' }));
+  const item = entries.get('health_bridge:' + r.request_id), entry = JSON.parse(item.value);
+  entry.stepsSource = 'private-device-name'; item.value = JSON.stringify(entry);
+  bad(call('health_bridge_read', r), [key, 'private-device-name', '2468']);
+});
 console.log('PASS ' + count + ' health bridge groups; no Sheets, Properties, network or real health data used');

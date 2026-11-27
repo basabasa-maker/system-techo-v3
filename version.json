@@ -1,5 +1,5 @@
 {
-  "build": "20261127-211744",
+  "build": "20261127-235638",
   "assets": [
     {
       "path": "css/goals.css",
@@ -59,7 +59,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "17283c5e0aa67a7708a3ea9f942c26d7540bf2f1d07d3111250928c8f201b706"
+      "sha256": "b567c90a3be58e259382b1359d24d3bbc8ae6e3416140e7f4d89bda858504051"
     },
     {
       "path": "js/app.js",
@@ -119,11 +119,11 @@
     },
     {
       "path": "js/habit.js",
-      "sha256": "6907b1794550e65225f2a72916c3010f1483deb1233fab2ebd17e00badea404c"
+      "sha256": "d29dde4d55587038147e2e4ca06b89863f236a7e8c042d11d382f9be8a7ce5ab"
     },
     {
       "path": "js/health/bridge.js",
-      "sha256": "1db69bec64f5cb3ce5cd4e574529fa854cf6174af0a06650e28649654f80313d"
+      "sha256": "ef1be0b515b85f5b7a23249d53de440802e18ef5671cbcb8a7e9721a579a45e2"
     },
     {
       "path": "js/health/model.js",
@@ -131,7 +131,7 @@
     },
     {
       "path": "js/health/ui.js",
-      "sha256": "b7b50b36d5f1823dae14fc752f381a316e87b6eb7fdbc980351f938398b39f7e"
+      "sha256": "457bd47c9d17d4b066908efe061c60515640daeac14d328bc6628a9669409e01"
     },
     {
       "path": "js/meal-time.js",
@@ -227,11 +227,11 @@
     },
     {
       "path": "shortcuts/health-bridge/system-techo-health.shortcut",
-      "sha256": "8ab9a22e88b12ae731f72fc0bf5ba771da3a3ab7ef329500f99e4c90f40bbae5"
+      "sha256": "ca749a7d69d92f406f9453456ab45d833b053ee32c5c0d3a68ebe792f87bfb51"
     },
     {
       "path": "shortcuts/health-bridge/system-techo-health.zip",
-      "sha256": "559c6991cd8efc3258418c2e0423b69539fda289b0b88738f57bdfe140110b85"
+      "sha256": "6826096cc0b35f82a39056a9d8812e74ce76c90e9cde37ead8b6ea998bb46318"
     },
     {
       "path": "support.html",
@@ -239,7 +239,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "96993a1ca7c8d3fa8cf4bc6f02bfccc9e657e8247b8631871d852bef57e259b1"
+      "sha256": "ef26b796177b0944665b45203746a825c6c1abe895cb14ac018e0bc7de2ad068"
     },
     {
       "path": "vendor/codemirror/codemirror.js",

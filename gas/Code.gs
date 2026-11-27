@@ -1397,7 +1397,16 @@ function healthBridgeLoad(cache, request) {
     throw new Error("health request does not match");
   }
   if (entry.expires_at <= Date.now()) throw new Error("health request expired");
+  healthBridgeStepsMetadata(entry);
   return entry;
+}
+
+// Optional provenance is a protocol marker, not a device name or a metric.
+// Legacy results stay readable; the client decides whether their steps are safe.
+function healthBridgeStepsMetadata(data) {
+  if (!Object.prototype.hasOwnProperty.call(data, "stepsSource")) return {};
+  if (data.stepsSource !== "apple_watch") throw new Error("invalid health steps source");
+  return { stepsSource: "apple_watch" };
 }
 
 function healthBridgeValues(values, units) {
@@ -1434,6 +1443,7 @@ function healthBridgeStore(cache, entry) {
 function healthBridgeUpload(body) {
   const request = healthBridgeRequest(body);
   const metrics = healthBridgeValues(body.values, body.units);
+  const metadata = healthBridgeStepsMetadata(body);
   return healthBridgeWithLock(() => {
     const cache = CacheService.getScriptCache();
     const existing = healthBridgeLoad(cache, request);
@@ -1442,7 +1452,7 @@ function healthBridgeUpload(body) {
       return { status: "ready", date: request.date, issued_at: request.issued_at }; // Retry preserves the first result.
     }
     const entry = { ...request, status: "ready", expires_at: Math.min(request.issued_at + HEALTH_BRIDGE_TTL_MS,
-      Date.now() + HEALTH_BRIDGE_TTL_MS), values: metrics.values, units: metrics.units };
+      Date.now() + HEALTH_BRIDGE_TTL_MS), values: metrics.values, units: metrics.units, ...metadata };
     healthBridgeStore(cache, entry);
     return { status: "ready", date: request.date, issued_at: request.issued_at };
   });
@@ -1455,7 +1465,8 @@ function healthBridgeRead(body) {
     if (!entry) return { status: "waiting", date: request.date };
     if (entry.status === "consumed") return { status: "consumed", date: request.date, issued_at: request.issued_at };
     const metrics = healthBridgeValues(entry.values, entry.units);
-    return { status: "ready", date: request.date, issued_at: entry.issued_at, values: metrics.values, units: metrics.units };
+    return { status: "ready", date: request.date, issued_at: entry.issued_at, values: metrics.values, units: metrics.units,
+      ...healthBridgeStepsMetadata(entry) };
   });
 }
 
@@ -1467,7 +1478,7 @@ function healthBridgeAck(body) {
     if (!entry) return { status: "waiting", date: request.date };
     const marker = { request_id: request.request_id, date: request.date, issued_at: request.issued_at,
       key_hash: request.key_hash, expires_at: entry.expires_at, status: "consumed" };
-    healthBridgeStore(cache, marker); // No values or units remain in the consumed marker.
+    healthBridgeStore(cache, marker); // No values, units or provenance remain in the consumed marker.
     return { status: "consumed", date: request.date, issued_at: request.issued_at };
   });
 }

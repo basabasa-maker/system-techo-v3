@@ -88,3 +88,13 @@ UUIDを除く検索パラメータが配布版と完全一致：Type=Steps、Gro
 [診断のiPhone手順](../shortcuts/health-bridge/diagnostics/README.md)。これは別名のキー不要診断で、通常のShortcut・アプリの連携設定を差し替えない。公開sourceは元の本人用Shortcutを読み出したものではなく、キーなしbuilderから生成したもの。2つのqueryはGroupByの有無だけが異なる。最終出力は画面だけで、HTTP・ファイル書込み・Health書込み・他のShortcut呼出しを含まない。
 
 親のApple実行器試験で初稿の空Text判定が期待と異なることを発見。日付とSourceの判定をregexの一致結果へ変更したR2で、JSON入力8ケースすべて成功。取得元行の順序は保証しない。実SourceプロパティとHealth queryは辞書置換しており、その成功は未検証。自作の一時fixtureだけを追加・実行後に削除し、元の5件が保たれたことをCUAで確認。個人のHealth読取・連携送信・保存記録の操作は0。
+
+## 本人診断とWatch基準への変更
+
+本人のソース別診断で、日本時間の当日0時〜翌日0時、GroupByDay候補1件、全rawの同日countサンプルのみが返り、GroupByDay採用値=raw単純合計=Watchのraw合計+iPhoneのraw合計となった。個人の実値・件数・機器名は非公開記録のみ。保存前に両ソースの合算値を採用していたことを確認した。Health内部の区間ごとの重複調整アルゴリズムを特定した、とは扱わない。
+
+本人の「ウォッチを基準にしろ」を受け、Stepsだけraw検索＋同日/count/Source表示Apple Watch（大小文字不問）の採用分の合計へ変更。他3項目と日付境界の87actionsはUUID込みで変更前と一致。Watch欠測は省略、0は有効。Source表示名による選別なので物理機器ID識別や全ソース統合を保証しない。stepsSource=apple_watchをGASが一時保持し、Webが無印旧結果の歩数上書きを拒否する。旧結果でも他3項目は更新可能。
+
+既存のキーを通常アプリ内だけで引き継ぎ、本人用の呼出名system-techo-health 4を維持。キーをログやファイルへ出さず、新版保存後に旧値との一致をbooleanだけで確認。旧合算版は使用停止と明記し、過去記録・個人用全体の書出しを行っていない。自作のHealthなしfixtureは試験後に削除済み。
+
+同じStepsブロックを使った架空JSON8ケースはApple実行器で成功。Node155、Healthブラウザ34、設定17、GAS Health16/backup24/goals12、Python10も成功。実iPhoneの通常更新での確認は未完了。旧diagnostic generatorはbuilderの旧版に依存するため、既存成果物を現builderで不用意に再生成しない。

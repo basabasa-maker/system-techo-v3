@@ -2,7 +2,7 @@ import { HEALTH_METRICS } from "./model.js";
 import { generateHealthKey, loadHealthSettings, saveHealthSettings } from "./bridge.js";
 import { toast } from "../toast.js";
 
-export const HEALTH_LABELS = { weight: "体重", bodyFat: "体脂肪率", kcal: "アクティブエネルギー", steps: "歩数" };
+export const HEALTH_LABELS = { weight: "体重", bodyFat: "体脂肪率", kcal: "アクティブエネルギー", steps: "歩数（Apple Watch）" };
 const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
 function dialog(title, body, footer, onClose) {
   const previous = document.activeElement;
@@ -34,6 +34,7 @@ export function showHealthSettings(onSaved) {
   }
   const modal = dialog("ヘルスケア連携", `
     <p>iPhoneのショートカットで、表示中の日の4項目を読み取り、Google上の一時保管先へ送信します。初めて届いた項目は、手帳で値を確認してから連携先のGoogleスプレッドシートへ保存します。</p>
+    <p class="health-small">歩数はApple Watchの記録だけを集計します。iPhoneの歩数は加えず、Watchの記録がない日は保存済みの歩数を変更しません。</p>
     <ol class="health-setup-steps"><li>下の連携キーをコピーします。</li><li><a href="shortcuts/health-bridge/system-techo-health.zip?_app_update=health-shortcut" download>追加用ZIPをダウンロード</a>します。</li><li>iPhoneの「ファイル」→「ダウンロード」でZIPをタップして展開し、中の「system-techo-health.shortcut」を開きます。</li><li>「ショートカットを設定」でキーを貼り付け、追加します。登録された名前と下のショートカット名を合わせます。</li><li>手帳で連携をONにして保存し、対象日の更新から実行します。初回の4項目の読み取り許可は順に表示されます。</li><li>読み取り後は画面左上の「システム手帳」から元のアプリへ戻り、同じ日のヘルスケア値と照合してから取り込みます。</li></ol>
     <label class="health-enable"><input type="checkbox" id="health-enabled" ${settings.enabled ? "checked" : ""}>入力画面の更新で連携する</label>
     <label>ショートカット名<input id="health-shortcut-name" value="${esc(settings.shortcutName)}" maxlength="100" /></label>
@@ -61,7 +62,7 @@ export function confirmHealthValues(date, values) {
     let settled=false;
     const finish=value=>{if(settled)return;settled=true;modal.close();resolve(value);};
     const rows=Object.entries(values).map(([key,value])=>`<div><dt>${esc(HEALTH_LABELS[key])}</dt><dd>${esc(key === "steps" ? value : value.toFixed(1))} ${esc(key === "steps" ? "歩" : HEALTH_METRICS[key].unit)}</dd></div>`).join("");
-    const modal=dialog("ヘルスケアの値を確認",`<p>${esc(date)} の値です。初めて届いた項目があるため、ヘルスケアの同じ日と一致するか確認してください。</p><dl class="health-preview">${rows}</dl><p class="health-small">測定のない項目には値を入れません。体脂肪率と、歩数・活動分の合計が一致することも確認してください。</p>`, '<button type="button" class="btn-ghost" id="health-reject">取り込まない</button><button type="submit" class="btn-primary" id="health-confirm">この値を取り込む</button>',()=>{if(!settled){settled=true;resolve(false);}});
+    const modal=dialog("ヘルスケアの値を確認",`<p>${esc(date)} の値です。初めて届いた項目があるため、ヘルスケアの同じ日と一致するか確認してください。</p><dl class="health-preview">${rows}</dl><p class="health-small">測定のない項目には値を入れません。歩数はApple Watchの記録だけを使い、iPhoneの歩数は加えません。</p>`, '<button type="button" class="btn-ghost" id="health-reject">取り込まない</button><button type="submit" class="btn-primary" id="health-confirm">この値を取り込む</button>',()=>{if(!settled){settled=true;resolve(false);}});
     modal.element.querySelector("#health-reject").addEventListener("click",()=>finish(false));
     modal.element.querySelector("form").addEventListener("submit",event=>{event.preventDefault();finish(true);});
   });

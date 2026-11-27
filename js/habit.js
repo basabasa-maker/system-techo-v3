@@ -872,10 +872,11 @@ export function resumeHealthSync(internal = false) {
 async function receiveHealth(request) {
   if (Date.now()-request.issued_at >= REQUEST_TTL_MS) throw new Error("読み取りが期限切れです。もう一度更新してください。");
   const cached=healthReady?.request_id === request.request_id ? healthReady : null;
-  const values=cached ? cached.values : await healthBridge.read(request);
+  const snapshot=cached || await healthBridge.readSnapshot(request);
   if (!healthContext(request)) return;
-  if (values === null) { scheduleHealth(request);return; }
-  healthReady={request_id:request.request_id,values,receivedAt:cached?.receivedAt ?? Date.now()};
+  if (snapshot === null) { scheduleHealth(request);return; }
+  const values={...snapshot.values};
+  healthReady={request_id:request.request_id,values:{...values},stepsSource:snapshot.stepsSource,receivedAt:cached?.receivedAt ?? Date.now()};
   if (healthInputBusy()) { scheduleHealth(request,500);return; }
   if (request.mode === "inspect") {
     await showHealthStepObservation(request.date, {
@@ -888,6 +889,10 @@ async function receiveHealth(request) {
     }
     return;
   }
+  // Only the Watch-only reader may update steps. Old all-source Shortcuts
+  // still supply the other three metrics, but cannot overwrite saved steps.
+  const blockedSteps=Object.hasOwn(values,"steps") && snapshot.stepsSource !== "apple_watch";
+  if (blockedSteps) delete values.steps;
   let settings=loadHealthSettings();
   const receivedKeys=Object.keys(values);
   const needsCheck=receivedKeys.some(key=>!settings.verifiedKeys.includes(key));
@@ -932,8 +937,12 @@ async function receiveHealth(request) {
     }
     await sync.flushAll();
   }
-  if (!await healthBridge.finish(request,appliedKeys,skipped)) return;
+  if (!await healthBridge.finish(request,appliedKeys,[...skipped,...(blockedSteps?["steps"]:[])])) return;
   healthReady=null;
   healthMessage=!receivedKeys.length ? "この日のヘルスケア値を取得できませんでした。読み取り許可・条件を確認してください。保存済みの4項目は変更していません。" : skipped.length ? `${appliedKeys.length}項目を取り込み、変更中などの${skipped.length}項目はそのまま残しました。` : appliedKeys.length ? `ヘルスケア${appliedKeys.length}項目を取り込みました。` : "ヘルスケアの値を確認しました。変更はありません。";
+  if (blockedSteps) {
+    const notice="歩数はApple Watchで集計した結果を確認できないため変更していません。連携ショートカットを更新してください。";
+    healthMessage=receivedKeys.length ? `${healthMessage} ${notice}` : notice;
+  }
   notifyHealthSyncChange();toast(healthMessage + await sync.pendingNote(),"success");
 }

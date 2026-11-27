@@ -68,12 +68,14 @@ def build(endpoint):
     for name in ['HealthValues','HealthUnits']:
         empty=w.dictionary();w.bind(name,w.ref(empty,'Dictionary'))
     for key,label,unit,cumulative in [('weight','Weight','kg',False),('bodyFat','Body Fat Percentage','%',False),('kcal','Active Calories','kcal',True),('steps','Steps','count',True)]:
-        w.add('comment',WFCommentActionText=f'{label}: '+('日ごとの集計値。生サンプルの合算はしません。' if cumulative else '対象日内の最新測定のみ。')+' 欠測を0で埋めません。')
+        w.add('comment',WFCommentActionText=f'{label}: '+('同日・count・Source表示にApple Watchを含むサンプルだけを合算します。' if key=='steps' else '日ごとの集計値。生サンプルの合算はしません。' if cumulative else '対象日内の最新測定のみ。')+' 欠測を0で埋めません。')
+        if key=='steps':
+            zero=w.add('number',WFNumberActionNumber='0');w.bind('WatchStepsSum',w.ref(zero,'Number'))
         nothing=w.add('nothing');candidates=key+'Candidates';w.bind(candidates,w.ref(nothing,'Nothing'))
         kind={'Bounded':True,'Operator':4,'Property':'Type','Removable':False,'Values':{'Enumeration':{'Value':label,'WFSerializationType':'WFStringSubstitutableState'}}}
         dates={'Bounded':True,'Operator':1003,'Property':'Start Date','Removable':False,'Values':{'Date':w.att(w.var('WindowStart')),'AnotherDate':w.att(w.var('WindowEnd'))}}
         params={'WFContentItemFilter':{'Value':{'WFActionParameterFilterPrefix':1,'WFContentPredicateBoundedDate':False,'WFActionParameterFilterTemplates':[kind,dates]},'WFSerializationType':'WFContentPredicateTableTemplate'},'WFContentItemInputParameter':'Library','WFContentItemLimitEnabled':False,'WFContentItemSortProperty':'Start Date','WFContentItemSortOrder':'Latest First','WFHKSampleFilteringUnit':unit,'WFHKSampleFilteringFillMissing':False}
-        if cumulative:params['WFHKSampleFilteringGroupBy']='Day'
+        if cumulative and key!='steps':params['WFHKSampleFilteringGroupBy']='Day'
         found=w.add('is.workflow.actions.filter.health.quantity',**params)
         have=w.condition(w.ref(found,'Health Samples'),100)
         loop=w.uid('repeat');w.add('repeat.each',GroupingIdentifier=loop,WFControlFlowMode=0,WFInput=w.att(w.ref(found,'Health Samples')))
@@ -82,20 +84,32 @@ def build(endpoint):
         same=w.condition(w.ref(day,'Formatted Date'),4,w.var('TargetDay'))
         unit_detail=w.add('is.workflow.actions.properties.health.quantity',WFContentItemPropertyName='Unit',WFInput=w.att(w.var('Repeat Item')))
         unit_matches=w.condition(w.ref(unit_detail,'Unit'),4,unit)
+        if key=='steps':
+            source=w.add('properties.health.quantity',WFContentItemPropertyName='Source',WFInput=w.att(w.var('Repeat Item')))
+            source_text=w.add('gettext',WFTextActionText=w.text(w.ref(source,'Source')))
+            watch_matches=w.add('text.match',text=w.text(w.ref(source_text,'Text')),WFMatchTextPattern='Apple Watch',WFMatchTextCaseSensitive=False)
+            watch=w.condition(w.ref(watch_matches,'Matches'),100)
         value=w.add('is.workflow.actions.properties.health.quantity',WFContentItemPropertyName='Value',WFInput=w.att(w.var('Repeat Item')))
         number=w.add('number',WFNumberActionNumber=w.text(w.ref(value,'Value')))
         w.add('appendvariable',WFVariableName=candidates,WFInput=w.att(w.ref(number,'Number')))
+        if key=='steps':
+            total=w.add('math',WFInput=w.att(w.var('WatchStepsSum')),WFMathOperation='+',WFMathOperand=w.text(w.ref(number,'Number')))
+            w.bind('WatchStepsSum',w.ref(total,'Calculation Result'));w.end(watch)
         w.end(unit_matches);w.end(same);w.end(loop,'is.workflow.actions.repeat.each')
         any_candidates=w.condition(w.var(candidates),100)
-        if cumulative:
-            count=w.add('count',WFCountType='Items',Input=w.att(w.var(candidates)))
-            one=w.condition(w.ref(count,'Count'),4,1)
-        first=w.add('getitemfromlist',WFItemSpecifier='First Item',WFInput=w.att(w.var(candidates)))
-        w.put('HealthValues',key,w.ref(first,'Item from List'));w.put('HealthUnits',key,unit)
-        if cumulative:w.end(one)
+        if key=='steps':
+            # Candidate presence distinguishes Watch missing from a genuine 0.
+            w.put('HealthValues',key,w.var('WatchStepsSum'));w.put('HealthUnits',key,unit)
+        else:
+            if cumulative:
+                count=w.add('count',WFCountType='Items',Input=w.att(w.var(candidates)))
+                one=w.condition(w.ref(count,'Count'),4,1)
+            first=w.add('getitemfromlist',WFItemSpecifier='First Item',WFInput=w.att(w.var(candidates)))
+            w.put('HealthValues',key,w.ref(first,'Item from List'));w.put('HealthUnits',key,unit)
+            if cumulative:w.end(one)
         w.end(any_candidates);w.end(have)
     body=w.dictionary();w.bind('Payload',w.ref(body,'Dictionary'))
-    for key,ref in [('type','health_bridge_upload'),('request_id',w.var('RequestID')),('pair_key',w.var('PairKey')),('date',w.var('TargetDay')),('issued_at',w.var('IssuedAt')),('values',w.var('HealthValues')),('units',w.var('HealthUnits'))]:w.put('Payload',key,ref)
+    for key,ref in [('type','health_bridge_upload'),('request_id',w.var('RequestID')),('pair_key',w.var('PairKey')),('date',w.var('TargetDay')),('issued_at',w.var('IssuedAt')),('values',w.var('HealthValues')),('units',w.var('HealthUnits')),('stepsSource','apple_watch')]:w.put('Payload',key,ref)
     json_text=w.add('gettext',WFTextActionText=w.text(w.var('Payload')))
     request=w.add('downloadurl',WFURL=w.text(endpoint),WFHTTPMethod='POST',WFHTTPBodyType='File',WFRequestVariable=w.att(w.ref(json_text,'Text')),WFFormValues={'Value':{'WFDictionaryFieldValueItems':[]},'WFSerializationType':'WFDictionaryFieldValue'},WFHTTPHeaders={'Value':{'WFDictionaryFieldValueItems':[{'WFItemType':0,'WFKey':w.text('Content-Type'),'WFValue':w.text('application/json')}]},'WFSerializationType':'WFDictionaryFieldValue'})
     response=w.add('detect.dictionary',WFInput=w.att(w.ref(request,'Contents of URL')))
@@ -160,7 +174,7 @@ def validate(workflow,endpoint):
     encoded=plistlib.dumps(workflow)
     assert b'habit_day_upsert' not in encoded and b'Basal' not in encoded
     assert PLACEHOLDER.encode() in encoded
-    return {'actions':len(actions),'health_queries':4,'contains_real_pair_key':False,'writes_health':False,'posts_existing_habits':False,'callback_contains_health_or_credentials':False,'dynamic_dictionary_values_use_single_token_strings':True,'ios_execution':'not_tested'}
+    return {'actions':len(actions),'health_queries':4,'contains_real_pair_key':False,'writes_health':False,'posts_existing_habits':False,'callback_contains_health_or_credentials':False,'dynamic_dictionary_values_use_single_token_strings':True,'steps_source':'apple_watch','steps_aggregation':'raw_same_day_count_source_display_apple_watch_case_insensitive_sum','watch_missing_omits_steps':True,'ios_execution':'not_tested'}
 
 
 def main():

@@ -193,3 +193,11 @@ PLAYWRIGHT_PATH=/path/to/playwright PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers B
 `node --test tests/*.test.mjs`：149件。`node tests/health.cjs`：31件（保存なし確認6件を含む）。通常保存、手入力・他日・未送信保護の既存回帰も含む。`app-settings.cjs` 17件、`backup-settings.cjs` 8件も成功。すべて隔離ブラウザと合成APIを使い、実Healthや本人のShortcutを起動しない。
 
 観測専用pendingを通常pendingから分離する。`health-bridge.test.mjs` はGit履歴 `299419f:js/health/bridge.js` の旧bridge実体もロードし、観測中の旧版から読取り・完了・通常取込ができないことを検証するため、この履歴が必要。観測中の再読み込み、欠測と0、受信歩数が変わっても既存歩数不変、通常更新への復帰、連携OFF/別画面/既存待機の禁止、アプリ更新待機を確認する。測定値やキーはテストへ転記しない。
+
+## Watch基準の歩数（2026-11-27）
+
+`node --test tests/*.test.mjs tests/*.test.cjs` は155件成功。`node tests/health.cjs` は34件、設定17件、`node tests/gas-health.cjs` は16群、GAS backup24件/goals12群、`python3 tests/health-shortcut.test.py` は10件成功。PythonファイルをNodeのtest globへ含めない。
+
+Health入口では、旧無印のstepsを保存せず他3項目は保存、Watch値の置換（減少時も加算しない）、Watch欠測で既存値保持、保存なし観測では旧値も観測できることを確認。bridgeはvaluesに加えてprovenanceを返すreadSnapshotを使い、readの旧返り値は互換。GASはoptional stepsSourceを一時Cache経由で保持し、再送は先着・ackで削除、不正sourceは拒否。
+
+実Stepsのquery/propertyだけを架空辞書へ置換した8ケースはMacのApple Shortcuts実行器で成功。ここには実Health queryはなく、Source文字列と日時・単位の条件、合算、欠測と0、JSON出力を検証する。実iPhone・本番Healthの成功と混同しない。署名済み公開テンプレートに本人のキーを入れず、本人用全体を書き出さない。

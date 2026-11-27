@@ -90,7 +90,7 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   ctx=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'});
   page=await ctx.newPage();page.setDefaultTimeout(4000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const values=clone(initialValues),days=clone(initialDays),posts=[],gets=[];
-  const opts={healthStatus:'ready',readDelay:0,failHealthRead:false,healthValues:{weight:62.3,bodyFat:21.2,kcal:420,steps:8040},healthUnits:{weight:'kg',bodyFat:'%',kcal:'kcal',steps:'count'},resultDate:null,failPosts:false,habitPostDelay:0,habitGetDelay:0,items:clone(items)};
+  const opts={stepsSource:'apple_watch',healthStatus:'ready',readDelay:0,failHealthRead:false,healthValues:{weight:62.3,bodyFat:21.2,kcal:420,steps:8040},healthUnits:{weight:'kg',bodyFat:'%',kcal:'kcal',steps:'count'},resultDate:null,failPosts:false,habitPostDelay:0,habitGetDelay:0,items:clone(items)};
   await ctx.route('**/*',async route=>{
    const req=route.request(),url=new URL(req.url());
    if(url.origin===base)return route.continue();
@@ -106,7 +106,7 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
     posts.push(clone(p));
     if(p.type==='health_bridge_read'){
      if(opts.failHealthRead){await delay(opts.readDelay);return route.abort('failed');}
-     const data=opts.healthStatus==='ready'?{status:'ready',date:opts.resultDate||p.date,issued_at:p.issued_at,values:clone(opts.healthValues),units:clone(opts.healthUnits)}:{status:opts.healthStatus,date:p.date,issued_at:p.issued_at};
+     const data=opts.healthStatus==='ready'?{status:'ready',date:opts.resultDate||p.date,issued_at:p.issued_at,values:clone(opts.healthValues),units:clone(opts.healthUnits),...(opts.stepsSource===undefined?{}:{stepsSource:opts.stepsSource})}:{status:opts.healthStatus,date:p.date,issued_at:p.issued_at};
      await delay(opts.readDelay);return route.fulfill({json:{ok:true,data},headers});
     }
     if(p.type==='health_bridge_ack')return route.fulfill({json:{ok:true,data:{status:'consumed',date:p.date,issued_at:p.issued_at}},headers});
@@ -259,6 +259,30 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
   assert.deepEqual(await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>/^(sth_v3_(habitday_|mealday_|health_settings)|preserve:health-test)/.test(key)))),saved);
   assert.equal(healthReads(posts).length,0);assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
  },{enabled:false});
+ await scenario('Watch source gate preserves legacy steps while importing the other three metrics',async({page,posts,values,opts})=>{
+  opts.stepsSource=undefined;
+  await begin(page,posts);await done(page,posts);
+  assert.equal(values[TODAY].steps,initialValues[TODAY].steps,'unmarked old Shortcut steps must never overwrite saved steps');
+  assert.equal(values[TODAY].weight,62.3);assert.equal(values[TODAY].bodyFat,21.2);assert.equal(values[TODAY].kcal,420);
+  assert(habitWrites(posts).every(p=>!Object.hasOwn(p.set||{},'steps')));
+  await openHealthTools(page);assert.match(await page.locator('#settings-health-status').innerText(),/歩数.*変更していません/);
+ });
+ await scenario('Watch source gate replaces rather than adds, and missing Watch steps preserve the record',async({page,posts,values,opts})=>{
+  opts.healthValues={steps:500};opts.healthUnits={steps:'count'};
+  await begin(page,posts);await done(page,posts);assert.equal(values[TODAY].steps,500);
+  opts.healthValues={steps:300};
+  await begin(page,posts);await done(page,posts);assert.equal(values[TODAY].steps,300,'Watch total replaces the day even when it decreases');
+  opts.healthValues={weight:63};opts.healthUnits={weight:'kg'};
+  await begin(page,posts);await done(page,posts);assert.equal(values[TODAY].steps,300,'no Watch sample does not reset steps');
+  assert.equal(values[TODAY].weight,63);
+ });
+ await scenario('Watch source gate still shows unmarked values in read-only observation without saving',async({page,posts,values,opts})=>{
+  opts.stepsSource=undefined;
+  await startStepObservation(page);await shownStepObservation(page);
+  assert.equal(await page.locator('[data-observation-value="steps"]').innerText(),'8040 歩');
+  await page.locator('#health-step-observation-close').click();await done(page,posts);
+  assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,initialValues);
+ });
  await scenario('setup downloads a ZIP containing the signed shortcut without navigating away',async({page,posts,values})=>{
   await openHealthSettings(page);
   const footer=await page.locator('#health-save').boundingBox();
