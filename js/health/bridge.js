@@ -1,13 +1,15 @@
 // Health values travel in authenticated POST bodies, never launch/return URLs.
 import * as gas from "../gas-client.js";
 import { HEALTH_METRICS, healthBaseline, validateHealthResult } from "./model.js";
+import { HEALTH_SHORTCUT_NAME, HEALTH_SHORTCUT_PROTOCOL_VERSION } from "./release.js";
 
 export const SETTINGS_KEY = "sth_v3_health_settings";
 export const PENDING_KEY = "sth_v3_health_pending";
 // Old app instances only inspect PENDING_KEY and must never import a diagnosis.
 export const INSPECTION_PENDING_KEY = "sth_v3_health_inspection_pending";
 export const LAST_SYNC_KEY = "sth_v3_health_last_sync";
-export const SHORTCUT_NAME = "システム手帳 ヘルスケア同期";
+export const LAST_RECEIPT_KEY = "sth_v3_health_last_receipt";
+export const SHORTCUT_NAME = HEALTH_SHORTCUT_NAME;
 export const REQUEST_TTL_MS = 600000;
 const KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
@@ -42,11 +44,29 @@ export function saveHealthSettings(settings, storage) {
     ? [...new Set(settings.verifiedKeys.filter(key => Object.hasOwn(HEALTH_METRICS, key)))] : [];
   const next = { enabled: settings.enabled === true, shortcutName: settings.shortcutName.trim(), pairKey: settings.pairKey || "", verifiedKeys };
   target.setItem(SETTINGS_KEY, JSON.stringify(next));
+  if (next.shortcutName !== previous.shortcutName || next.pairKey !== previous.pairKey) target.removeItem(LAST_RECEIPT_KEY);
   if (!next.enabled || next.pairKey !== previous.pairKey) {
     target.removeItem(PENDING_KEY);
     target.removeItem(INSPECTION_PENDING_KEY);
   }
   return next;
+}
+function validReleaseMetadata(data) {
+  const versioned=Object.hasOwn(data,"shortcutVersion"), protocol=Object.hasOwn(data,"protocolVersion");
+  if (versioned !== protocol || (versioned && (typeof data.shortcutVersion !== "string" || data.shortcutVersion.length > 32
+    || !/^\d+\.\d+\.\d+$/.test(data.shortcutVersion) || /[\r\n]/.test(data.shortcutVersion)
+    || data.protocolVersion !== HEALTH_SHORTCUT_PROTOCOL_VERSION))) throw new Error("ショートカットの版情報が正しくありません");
+  return versioned ? {shortcutVersion:data.shortcutVersion,protocolVersion:data.protocolVersion} : {};
+}
+export function loadHealthReceipt(storage) {
+  try {
+    const target=store(storage), receipt=jsonAt(target,LAST_RECEIPT_KEY);
+    if (!receipt || receipt.shortcutName !== loadHealthSettings(target).shortcutName || !Number.isFinite(receipt.received_at) || receipt.received_at <= 0) return null;
+    if (receipt.shortcutVersion !== null || receipt.protocolVersion !== null) validReleaseMetadata(receipt);
+    if (receipt.stepsSource !== null && receipt.stepsSource !== "apple_watch") return null;
+    return {shortcutName:receipt.shortcutName,received_at:receipt.received_at,stepsSource:receipt.stepsSource,
+      shortcutVersion:receipt.shortcutVersion,protocolVersion:receipt.protocolVersion};
+  } catch (_) { return null; }
 }
 export function generateHealthKey(crypto = globalThis.crypto) {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -108,7 +128,12 @@ export function createHealthBridge(options = {}) {
     const values = validateHealthResult(result, request, now());
     if (values === null) return null;
     if (Object.hasOwn(result, "stepsSource") && result.stepsSource !== "apple_watch") throw new Error("歩数の取得元が正しくありません");
-    return {values, ...(Object.hasOwn(result, "stepsSource") ? {stepsSource:result.stepsSource} : {})};
+    const release=validReleaseMetadata(result);
+    // Connection metadata contains no measurement, key or requested health date.
+    const receipt={shortcutName:loadHealthSettings(storage()).shortcutName,received_at:now(),stepsSource:result.stepsSource ?? null,
+      shortcutVersion:release.shortcutVersion ?? null,protocolVersion:release.protocolVersion ?? null};
+    try { storage().setItem(LAST_RECEIPT_KEY,JSON.stringify(receipt)); } catch (_) { /* A full cache leaves the version unconfirmed, without blocking valid measurements. */ }
+    return {values, ...(Object.hasOwn(result, "stepsSource") ? {stepsSource:result.stepsSource} : {}), ...release};
   }
   async function read(request) {
     const result = await readSnapshot(request);
@@ -146,6 +171,6 @@ export function createHealthBridge(options = {}) {
     storage().removeItem(INSPECTION_PENDING_KEY);
   }
   function lastSync() { return jsonAt(storage(), LAST_SYNC_KEY); }
-  return { pending, prepare, read, readSnapshot, finish, cancel, lastSync, markEdited };
+  return { pending, prepare, read, readSnapshot, finish, cancel, lastSync, lastReceipt:()=>loadHealthReceipt(storage()), markEdited };
 }
 export const healthBridge = createHealthBridge();

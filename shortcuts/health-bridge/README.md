@@ -1,89 +1,98 @@
-# iPhone「システム手帳 ヘルスケア同期」
+# iPhoneヘルスケア連携ショートカット 1.0.1
 
-> 2026-11-27：本人指示で歩数はApple Watchの記録だけを集計する版へ変更。iPhone等の歩数を加えず、Watch欠測はsteps省略、実測0は保持。Source表示名にApple Watchを含むかで選別する。stepsSource=apple_watchを送信し、対応Webは無印旧版の歩数を保存しない。他3項目・日付・単位は不変。Mac側の本人用呼出名はsystem-techo-health 4のまま、キーの再発行は不要。iPhone同期と通常更新は本人確認前。詳しくは[現行の連携資料](../../docs/health-bridge.md)を参照。
+> **未解決：iPhoneでは「そんなファイルない」と呼出エラーが報告されている。iPhoneミラーリングがTouch ID認証で止まっており、iPhone内の実名・手帳が呼ぶ名前・実際に応答する版は未照合。Macの既存名 `system-techo-health 4` は保持しているが、これをiPhoneでも正常に呼べる証拠とは扱わない。推測で再追加・改名して解決済みにしない。**
 
-`system-techo-health.shortcut` はキー未設定の署名済みテンプレートです。2026-11-25、本人が4項目の取り込み成功と小数第1位対応後の完了を確認しました。現行Web版は `20261125-233946`（実装 `838c47f`）。通常版の登録名は現在 `system-techo-health 4` で、既存キーを維持しています。小数桁の修正でShortcutを再追加する必要はありません。
+明示管理する配布対象は `1.0.1`、通信規約は数値 `1`、歩数の取得元表示は `apple_watch`。public templateの名前と配布ファイル名は `system-techo-health` に固定する。末尾の4、5等を増やす方法で版を管理しない。個人用の既存名と公開template名は別に扱う。
 
-体重・体脂肪率・アクティブエネルギーはWeb側の確認・新規取り込みで小数第1位、歩数は整数です。過去の記録は一括変更しません。完全な自動PWA復帰は未実装です。後半の検証記録にある未確認事項は、各修正当時の状態として読んでください。現行状態の詳細は [開発資料](../../docs/health-bridge.md) を参照してください。
+`1.0.0` は数値型の不備で**公開前に撤回した候補**。配布・公開しない。1.0.1の静的Payload辞書はApple UIで作成・書出しした形式と一致し、生成R3のキーなし5アクションをApple実行器のGUIで実行して `shortcutVersion: "1.0.1"`、JSON numberの `protocolVersion: 1`、`stepsSource: "apple_watch"` を確認した。これはiPhoneでの本来の呼出・実Health読取・保存成功の確認とは区別する。今回の公開対象ビルドは `20261128-003214`、通常APIはGAS public版 `28` へ反映済み。本人限定バックアップ管理のprivate版 `26` も維持されていることをread-onlyで照合済み。
 
-## 初回の設定
+現行の詳細と過去の検証経緯は[連携資料](../../docs/health-bridge.md)を参照。11/25の4項目取込成功は当時の確認であり、今回のiPhone呼出エラーの解消根拠にはしない。
 
-1. 普段使うホーム画面の手帳の習慣タブでヘルスケア連携設定を開き、連携キーを発行・コピーします。
-2. [追加用ZIP](system-techo-health.zip?_app_update=health-shortcut)をダウンロードし、iPhoneの「ファイル」→「ダウンロード」でZIPをタップして展開します。中の `system-techo-health.shortcut` を開き、「ショートカットを設定」を押します。ファイルへ `.html` が付く誤保存を避けるため、配布入口はZIPにします。
-3. 追加時の質問に、手帳でコピーした43文字の連携キーを貼り付けます。質問が表示されない場合は、ショートカットの編集画面で冒頭のテキスト `PASTE_HEALTH_PAIR_KEY_HERE` を置き換えてください。
-4. 登録名はファイル名由来の **`system-techo-health`** になることを本人のiPhoneで確認しています。手帳側の「ショートカット名」を実際の登録名に合わせます。現在の呼び出し名を確認し、修正版への差し替えが完了したら使わない旧版は削除して一本化します。名前へ4、5と番号を増やし続ける運用にしません。既存の連携キーは作り直しません。
-5. 手帳で確認したい日を表示し、更新ボタンから実行します。ショートカット単体の手動実行には、対象日とリクエスト情報がないため対応しません。
-6. 初回のヘルスケア読み取り許可は、体重から4項目が順に表示されます。体重・体脂肪率・アクティブエネルギー・歩数を許可します。このショートカットはヘルスケアへの書き込みをしません。
-7. 修正版はSafariを開くアクションを含みません。送信後は画面左上の「システム手帳」から元のホーム画面アプリへ戻ります。表示がない場合はホーム画面から手帳を開きます。完全な自動復帰は実装・検証していません。
-8. 初めて届いた項目は、手帳側の確認画面で**同じ日付のヘルスケア表示と値・単位を照合してから**取り込みます。未表示項目を0で補う必要はありません。
+## 名前と版を確認する
 
-連携キーを設定したあとのショートカットは他人に共有しないでください。公開するのは、キーが入っていないこのテンプレートだけです。
+設定のヘルスケア欄では次を分けて表示する。
+
+| 表示 | 意味 |
+| --- | --- |
+| この端末が呼ぶ名前 | この端末に保存された起動先の名前。iPhone内の実在確認を代行する表示ではない |
+| 配布ショートカット版 | アプリが案内するtemplateの版 `1.0.1` |
+| 最後に応答した版 | この端末が有効な応答から受け取った版と通信規約 |
+| 応答を確認した時刻 | 手帳が応答を取得・検証した時刻。測定時刻や記録保存の成功時刻ではない |
+
+応答が未確認なら「未確認」。版情報のない旧形式は `unknown` と扱い、画面には「版情報なし（旧形式）」と表示する。名前の数字から版を推測しない。配布版と応答版が一致しても、個々の測定値や保存の成功までは保証しない。公開更新だけで端末に追加済みのShortcutが自動で最新版になるとは扱わない。
+
+## 初回の設定・差し替え
+
+1. ホーム画面の手帳で「設定」→「ヘルスケア連携を設定」を開き、連携キーをコピーする。既存連携の差し替えではキーを再発行しない。
+2. [1.0.1追加用ZIP](releases/1.0.1/system-techo-health.zip?_app_update=health-shortcut)を取得する。iPhoneの「ファイル」→「ダウンロード」でZIPを展開し、中の `system-techo-health.shortcut` を開く。追加時の質問へ43文字のキーを貼り付ける。質問が出なければ冒頭の `PASTE_HEALTH_PAIR_KEY_HERE` を置き換える。
+3. iPhone内の実際の登録名を確認して、手帳の「ショートカット名」と照合する。Macの実名をiPhoneの実名と推測しない。上記の呼出エラーはこの照合が未完了である。
+4. 対象日を表示して手帳の更新から実行する。単体の手動実行は対象日・リクエスト情報がないため対応しない。初回は体重・体脂肪率・アクティブエネルギー・歩数の読み取りを順に許可する。Healthへの書き込みはしない。
+5. 送信後は左上の「システム手帳」、またはホーム画面から元の手帳へ戻る。Safariを明示的に開く処理は含めず、完全な自動PWA復帰は保証しない。
+6. 初回の項目は同日・同じ単位の値を確認してから取り込む。歩数はWatch基準として確認し、Healthの全ソース統合値と常に一致するものとは説明しない。設定の応答版と時刻も照合する。
+
+キー設定済みの個人用Shortcutは共有・公開しない。公開するのはキー未設定のtemplateだけ。使わない旧版を整理する場合も、実名と応答版を確認してから行い、動いている個人用を名前だけで削除しない。
 
 ## 読み取る内容
 
 | 手帳の項目 | 取得方法 | 送信単位 |
-|---|---|---|
+| --- | --- | --- |
 | 体重 | 対象日内の最新測定 | kg |
 | 体脂肪率 | 対象日内の最新測定 | %（表示値。20%は20） |
-| 消費カロリー | 対象日の **アクティブエネルギーのみ**。安静時エネルギーは含まない | kcal |
-| 歩数 | 対象日の集計値 | count |
+| 消費カロリー | 対象日のアクティブエネルギー。安静時は含まない | kcal |
+| 歩数 | 同日・count単位でSource表示にApple Watchを含むrawサンプルの合計 | count |
 
-- データがない項目は送信辞書から省略します。前日値を繰り越さず、欠測を0で埋めません。実測0がある場合は0を扱います。
-- 日付範囲を対象日の開始〜翌日開始に絞ったうえで、各結果のStart Dateを再び `yyyy-MM-dd` にして対象日と照合します。翌日0時の結果は除外します。
-- 歩数・アクティブエネルギーにはFind Health Samplesの **Group by Day / Fill Missing Off** を使います。iPhoneとWatchの生サンプルを単純合算しません。対象日の集計結果が複数に分かれた場合は、その項目を送らない構成です。
-- 体重・体脂肪率には日次平均ではなく、対象日内の最新サンプルを使います。
-- 送信前に各結果のUnitが `kg` / `%` / `kcal` / `count` と一致することを確認し、不明な単位の項目は送信しません。
-
-## 実機で必ず照合する点
-
-1. **体脂肪率**：HealthKitの内部比率とShortcutsの表示値は同じ扱いにできません。例えばヘルスケアが20%のとき、確認画面が20%になることを確認してください。0.20%や2000%なら取り込まず、ショートカットのUnitとValueの出力を調べます。値の大きさから勝手に100倍する実装にはしていません。
-2. **歩数・アクティブエネルギー**：ShortcutsのGroup by Dayが、ヘルスケア画面と同じソース優先順位・重複排除を使うという保証は確認できていません。同日のヘルスケア表示と照合してください。差がある場合、確認前に取り込まず、データソースや集計設定を確認します。
-3. **日付**：iPhoneのタイムゾーンで、指定した日だけが対象になることを確認します。午前0時の測定、月末・年末も確認対象です。
-4. **戻り方**：元のPWAへ戻るかSafariが開くかは実機次第です。Safariに戻っただけで元PWAの記録が変わらない場合は、元の手帳へ戻ります。
+- 歩数のqueryはGroupByなし。Sourceの `Apple Watch` を大小文字を区別せず検索し、Matchesがあるサンプルだけを加算する。iPhone・他Sourceは加えない。複数Watchの採用分は合算し、物理機器IDによる区別や重複調整は行わない。
+- アクティブエネルギーは従来どおり Group by Day / Fill Missing Off。対象日の候補が1件の場合だけ送る。Shortcutsのこの集計とHealth画面の統合方法が同一である保証は確認していない。
+- 日付は対象日の開始〜翌日開始で絞り、結果のStart Dateを `yyyy-MM-dd` にして再照合する。各結果のUnitも確認する。タイムゾーンと午前0時の境界は実機で照合する。
+- 欠測は送信辞書から省略し、前日値を繰り越さず0で埋めない。Watch欠測もsteps省略とする。実測0は保持する。過去の記録を一括補正しない。
+- Web側は体重・体脂肪率・アクティブエネルギーを新規取込時に小数第1位、歩数を整数として扱う。体脂肪率の値を推測で100倍しない。
 
 ## 保存と通信
 
-- 通信先はファイル生成時に固定した、システム手帳のGAS Web Appです。呼び出し元から渡されたURLへ送信する仕組みはありません。
-- 送信先は一時保管の `health_bridge_upload` です。ショートカットから `habit_day_upsert` は呼びません。手帳側で対象日・本人の連携キー・取得後の編集を照合してから、取得できた項目だけを保存します。
-- `request_id`・対象日・`issued_at` は手帳から受け取ります。連携キーはショートカット内に設定したものをHTTP本文へ送ります。
-- 戻りURLを開く処理自体を撤去し、健康データ・連携キー・リクエストIDをURLで戻しません。旧版からの `#health-return` は手帳側の互換案内として残ります。
+通信先は生成時に固定したGASの一時保管API `health_bridge_upload`。Shortcutから習慣シートへ直接書かない。手帳からの入力は `request_id / date / issued_at` の3項目で、健康値やキーを起動URLへ入れない。連携キーはHTTP本文だけに含める。
 
-## 再生成と構造確認
+初期Payload辞書にTextの `shortcutVersion` とNumberの `protocolVersion` を持たせ、後続の既存辞書更新で測定値等を追加する。`stepsSource: "apple_watch"` も付けて、GAS Cacheのread経由で返す。印のない旧結果の歩数は対応Webで保存せず、他3項目の処理は保持する。版・sourceメタ情報は通信方式の自己申告であり、暗号的な機器認証ではない。
 
-開発者向け：
+手帳は対象日・期限・キー・手入力・未送信を照合し、取込対象だけをPATCHで保存する。保存なし確認では測定値・最終取込情報・未送信キューを変えない。応答版と応答時刻のメタ情報は確認結果として更新され得る。
+
+## 配布物とハッシュ
+
+中央定義は `build/health-release.json`。builderはここからtemplateと `js/health/release.js` を生成する。配布版は次の変更不可パスへ置く。
+
+```text
+releases/1.0.1/
+  system-techo-health.shortcut
+  system-techo-health.zip
+  source.plist
+  manifest.json
+```
+
+[manifest.json](releases/1.0.1/manifest.json)に公開名・版・通信規約・source・各artifactのSHA-256とbyte数を記録する。
+
+| 1.0.1配布物 | SHA-256 |
+| --- | --- |
+| 署名済みShortcut | `6b09fa0cc9050762fe7778fbae3d4ec942eccbb8f91dd5d7cee4aa15b590a2f3` |
+| ZIP | `b00f7badd289597a15c7686830bcd05bf9e98e74bfd9b67969e4b0c72353cb6e` |
+| source.plist | `dc907853caddc86ce7a1136326fd6689956e82a331ed5fd1b0cd806b6e998a05` |
+| manifest.json自体 | `5fe2f6153d0793b494ed3f0ed1440e239d5bbef22211014c1a2dc1b0bb90465b` |
+
+Apple公開証明書で署名を検証し、署名container内の全176アクションとImportQuestionsが生成元と一致することを確認した。Apple署名による名前の除去・clientVersion・QuickActionSurfacesの正規化は測定処理の変更と区別した。これは実Health読取やiPhoneでの起動成功を意味しない。
+
+`artifacts["system-techo-health.shortcut"].sha256`、ZIP、sourceのhashを実ファイルと照合する。連携キー・個人の測定値・個人用Shortcutはmanifestへ収録しない。
+
+同versionに異なるhashのファイルがあればpackagerは上書きを拒否する。修正は次のversionへ上げる。従来の [latest互換ZIP](system-techo-health.zip?_app_update=health-shortcut) は維持するが、設定の配布リンクは版別URLを使う。ZIPにはキー未設定の署名済みShortcut一つだけを含める。
+
+## 再生成と検証
 
 ```sh
 python3 build/build-health-shortcut.py
-plutil -lint shortcuts/health-bridge/system-techo-health.source.plist
-shortcuts sign --mode anyone \
-  --input shortcuts/health-bridge/system-techo-health.unsigned.shortcut \
-  --output shortcuts/health-bridge/system-techo-health.shortcut
-python3 build/package-health-shortcut.py
 python3 tests/health-shortcut.test.py
+python3 tests/health-release.test.py
+plutil -lint shortcuts/health-bridge/system-techo-health.source.plist
 ```
 
-生成スクリプトは標準ライブラリだけを使い、健康データや個人のショートカット一覧を読みません。署名するのはキー未設定のテンプレートだけです。`structure-check.json` は参照UUID・制御ブロック・4つのHealth query・固定送信先・欠測補完OFF・Health/習慣への直接書き込みなしを検査した結果です。Set Dictionary Valueの `WFDictionaryValue` は、単一変数でも `WFTextTokenString`（U+FFFC 1文字と `{0, 1}` の変数参照）で渡します。ここへ単独の `WFTextTokenAttachment` を渡す旧形式は、macOS Shortcutsでも同じ「request_idの値未指定」で停止しました。辞書本体の入力 `WFDictionary` は従来どおり `WFTextTokenAttachment` です。修正版の合成実行では、文字列・数値時刻・小数・0・入れ子辞書・空辞書が最終JSONでも保持されることを確認しました。実Health/ネットワークを使わないmacOSテストであり、iPhoneの実測値照合とは区別します。
+署名・内容確認後にpackagerを別途実行する。構造試験や署名コマンドのexit0だけで配布へ進まず、静的Numberが最終JSONでも数値1であることをApple実行器で確認する。初版の型不備でこの条件を満たさなかった1.0.0は公開前撤回とした。
 
-`system-techo-health.source.plist` と `.unsigned.shortcut` は編集・再生成用の資料です。配布ZIPは、署名済みの `system-techo-health.shortcut` 一つだけを含みます。ZIP展開後のファイルと元の署名ファイルが完全一致することをpackagerで検査します。
+Number辞書項目はApple UI実exportと同じ `WFItemType=3`、値は `WFTextTokenString` の `string: "1"`。生成R3の5アクションでJSON number1を確認済み。後続Set Dictionary Valueの動的値は単一変数でも `WFTextTokenString`、辞書本体の入力は `WFTextTokenAttachment`。HTTP File本文の変数は `WFTextTokenAttachment` とする。
 
-## 構造の根拠
-
-- AppleのローカルActionKit定数・ローカライズにはGroup by / Day / Unit / Fill Missingの存在を確認しました。ただし、非AppleプロセスからActionKitの完全な実行時メタデータを読むとOS側の制限で停止するため、iOSでの動作検証の代用にはしていません。
-- Health型フィルタ・プロパティ・パラメータ名は、開発者が匿名化したiOS書き出しとToolKitデータから公開した一次観測資料を使っています。Appleが公開する安定したファイル生成APIではありません。
-- 根拠URLと採用時のリポジトリコミット、残る確認項目は `evidence.json` に記録しています。
-
-Appleの公式説明：
-
-- [URLからショートカットを実行](https://support.apple.com/guide/shortcuts/apd624386f42/ios)
-- [辞書の利用](https://support.apple.com/guide/shortcuts/apd43b69f337/ios)
-- [Macでのショートカット共有と署名](https://support.apple.com/guide/shortcuts-mac/apd455c82f02/mac)
-
-## 送信本文修正版（2026-11-25公開）
-
-File本文の変数指定は `WFRequestVariable = WFTextTokenAttachment` とする。旧 `WFTextTokenString` はmacOSの本文選択で未指定になった。ネイティブUIで合成Payloadを指定したlocalhost送信と書き出し形式を照合済み。生成修正版の本文変数認識は確認したが、そのlocalhost再実行は完了せず中止した。iPhoneでの実測値送信は別途確認が必要。連携キーは同じものを使い、追加済みShortcutは最新版ZIPから差し替える。Web公開版は20261125-122202。
-
-## 日付比較・復帰後受信の修正（2026-11-25、公開承認済み）
-
-Format DateはCustomスタイルに対しWFDateFormat自体をyyyy-MM-ddとする。旧WFDateFormat=Custom/WFDateFormatString=yyyy-MM-ddは、合成nativeの11月24日・25日をどちらも空文字にし、全4項目の日付ゲートで除外していた。修正後は両日とも正しい日付文字列を得た。既存の対象日範囲、単位照合、欠測省略、アクティブのみの指定は維持する。実PhoneのHealthサンプル出力はまだ未確認。
-
-手帳側は一時受信失敗で待機nonceを消さず、復帰や同日の更新で同じ結果を再受信する。期限切れ・中止・別キー・別日・編集中の保護は維持。受信0件の表示を「この日のデータはない」と断定せず、「取得できなかった」とする。
+構造・合成試験は実HealthやiPhoneの呼出成功の代用にしない。根拠と過去の修正は[連携資料](../../docs/health-bridge.md)と `evidence.json` を参照。

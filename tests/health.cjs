@@ -30,7 +30,7 @@ let browser,base,passed=0,failed=0;
 // All bytes and network responses here are synthetic and remain inside this VM.
 async function assertFreshShortcutDownload(href){
  const scope='https://planner.example/system-techo-v3/';
- const zipURL=new URL('shortcuts/health-bridge/system-techo-health.zip',scope).href;
+ const canonical=new URL(href,scope);canonical.search='';const zipURL=canonical.href;
  const stale=Buffer.from('previous signed shortcut ZIP'),fresh=Buffer.from('new signed shortcut ZIP');
  const cached=new Map([[zipURL,stale]]),handlers={},fetches=[];
  const source=fs.readFileSync(path.join(root,'sw.js'),'utf8');

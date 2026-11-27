@@ -1,0 +1,10 @@
+{
+  "shortcutName": "system-techo-health",
+  "shortcutVersion": "1.0.1",
+  "protocolVersion": 1,
+  "source": "apple_watch",
+  "releaseNotes": [
+    "1.0.0は公開前に撤回した候補。protocolVersionの静的辞書項目が数値にならなかった不備を修正。",
+    "歩数は対象日の Apple Watch ソースだけを集計。欠測は省略し、実測0は保持。"
+  ]
+}

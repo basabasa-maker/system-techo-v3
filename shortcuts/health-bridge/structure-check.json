@@ -6,6 +6,8 @@
   "posts_existing_habits": false,
   "callback_contains_health_or_credentials": false,
   "dynamic_dictionary_values_use_single_token_strings": true,
+  "shortcut_version": "1.0.1",
+  "protocol_version": 1,
   "steps_source": "apple_watch",
   "steps_aggregation": "raw_same_day_count_source_display_apple_watch_case_insensitive_sum",
   "watch_missing_omits_steps": true,

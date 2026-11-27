@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "shortcutName": "system-techo-health",
+  "shortcutVersion": "1.0.1",
+  "protocolVersion": 1,
+  "stepsSource": "apple_watch",
+  "releaseNotes": [
+    "1.0.0は公開前に撤回した候補。protocolVersionの静的辞書項目が数値にならなかった不備を修正。",
+    "歩数は対象日の Apple Watch ソースだけを集計。欠測は省略し、実測0は保持。"
+  ],
+  "signatureContainer": "AEA1",
+  "signatureVerification": "not_performed_by_packager",
+  "artifacts": {
+    "system-techo-health.shortcut": {
+      "sha256": "6b09fa0cc9050762fe7778fbae3d4ec942eccbb8f91dd5d7cee4aa15b590a2f3",
+      "bytes": 36522
+    },
+    "system-techo-health.zip": {
+      "sha256": "b00f7badd289597a15c7686830bcd05bf9e98e74bfd9b67969e4b0c72353cb6e",
+      "bytes": 25692
+    },
+    "source.plist": {
+      "sha256": "dc907853caddc86ce7a1136326fd6689956e82a331ed5fd1b0cd806b6e998a05",
+      "bytes": 136568
+    }
+  }
+}

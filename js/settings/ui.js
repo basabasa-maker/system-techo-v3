@@ -2,6 +2,8 @@ import { createAppUpdater } from './updater.js';
 import { createUpdateSafety } from './safety.js';
 import { THEMES, currentThemeId, selectTheme } from '../theme.js';
 import { getBackupStatus, backupAdminUrl, backupTimeLabel } from '../backup/client.js';
+import { loadHealthSettings, loadHealthReceipt } from '../health/bridge.js';
+import { HEALTH_SHORTCUT_VERSION, HEALTH_SHORTCUT_PROTOCOL_VERSION } from '../health/release.js';
 import { getHealthSyncView, cancelHealthSync, resumeHealthAfterSettings, HEALTH_SYNC_EVENT } from '../habit.js';
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -48,6 +50,13 @@ export function showAppSettings({ onOpenHealthSettings, onInspectHealthSteps, up
       <section class="settings-section" aria-labelledby="settings-health-title">
         <h2 id="settings-health-title">ヘルスケア連携</h2>
         <p>体重・体脂肪率・アクティブエネルギー・歩数の設定と、連携の停止を行えます。</p>
+        <dl class="settings-facts">
+          <div><dt>この端末が呼ぶ名前</dt><dd id="settings-health-call-name"></dd></div>
+          <div><dt>配布ショートカット版</dt><dd id="settings-health-release">${escapeHtml(HEALTH_SHORTCUT_VERSION)}</dd></div>
+          <div><dt>最後に応答した版</dt><dd id="settings-health-received-release"></dd></div>
+          <div><dt>応答を確認した時刻</dt><dd id="settings-health-received-at"></dd></div>
+        </dl>
+        <p id="settings-health-release-status" class="settings-small"></p>
         <p id="settings-health-status" class="settings-update-status" role="status" aria-live="polite"></p>
         <div class="settings-health-actions">
           <button type="button" class="btn-ghost" id="settings-open-health">ヘルスケア連携を設定</button>
@@ -93,6 +102,15 @@ export function showAppSettings({ onOpenHealthSettings, onInspectHealthSteps, up
     if (!backdrop.isConnected) return;
     const view = getHealthSyncView();
     healthStatus.textContent = view.message;
+    const settings=loadHealthSettings(), receipt=loadHealthReceipt();
+    backdrop.querySelector('#settings-health-call-name').textContent=settings.shortcutName;
+    backdrop.querySelector('#settings-health-received-release').textContent=receipt?.shortcutVersion
+      ? `${receipt.shortcutVersion}（通信規約 ${receipt.protocolVersion}）` : receipt ? '版情報なし（旧形式）' : '未確認';
+    backdrop.querySelector('#settings-health-received-at').textContent=receipt ? new Date(receipt.received_at).toLocaleString('ja-JP') : '未確認';
+    backdrop.querySelector('#settings-health-release-status').textContent=!receipt ? 'この端末からの応答はまだ確認していません。'
+      : !receipt.shortcutVersion ? '応答したショートカットに版情報がありません。名前だけでは版を判定しません。'
+      : receipt.shortcutVersion !== HEALTH_SHORTCUT_VERSION || receipt.protocolVersion !== HEALTH_SHORTCUT_PROTOCOL_VERSION ? '配布版と応答した版が異なります。連携設定で確認してください。'
+      : '配布版と応答した版が一致しています。';
     healthButton.disabled = updating || view.saving;
     healthCancelButton.hidden = !view.pending;
     healthCancelButton.disabled = updating || view.saving;

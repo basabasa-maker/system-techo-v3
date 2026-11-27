@@ -1,5 +1,5 @@
 {
-  "build": "20261127-235638",
+  "build": "20261128-003214",
   "assets": [
     {
       "path": "css/goals.css",
@@ -59,7 +59,7 @@
     },
     {
       "path": "index.html",
-      "sha256": "b567c90a3be58e259382b1359d24d3bbc8ae6e3416140e7f4d89bda858504051"
+      "sha256": "1797232d8bdc7540a7020fcbfc60dabb6986817aebac3944bb705505bb9b7fbe"
     },
     {
       "path": "js/app.js",
@@ -123,15 +123,19 @@
     },
     {
       "path": "js/health/bridge.js",
-      "sha256": "ef1be0b515b85f5b7a23249d53de440802e18ef5671cbcb8a7e9721a579a45e2"
+      "sha256": "1639730f7e3918fb4d6ff8a7c691226a0b6a1ba57c59d49525b800cb289c238c"
     },
     {
       "path": "js/health/model.js",
       "sha256": "2d876c5d6cdfc712a8b3376e681a200db6bfe3a4f6d89721431807ec31de1c8c"
     },
     {
+      "path": "js/health/release.js",
+      "sha256": "c81c4174a5483fb99e00de0b7b523eeb960b762b26cfea09dd178f825414aad6"
+    },
+    {
       "path": "js/health/ui.js",
-      "sha256": "457bd47c9d17d4b066908efe061c60515640daeac14d328bc6628a9669409e01"
+      "sha256": "6bed65c9c318134bf6768790b5d601aefb7f0a73707638f54a8a9db5e8bf8b9a"
     },
     {
       "path": "js/meal-time.js",
@@ -179,7 +183,7 @@
     },
     {
       "path": "js/settings/ui.js",
-      "sha256": "e61a423d07f9b912689f220deab8338770da3a5c6de4321081360e4a6f196a46"
+      "sha256": "1880dbde2752c3d56ddc56c61594120615c4481b3784610fe53a5bd969017d8a"
     },
     {
       "path": "js/settings/updater.js",
@@ -227,11 +231,11 @@
     },
     {
       "path": "shortcuts/health-bridge/system-techo-health.shortcut",
-      "sha256": "ca749a7d69d92f406f9453456ab45d833b053ee32c5c0d3a68ebe792f87bfb51"
+      "sha256": "6b09fa0cc9050762fe7778fbae3d4ec942eccbb8f91dd5d7cee4aa15b590a2f3"
     },
     {
       "path": "shortcuts/health-bridge/system-techo-health.zip",
-      "sha256": "6826096cc0b35f82a39056a9d8812e74ce76c90e9cde37ead8b6ea998bb46318"
+      "sha256": "b00f7badd289597a15c7686830bcd05bf9e98e74bfd9b67969e4b0c72353cb6e"
     },
     {
       "path": "support.html",
@@ -239,7 +243,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "ef26b796177b0944665b45203746a825c6c1abe895cb14ac018e0bc7de2ad068"
+      "sha256": "e008ae09c3464eb5f3abe8accaa58e9f705fa4e932416f2ac71d83363fcca57e"
     },
     {
       "path": "vendor/codemirror/codemirror.js",

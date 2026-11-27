@@ -1397,16 +1397,30 @@ function healthBridgeLoad(cache, request) {
     throw new Error("health request does not match");
   }
   if (entry.expires_at <= Date.now()) throw new Error("health request expired");
-  healthBridgeStepsMetadata(entry);
+  healthBridgeMetadata(entry);
   return entry;
 }
 
-// Optional provenance is a protocol marker, not a device name or a metric.
-// Legacy results stay readable; the client decides whether their steps are safe.
-function healthBridgeStepsMetadata(data) {
-  if (!Object.prototype.hasOwnProperty.call(data, "stepsSource")) return {};
-  if (data.stepsSource !== "apple_watch") throw new Error("invalid health steps source");
-  return { stepsSource: "apple_watch" };
+// Optional metadata identifies the sender's protocol, not a device or a metric.
+// Legacy results stay readable; version comparison belongs to the client.
+function healthBridgeMetadata(data) {
+  const own = (key) => Object.prototype.hasOwnProperty.call(data, key);
+  const metadata = {};
+  if (own("stepsSource")) {
+    if (data.stepsSource !== "apple_watch") throw new Error("invalid health steps source");
+    metadata.stepsSource = "apple_watch";
+  }
+  const hasShortcut = own("shortcutVersion"), hasProtocol = own("protocolVersion");
+  if (hasShortcut !== hasProtocol) throw new Error("incomplete health protocol metadata");
+  if (hasShortcut) {
+    const version = data.shortcutVersion;
+    if (typeof version !== "string" || version.length > 32 || version.trim() !== version
+        || !/^\d+\.\d+\.\d+$/.test(version)) throw new Error("invalid health shortcut version");
+    if (!Number.isInteger(data.protocolVersion) || data.protocolVersion !== 1) throw new Error("unsupported health protocol version");
+    metadata.shortcutVersion = version;
+    metadata.protocolVersion = 1;
+  }
+  return metadata;
 }
 
 function healthBridgeValues(values, units) {
@@ -1443,7 +1457,7 @@ function healthBridgeStore(cache, entry) {
 function healthBridgeUpload(body) {
   const request = healthBridgeRequest(body);
   const metrics = healthBridgeValues(body.values, body.units);
-  const metadata = healthBridgeStepsMetadata(body);
+  const metadata = healthBridgeMetadata(body);
   return healthBridgeWithLock(() => {
     const cache = CacheService.getScriptCache();
     const existing = healthBridgeLoad(cache, request);
@@ -1466,7 +1480,7 @@ function healthBridgeRead(body) {
     if (entry.status === "consumed") return { status: "consumed", date: request.date, issued_at: request.issued_at };
     const metrics = healthBridgeValues(entry.values, entry.units);
     return { status: "ready", date: request.date, issued_at: entry.issued_at, values: metrics.values, units: metrics.units,
-      ...healthBridgeStepsMetadata(entry) };
+      ...healthBridgeMetadata(entry) };
   });
 }
 
@@ -1478,7 +1492,7 @@ function healthBridgeAck(body) {
     if (!entry) return { status: "waiting", date: request.date };
     const marker = { request_id: request.request_id, date: request.date, issued_at: request.issued_at,
       key_hash: request.key_hash, expires_at: entry.expires_at, status: "consumed" };
-    healthBridgeStore(cache, marker); // No values, units or provenance remain in the consumed marker.
+    healthBridgeStore(cache, marker); // No values, units or sender metadata remain in the consumed marker.
     return { status: "consumed", date: request.date, issued_at: request.issued_at };
   });
 }

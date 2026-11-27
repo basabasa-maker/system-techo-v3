@@ -86,6 +86,18 @@ async function scenario(name,fn){
 (async()=>{
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));base='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
+ await scenario('version management displays this device call name and actual responding release separately',async({page,posts,values})=>{
+  await page.evaluate(()=>{
+   const key='sth_v3_health_settings',settings=JSON.parse(localStorage.getItem(key)||'{}');
+   localStorage.setItem(key,JSON.stringify({...settings,shortcutName:'Existing alias 4',pairKey:'a'.repeat(43)}));
+   localStorage.setItem('sth_v3_health_last_receipt',JSON.stringify({shortcutName:'Existing alias 4',received_at:1800000000000,shortcutVersion:'1.0.0',protocolVersion:1,stepsSource:'apple_watch'}));
+  });
+  await openSettings(page);
+  assert.equal(await page.locator('#settings-health-call-name').innerText(),'Existing alias 4');
+  assert.equal(await page.locator('#settings-health-release').innerText(),'1.0.1');
+  assert.equal(await page.locator('#settings-health-received-release').innerText(),'1.0.0（通信規約 1）');
+  assert.equal(posts.filter(p=>p.type==='health_bridge_read').length,0);assert.deepEqual(values,initialValues);
+ });
  await scenario('background colors live in settings and header actions keep a compact touch gap',async({page,posts,values})=>{
   assert.equal(await page.locator('#app-header #btn-theme').count(),0,'color control moved out of header');
   assert.equal(await page.locator('#app-header button').count(),2,'header keeps settings and data refresh');

@@ -146,4 +146,72 @@ test('invalid cached provenance is rejected instead of being relayed as trusted'
   entry.stepsSource = 'private-device-name'; item.value = JSON.stringify(entry);
   bad(call('health_bridge_read', r), [key, 'private-device-name', '2468']);
 });
+test('paired shortcut and protocol versions survive staging with source and all metrics', () => {
+  for (const shortcutVersion of ['1.0.0', '42.7.3', '1'.repeat(28) + '.1.1']) {
+    const r = request(), values = { weight: 72.4, bodyFat: 18.1, kcal: 325, steps: 2468 }, units = { weight: 'kg', bodyFat: '%', kcal: 'kcal', steps: 'count' };
+    const metadata = { stepsSource: 'apple_watch', shortcutVersion, protocolVersion: 1 };
+    const staged = ok(call('health_bridge_upload', { ...r, values, units, ...metadata }));
+    assert.deepEqual(staged, { status: 'ready', date: r.date, issued_at: r.issued_at });
+    assert.deepEqual(ok(call('health_bridge_read', r)), { status: 'ready', date: r.date, issued_at: r.issued_at, values, units, ...metadata });
+  }
+});
+test('version metadata is optional without creating metrics and real zero remains zero', () => {
+  for (const values of [{}, { steps: 0 }]) {
+    const r = request(), units = Object.hasOwn(values, 'steps') ? { steps: 'count' } : {};
+    ok(call('health_bridge_upload', { ...r, values, units, shortcutVersion: '1.0.0', protocolVersion: 1 }));
+    const read = ok(call('health_bridge_read', r));
+    assert.deepEqual(read.values, values); assert.deepEqual(read.units, units);
+    assert.equal(read.shortcutVersion, '1.0.0'); assert.equal(read.protocolVersion, 1); assert(!Object.hasOwn(read, 'stepsSource'));
+  }
+});
+test('first result keeps version presence and values, and ack removes every metadata field', () => {
+  for (const first of [{ stepsSource: 'apple_watch', shortcutVersion: '1.0.0', protocolVersion: 1 }, {}]) {
+    const r = request();
+    ok(call('health_bridge_upload', { ...r, values: { steps: 2468 }, units: { steps: 'count' }, ...first }));
+    ok(call('health_bridge_upload', { ...r, values: { steps: 9753 }, units: { steps: 'count' }, stepsSource: 'apple_watch', shortcutVersion: '9.0.0', protocolVersion: 1 }));
+    const read = ok(call('health_bridge_read', r)); assert.equal(read.values.steps, 2468);
+    for (const field of ['stepsSource', 'shortcutVersion', 'protocolVersion']) {
+      assert.equal(Object.hasOwn(read, field), Object.hasOwn(first, field));
+      if (Object.hasOwn(first, field)) assert.equal(read[field], first[field]);
+    }
+    ok(call('health_bridge_ack', r));
+    const marker = JSON.parse(entries.get('health_bridge:' + r.request_id).value);
+    for (const field of ['values', 'units', 'stepsSource', 'shortcutVersion', 'protocolVersion']) assert(!Object.hasOwn(marker, field), field);
+    assert.deepEqual(ok(call('health_bridge_read', r)), { status: 'consumed', date: r.date, issued_at: r.issued_at });
+  }
+});
+test('invalid or incomplete versions reject new and retry uploads before any cache change', () => {
+  const r = request(), valid = { shortcutVersion: '1.0.0', protocolVersion: 1 };
+  ok(call('health_bridge_upload', { ...r, values: { steps: 2468 }, units: { steps: 'count' }, ...valid }));
+  const before = entries.get('health_bridge:' + r.request_id).value;
+  const cases = [{ shortcutVersion: '1.0.0' }, { protocolVersion: 1 }];
+  for (const shortcutVersion of [null, false, 1, [], {}, '', 'v1.0.0', '1.0', '1.0.0-beta', '1.0.0+build', ' 1.0.0', '1.0.0\n', '1'.repeat(29) + '.1.1', 'private-version-label']) cases.push({ shortcutVersion, protocolVersion: 1 });
+  for (const protocolVersion of [null, false, 0, 2, 1.1, '1', [], {}]) cases.push({ shortcutVersion: '1.0.0', protocolVersion });
+  for (const metadata of cases) {
+    const fresh = request();
+    for (const current of [fresh, r]) bad(call('health_bridge_upload', { ...current, values: { steps: 9753 }, units: { steps: 'count' }, ...metadata }), [key, 'private-version-label', '9753']);
+    assert(!entries.has('health_bridge:' + fresh.request_id));
+    assert.equal(entries.get('health_bridge:' + r.request_id).value, before);
+  }
+});
+test('invalid cached version metadata is rejected without exposing the staged values', () => {
+  const invalid = [{ shortcutVersion: '1.0.0' }, { protocolVersion: 1 }, { shortcutVersion: 'private-version-label', protocolVersion: 1 }, { shortcutVersion: '1.0.0', protocolVersion: 2 }];
+  for (const metadata of invalid) {
+    const r = request(); ok(call('health_bridge_upload', { ...r, values: { steps: 2468 }, units: { steps: 'count' } }));
+    const item = entries.get('health_bridge:' + r.request_id), entry = JSON.parse(item.value);
+    Object.assign(entry, metadata); item.value = JSON.stringify(entry);
+    bad(call('health_bridge_read', r), [key, 'private-version-label', '2468']);
+  }
+});
+test('versioned results cannot be read, overwritten or consumed through a different date', () => {
+  const r = request(), values = { steps: 2468 }, units = { steps: 'count' };
+  const metadata = { stepsSource: 'apple_watch', shortcutVersion: '1.0.0', protocolVersion: 1 };
+  ok(call('health_bridge_upload', { ...r, values, units, ...metadata }));
+  const before = entries.get('health_bridge:' + r.request_id).value, otherDay = { ...r, date: '2026-11-24' };
+  bad(call('health_bridge_read', otherDay), [key, '2468']);
+  bad(call('health_bridge_ack', otherDay), [key, '2468']);
+  bad(call('health_bridge_upload', { ...otherDay, values: { steps: 9753 }, units, ...metadata, shortcutVersion: '9.0.0' }), [key, '9753']);
+  assert.equal(entries.get('health_bridge:' + r.request_id).value, before);
+  assert.deepEqual(ok(call('health_bridge_read', r)), { status: 'ready', date: r.date, issued_at: r.issued_at, values, units, ...metadata });
+});
 console.log('PASS ' + count + ' health bridge groups; no Sheets, Properties, network or real health data used');

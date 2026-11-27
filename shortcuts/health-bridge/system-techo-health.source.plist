@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>WFWorkflowName</key>
-	<string>システム手帳 ヘルスケア同期</string>
+	<string>system-techo-health</string>
 	<key>WFWorkflowClientVersion</key>
 	<string>2700.0.4</string>
 	<key>WFWorkflowMinimumClientVersion</key>
@@ -25,7 +25,8 @@
 			<key>WFWorkflowActionParameters</key>
 			<dict>
 				<key>WFCommentActionText</key>
-				<string>試作品：対象日の4項目だけを読み取り、一時保管APIに送信します。Healthへの書込・習慣シートへの直接書込は行いません。実機での単位・集計の確認後に連携を有効にしてください。</string>
+				<string>system-techo-health version=1.0.1 / protocol=1 / stepsSource=apple_watch
+試作品：対象日の4項目だけを読み取り、一時保管APIに送信します。Healthへの書込・習慣シートへの直接書込は行いません。実機での単位・集計の確認後に連携を有効にしてください。</string>
 				<key>UUID</key>
 				<string>3BFAD8E7-DB89-5EFC-9745-5AE37C7673DB</string>
 			</dict>
@@ -3995,7 +3996,56 @@
 					<key>Value</key>
 					<dict>
 						<key>WFDictionaryFieldValueItems</key>
-						<array/>
+						<array>
+							<dict>
+								<key>WFItemType</key>
+								<integer>0</integer>
+								<key>WFKey</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>shortcutVersion</string>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+								<key>WFValue</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>1.0.1</string>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+							</dict>
+							<dict>
+								<key>WFItemType</key>
+								<integer>3</integer>
+								<key>WFKey</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>protocolVersion</string>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+								<key>WFValue</key>
+								<dict>
+									<key>Value</key>
+									<dict>
+										<key>string</key>
+										<string>1</string>
+									</dict>
+									<key>WFSerializationType</key>
+									<string>WFTextTokenString</string>
+								</dict>
+							</dict>
+						</array>
 					</dict>
 					<key>WFSerializationType</key>
 					<string>WFDictionaryFieldValue</string>

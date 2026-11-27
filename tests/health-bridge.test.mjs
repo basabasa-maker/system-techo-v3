@@ -303,3 +303,29 @@ test('readSnapshot rejects malformed provenance and retains pending without writ
     await assert.rejects(f.bridge.readSnapshot(request));assert.deepEqual([...f.map],saved);assert(!f.map.has(LAST_SYNC_KEY));
   }
 });
+
+
+test('versioned response records only connection metadata and retains the configured alias',async()=>{
+  const f=fixture();enable(f);saveHealthSettings({...loadHealthSettings(f.storage),shortcutName:'Existing alias 4'},f.storage);
+  const {request}=f.bridge.prepare('2026-11-25',{});const previousRaw=' { "date":"2026-11-24", "keys":["steps"] } ';f.storage.setItem(LAST_SYNC_KEY,previousRaw);
+  f.setResponse({status:'ready',date:request.date,issued_at:request.issued_at,values:{steps:450},units:{steps:'count'},stepsSource:'apple_watch',shortcutVersion:'1.0.0',protocolVersion:1});
+  assert.deepEqual(await f.bridge.readSnapshot(request),{values:{steps:450},stepsSource:'apple_watch',shortcutVersion:'1.0.0',protocolVersion:1});
+  assert.deepEqual(f.bridge.lastReceipt(),{shortcutName:'Existing alias 4',received_at:now,stepsSource:'apple_watch',shortcutVersion:'1.0.0',protocolVersion:1});
+  const recorded=JSON.stringify(f.bridge.lastReceipt());assert(!recorded.includes(key));assert(!recorded.includes('450'));assert(!recorded.includes('values'));
+  assert.equal(f.storage.getItem(LAST_SYNC_KEY),previousRaw);assert.equal(loadHealthSettings(f.storage).shortcutName,'Existing alias 4');
+  const again=createHealthBridge({storage:f.storage,now:()=>now,api:{}});assert.deepEqual(again.lastReceipt(),f.bridge.lastReceipt());
+});
+test('unversioned responses remain readable and are honestly reported as version unknown',async()=>{
+  const f=fixture();enable(f);const {request}=f.bridge.prepare('2026-11-25',{});
+  f.setResponse({status:'ready',date:request.date,issued_at:request.issued_at,values:{steps:450},units:{steps:'count'},stepsSource:'apple_watch'});
+  assert.deepEqual(await f.bridge.readSnapshot(request),{values:{steps:450},stepsSource:'apple_watch'});
+  assert.equal(f.bridge.lastReceipt().shortcutVersion,null);assert.equal(f.bridge.lastReceipt().protocolVersion,null);
+  saveHealthSettings({...loadHealthSettings(f.storage),shortcutName:'different alias'},f.storage);assert.equal(f.bridge.lastReceipt(),null);
+});
+test('malformed or incomplete release metadata is rejected without recording a receipt',async()=>{
+  for(const metadata of [{shortcutVersion:'1.0.0'},{protocolVersion:1},{shortcutVersion:'1.0.0',protocolVersion:'1'},{shortcutVersion:'1.0.0',protocolVersion:2},{shortcutVersion:'bad-private-value',protocolVersion:1},{shortcutVersion:'1.0.0\n',protocolVersion:1}]){
+    const f=fixture();enable(f);const {request}=f.bridge.prepare('2026-11-25',{});const before=[...f.map];
+    f.setResponse({status:'ready',date:request.date,issued_at:request.issued_at,values:{},units:{},...metadata});
+    await assert.rejects(f.bridge.readSnapshot(request));assert.deepEqual([...f.map],before);
+  }
+});
