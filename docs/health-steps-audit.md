@@ -1,4 +1,4 @@
-# 歩数の不一致調査（2026-11-26、実機照合待ち）
+# 歩数の不一致調査（2026-11-27、表示値照合待ち）
 
 依頼：iPhone Shortcutで歩数は取得できるが、Healthの日別合計と毎回違う。歩数以外と過去の記録を変えずに調査する。
 
@@ -32,12 +32,12 @@ Apple同梱のiOS 27 ActionKitローカライズではGroupBy/Day/Unit/FillMissi
 
 ## まだ必要な確認
 
-- ユーザーに、確定した1日の日付・Health歩数・手帳歩数・最終更新時刻・Watch併用有無を質問済み。未回答。
-- 登録済み本人用system-techo-health 4の歩数処理を読取確認する必要がある。CUAはMacロックで停止した。ロック回避・DB読取り・実Health/送信実行は行っていない。
+- 比較対象は当日分。時刻等の補足は受領し、未修正の当日分について手帳とHealthの表示歩数2つを追加質問済み。測定値は公開資料へ転載しない。
+- 11/26はCUAがMacロックで停止。11/27の本人による解除後、登録済みsystem-techo-health 4の歩数検索を確認した。ロック回避・DB読取り・実Health/送信実行はしていない。
 - 日本時間の同じ開始/終了、読み取り時点、集計モード、入力がLibraryか、ソース条件、候補数/採用値を実体で確認する。キーは読取記録へ転記せず、再発行/追加し直しを推測で依頼しない。
 - 実際の両数値の比較前に、複数ソース・時差・取得後の増分・古い結果・保護skipのどれかへ断定しない。
 
-実装修正・公開・過去データ修正はまだなし。登録済み実体はMac解除後に確認するか、iPhoneの「歩数を検索」アクションだけを見せてもらう。新しい診断Shortcutを何本も追加させる方針にはしない。
+実装修正・公開・過去データ修正はまだなし。登録済み実体の検索設定は確認できたため、同じ箇所のスクリーンショットを重ねて依頼しない。実際の両表示値と読み取り時点の照合を次に行う。
 
 ## 成果物と再実行
 
@@ -49,3 +49,14 @@ Apple同梱のiOS 27 ActionKitローカライズではGroupBy/Day/Unit/FillMissi
 - 既存のHealth model/bridge Node18件とGAS11群も成功。
 
 runnerは `node health-steps-audit.mjs`。実ネットワークを使わず、公開b03939dのreceiveHealth本体と同じことをGit履歴で検査してから実行する。全て架空データで、本人の測定値は含まない。
+
+
+## 11/27の本人用検索アクションの実体確認
+
+MacではHealth検索が非対応で詳細非表示のため、本人用system-techo-health 4のSteps検索アクション1個だけをCUAでコピーし、キーなしの一時Shortcutから書き出した。本人用全体をキー付きで書き出す方法は使っていない。Apple aea CLIで公開証明書による署名を検証し、AppleArchiveからShortcut.wflowを展開して確認した。
+
+UUIDを除く検索パラメータが配布版と完全一致：Type=Steps、GroupBy=Day、Unit=count、Input=Library、StartDateがWindowStart〜WindowEnd、FillMissing=false、limit=false。書式・単位の確認と、実際の集計値の一致は別の確認である。
+
+書出しファイルを内容確認後、一時Shortcutだけを整理し、開始時の元の5個が維持されることをCUAで確認した。本人用のキー・処理・記録は変更せず、実際のHealth読取・送信は一度も実行していない。
+
+`installed-query-check.json`、`installed-query/Shortcut.wflow`、署名済みのキーなし検査ファイルは上記作業成果物フォルダに保存。OS同梱メタデータの追加調査でもGroupByDay内部の重複調整方式は判定できず、関連文字列が見つからないことを未使用の証拠とは扱わない。
