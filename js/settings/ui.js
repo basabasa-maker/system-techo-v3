@@ -9,7 +9,7 @@ export function currentAppBuild() {
   return document.querySelector('meta[name="app-build"]')?.content || '';
 }
 
-export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = {}) {
+export function showAppSettings({ onOpenHealthSettings, onInspectHealthSteps, updaterOptions = {} } = {}) {
   const existing = document.querySelector('.app-settings-modal');
   if (existing) { existing.querySelector('[role="dialog"]').focus({preventScroll:true}); return; }
   const previous = document.activeElement;
@@ -52,7 +52,9 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
         <div class="settings-health-actions">
           <button type="button" class="btn-ghost" id="settings-open-health">ヘルスケア連携を設定</button>
           <button type="button" class="btn-ghost" id="settings-cancel-health" hidden>取り込みを中止</button>
+          <button type="button" class="btn-ghost" id="settings-inspect-steps">歩数を確認（保存しない）</button>
         </div>
+        <p class="settings-small">ヘルスケアの歩数を取り込む前の値を確認します。この確認では、ヘルスケアの値を手帳に保存しません。</p>
         <p class="settings-small">iPhoneに追加したショートカットは、この更新ボタンでは変更されません。修正版は連携設定の手順から追加してください。</p>
       </section>
       <section class="settings-section" aria-labelledby="settings-data-title">
@@ -85,6 +87,7 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
   const closeButton = backdrop.querySelector('#settings-close');
   const healthButton = backdrop.querySelector('#settings-open-health');
   const healthCancelButton = backdrop.querySelector('#settings-cancel-health');
+  const healthInspectButton = backdrop.querySelector('#settings-inspect-steps');
   const healthStatus = backdrop.querySelector('#settings-health-status');
   function refreshHealthStatus() {
     if (!backdrop.isConnected) return;
@@ -93,6 +96,7 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
     healthButton.disabled = updating || view.saving;
     healthCancelButton.hidden = !view.pending;
     healthCancelButton.disabled = updating || view.saving;
+    healthInspectButton.disabled = updating || view.pending || view.saving || !view.enabled || !view.inspectAvailable || typeof onInspectHealthSteps !== 'function';
   }
   const backupButton = backdrop.querySelector('#settings-open-backup');
   const backupRefreshButton = backdrop.querySelector('#settings-refresh-backup');
@@ -177,6 +181,12 @@ export function showAppSettings({ onOpenHealthSettings, updaterOptions = {} } = 
   healthButton.addEventListener('click',()=>{
     if (updating || getHealthSyncView().saving) return;
     close({resumeHealth:false});onOpenHealthSettings?.();
+  });
+  healthInspectButton.addEventListener('click',()=>{
+    const view = getHealthSyncView();
+    if (updating || view.pending || view.saving || !view.enabled || !view.inspectAvailable || typeof onInspectHealthSteps !== 'function') return;
+    close({resumeHealth:false});
+    onInspectHealthSteps();
   });
   healthCancelButton.addEventListener('click',()=>{
     if (updating || getHealthSyncView().saving) return;

@@ -66,6 +66,28 @@ export function confirmHealthValues(date, values) {
     modal.element.querySelector("form").addEventListener("submit",event=>{event.preventDefault();finish(true);});
   });
 }
+// Observation shows the received step value without offering any record write.
+export function showHealthStepObservation(date, {steps, current, receivedAt} = {}) {
+  return new Promise(resolve => {
+    const stepLabel = value => typeof value === "number" && Number.isInteger(value) && value >= 0 ? `${value} 歩` : "未取得";
+    let timeLabel = "未取得";
+    if (receivedAt !== null && receivedAt !== undefined && receivedAt !== "") {
+      const time = new Date(receivedAt);
+      if (Number.isFinite(time.getTime())) timeLabel = time.toLocaleString("ja-JP");
+    }
+    const modal = dialog("歩数を確認（保存しない）", `<p>ショートカットから届いた歩数と、手帳にある歩数です。この確認では、ヘルスケアの値を保存しません。</p>
+      <dl class="health-preview">
+        <div><dt>対象日</dt><dd id="health-observation-date">${esc(date)}</dd></div>
+        <div><dt>受信時刻</dt><dd id="health-observation-time">${esc(timeLabel)}</dd></div>
+        <div><dt>ショートカットから届いた歩数</dt><dd id="health-observation-steps" data-observation-value="steps">${esc(stepLabel(steps))}</dd></div>
+        <div><dt>手帳の歩数</dt><dd id="health-observation-current" data-observation-value="current">${esc(stepLabel(current))}</dd></div>
+      </dl>`, '<button type="button" class="btn-primary" id="health-step-observation-close">閉じる</button>', resolve);
+    modal.element.classList.add("health-step-observation");
+    modal.element.querySelector("#health-step-observation-close").addEventListener("click", modal.close);
+    modal.element.querySelector("form").addEventListener("submit", event => event.preventDefault());
+    modal.element.addEventListener("click", event => { if (event.target === modal.element) modal.close(); });
+  });
+}
 export function showHealthReturnNotice() {
   const modal=dialog("元の手帳に戻ってください",'<p>この画面がSafariで開いた場合は、ホーム画面から使っているシステム手帳へ戻ると結果を受け取れます。</p><p>読み取り結果は一時保管され、表示中の日付と照合してから取り込みます。</p>', '<button type="button" class="btn-primary" id="health-return-close">閉じる</button>');
   modal.element.querySelector("#health-return-close").addEventListener("click",modal.close);

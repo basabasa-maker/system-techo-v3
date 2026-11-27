@@ -4,6 +4,8 @@ import { HEALTH_METRICS, healthBaseline, validateHealthResult } from "./model.js
 
 export const SETTINGS_KEY = "sth_v3_health_settings";
 export const PENDING_KEY = "sth_v3_health_pending";
+// Old app instances only inspect PENDING_KEY and must never import a diagnosis.
+export const INSPECTION_PENDING_KEY = "sth_v3_health_inspection_pending";
 export const LAST_SYNC_KEY = "sth_v3_health_last_sync";
 export const SHORTCUT_NAME = "システム手帳 ヘルスケア同期";
 export const REQUEST_TTL_MS = 600000;
@@ -22,9 +24,10 @@ function validDate(date) {
   const parsed = new Date(Date.UTC(y,m-1,d));
   return y >= 2000 && y <= 2100 && parsed.getUTCFullYear() === y && parsed.getUTCMonth() === m-1 && parsed.getUTCDate() === d;
 }
+function validMode(mode) { return mode === undefined || mode === "inspect"; }
 function validRequest(request) {
   return request && KEY_PATTERN.test(request.request_id) && validDate(request.date)
-    && Number.isFinite(request.issued_at) && request.issued_at > 0;
+    && Number.isFinite(request.issued_at) && request.issued_at > 0 && validMode(request.mode);
 }
 export function loadHealthSettings(storage) {
   const saved = jsonAt(store(storage), SETTINGS_KEY);
@@ -39,7 +42,10 @@ export function saveHealthSettings(settings, storage) {
     ? [...new Set(settings.verifiedKeys.filter(key => Object.hasOwn(HEALTH_METRICS, key)))] : [];
   const next = { enabled: settings.enabled === true, shortcutName: settings.shortcutName.trim(), pairKey: settings.pairKey || "", verifiedKeys };
   target.setItem(SETTINGS_KEY, JSON.stringify(next));
-  if (!next.enabled || next.pairKey !== previous.pairKey) target.removeItem(PENDING_KEY);
+  if (!next.enabled || next.pairKey !== previous.pairKey) {
+    target.removeItem(PENDING_KEY);
+    target.removeItem(INSPECTION_PENDING_KEY);
+  }
   return next;
 }
 export function generateHealthKey(crypto = globalThis.crypto) {
@@ -51,11 +57,16 @@ export function createHealthBridge(options = {}) {
   const now = options.now || (() => Date.now());
   const crypto = options.crypto || globalThis.crypto;
   const api = options.api || gas;
-  function pending() {
-    const request = jsonAt(storage(), PENDING_KEY);
+  function pendingAt(key, mode) {
+    const request = jsonAt(storage(), key);
     if (request === null) return null;
-    if (!validRequest(request)) throw new Error("読み取り待ち情報が正しくありません。連携設定を確認してください");
+    if (!validRequest(request) || request.mode !== mode) throw new Error("読み取り待ち情報が正しくありません。連携設定を確認してください");
     return request;
+  }
+  function pending() {
+    // A normal request from another app instance takes precedence. A hidden
+    // inspection cannot be read or completed while that request is pending.
+    return pendingAt(PENDING_KEY, undefined) || pendingAt(INSPECTION_PENDING_KEY, "inspect");
   }
   function fresh(request) {
     if (!validRequest(request) || now()-request.issued_at >= REQUEST_TTL_MS || request.issued_at-now() > 120000) throw new Error("ヘルスケアの読み取りが期限切れです。もう一度更新してください");
@@ -65,12 +76,20 @@ export function createHealthBridge(options = {}) {
     if (!settings.enabled || !KEY_PATTERN.test(settings.pairKey)) throw new Error("ヘルスケア連携が設定されていません");
     return { request_id: request.request_id, pair_key: settings.pairKey, date: request.date, issued_at: request.issued_at };
   }
-  function prepare(date, values) {
+  function prepare(date, values, { mode } = {}) {
+    if (!validMode(mode)) throw new Error("読み取りモードが正しくありません。");
     if (!validDate(date)) throw new Error("読み取る日付が正しくありません");
     const settings = loadHealthSettings(storage());
     if (!settings.enabled || !KEY_PATTERN.test(settings.pairKey)) throw new Error("先にヘルスケア連携を設定してください");
+    if (mode === "inspect" && pending()) throw new Error("読み取り待ちの更新があります。完了または中止してから確認してください");
     const request = { request_id: generateHealthKey(crypto), date, issued_at: now(), baseline: healthBaseline(values), editedKeys: [] };
-    storage().setItem(PENDING_KEY, JSON.stringify(request));
+    if (mode === "inspect") {
+      request.mode = mode; // Local only; never sent to Shortcuts or GAS.
+      storage().setItem(INSPECTION_PENDING_KEY, JSON.stringify(request));
+    } else {
+      storage().setItem(PENDING_KEY, JSON.stringify(request));
+      storage().removeItem(INSPECTION_PENDING_KEY);
+    }
     const input = { request_id: request.request_id, date, issued_at: request.issued_at };
     const url = new URL("shortcuts://run-shortcut");
     url.searchParams.set("name", settings.shortcutName);
@@ -88,11 +107,21 @@ export function createHealthBridge(options = {}) {
     if (pending()?.request_id !== request.request_id) throw new Error("別の更新に切り替わりました");
     return validateHealthResult(result, request, now());
   }
-  async function finish(request, keys = [], skipped = []) {
-    if (pending()?.request_id !== request.request_id) return false;
+  async function finish(request, keys = [], skipped = [], { recordSync = true } = {}) {
+    if (!validMode(request?.mode) || typeof recordSync !== "boolean") throw new Error("読み取り完了の設定が正しくありません。");
+    const current = pending();
+    if (current?.request_id !== request.request_id) return false;
     const body = credentials(request);
-    storage().removeItem(PENDING_KEY);
-    storage().setItem(LAST_SYNC_KEY, JSON.stringify({ date: request.date, synced_at: now(), keys, skipped }));
+    if (current.mode === "inspect") storage().removeItem(INSPECTION_PENDING_KEY);
+    else {
+      storage().removeItem(PENDING_KEY);
+      storage().removeItem(INSPECTION_PENDING_KEY);
+    }
+    // Persisted mode also protects a resumed caller that omits the new option
+    // or loses mode while rebuilding its request object.
+    if (recordSync && current.mode !== "inspect" && request.mode !== "inspect") {
+      storage().setItem(LAST_SYNC_KEY, JSON.stringify({ date: request.date, synced_at: now(), keys, skipped }));
+    }
     try { await api.ackHealthBridge(body); } catch (_) { /* server cache expires without changing saved habits */ }
     return true;
   }
@@ -102,10 +131,13 @@ export function createHealthBridge(options = {}) {
     try { request = pending(); } catch (_) { return false; }
     if (!request || request.date !== date) return false;
     request.editedKeys = [...new Set([...(request.editedKeys || []), key])];
-    storage().setItem(PENDING_KEY, JSON.stringify(request));
+    storage().setItem(request.mode === "inspect" ? INSPECTION_PENDING_KEY : PENDING_KEY, JSON.stringify(request));
     return true;
   }
-  function cancel() { storage().removeItem(PENDING_KEY); }
+  function cancel() {
+    storage().removeItem(PENDING_KEY);
+    storage().removeItem(INSPECTION_PENDING_KEY);
+  }
   function lastSync() { return jsonAt(storage(), LAST_SYNC_KEY); }
   return { pending, prepare, read, finish, cancel, lastSync, markEdited };
 }

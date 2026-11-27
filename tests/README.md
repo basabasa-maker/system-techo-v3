@@ -187,3 +187,9 @@ PLAYWRIGHT_PATH=/path/to/playwright PLAYWRIGHT_BROWSERS_PATH=/path/to/browsers B
 実行変数の詳細は各テスト冒頭を参照。GAS、Drive、Healthはすべて合成応答/メモリstubで、実データや実トリガーは使わない。文章の改行・保存/復旧・旧入力イベント・型変更・他日保持、20画像＋50既存アイコンの選択/再開、バックアップ状態取得と管理者画面へのGET導線を検証する。
 
 設定は17件（未保存の文章で更新を止め、復旧・同期後だけ許すケースを追加）、Health23件・最終食事15件も回帰確認した。Googleの追加認可や実際のコピー/トリガーが成功したという意味ではない。公開前の手順・未確認範囲は [habit-text-backup.md](../docs/habit-text-backup.md)。
+
+## 歩数の保存なし観測（2026-11-27）
+
+`node --test tests/*.test.mjs`：149件。`node tests/health.cjs`：31件（保存なし確認6件を含む）。通常保存、手入力・他日・未送信保護の既存回帰も含む。`app-settings.cjs` 17件、`backup-settings.cjs` 8件も成功。すべて隔離ブラウザと合成APIを使い、実Healthや本人のShortcutを起動しない。
+
+観測専用pendingを通常pendingから分離する。`health-bridge.test.mjs` はGit履歴 `299419f:js/health/bridge.js` の旧bridge実体もロードし、観測中の旧版から読取り・完了・通常取込ができないことを検証するため、この履歴が必要。観測中の再読み込み、欠測と0、受信歩数が変わっても既存歩数不変、通常更新への復帰、連携OFF/別画面/既存待機の禁止、アプリ更新待機を確認する。測定値やキーはテストへ転記しない。

@@ -168,3 +168,15 @@ test('unknown habit draft status cannot be mistaken for a safely saved field', a
   const { guard } = fixture({ habitTextDirty: () => undefined });
   await assert.rejects(guard(), /確認|文章/);
 });
+
+test('read-only Health inspection also blocks reload and retains its dedicated request', async () => {
+  const {createHealthBridge,saveHealthSettings,PENDING_KEY,INSPECTION_PENDING_KEY} = await import('../js/health/bridge.js');
+  const map=new Map(),storage={getItem:key=>map.get(key)??null,setItem:(key,value)=>map.set(key,value),removeItem:key=>map.delete(key)};
+  saveHealthSettings({enabled:true,shortcutName:'synthetic',pairKey:'a'.repeat(43)},storage);
+  const bridge=createHealthBridge({storage,now:()=>1800000000000,crypto:{getRandomValues:bytes=>bytes.fill(1)},api:{}});
+  bridge.prepare('2026-11-27',{steps:4711},{mode:'inspect'});
+  assert.equal(storage.getItem(PENDING_KEY),null);const raw=storage.getItem(INSPECTION_PENDING_KEY);assert(raw);
+  const {guard}=fixture({healthPending:bridge.pending});
+  await assert.rejects(guard(),/ヘルスケア/);assert.equal(storage.getItem(INSPECTION_PENDING_KEY),raw);
+  bridge.cancel();assert.equal(await guard(),true);
+});

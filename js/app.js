@@ -8,7 +8,7 @@ import { initTheme } from "./theme.js";
 import { initTabNavigation, revealActiveTab } from "./tab-navigation.js";
 import { healthBridge } from "./health/bridge.js";
 import { showHealthReturnNotice, showHealthSettings } from "./health/ui.js";
-import { healthSettingsChanged } from "./habit.js";
+import { healthSettingsChanged, inspectHealthSteps } from "./habit.js";
 import { showAppSettings } from "./settings/ui.js";
 
 // タブの種類。表示順は tab-navigation.js が端末の設定を復元する。
@@ -27,6 +27,7 @@ function init() {
   initTheme();
   document.getElementById("btn-settings").addEventListener("click", () => showAppSettings({
     onOpenHealthSettings: () => showHealthSettings(healthSettingsChanged),
+    onInspectHealthSteps: inspectHealthSteps,
   }));
 
   if (!TABS.includes(appState.activeTab)) appState.activeTab = DEFAULT_TAB;

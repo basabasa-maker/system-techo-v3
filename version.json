@@ -1,5 +1,5 @@
 {
-  "build": "20261127-161914",
+  "build": "20261127-211744",
   "assets": [
     {
       "path": "css/goals.css",
@@ -59,11 +59,11 @@
     },
     {
       "path": "index.html",
-      "sha256": "23dd9722e54e0caca6145b03340fc37a4ed6322f8292e55dc9cdf554cd06b641"
+      "sha256": "17283c5e0aa67a7708a3ea9f942c26d7540bf2f1d07d3111250928c8f201b706"
     },
     {
       "path": "js/app.js",
-      "sha256": "a4db87026f6de0b987ad28812645b3e537e5d48b599d230eae556f23c52f9dd2"
+      "sha256": "71d19f98b7c0f6f368966d60dbab1f048fd14bf2e4e7c0cc3534ac97194561a5"
     },
     {
       "path": "js/backup/client.js",
@@ -119,11 +119,11 @@
     },
     {
       "path": "js/habit.js",
-      "sha256": "82fc510424ff8decebfb5cdff7d9e57c79ddd57ea37969c3ae91a795000723db"
+      "sha256": "6907b1794550e65225f2a72916c3010f1483deb1233fab2ebd17e00badea404c"
     },
     {
       "path": "js/health/bridge.js",
-      "sha256": "b76c58e4113914279b1abd8dc974125cd52206ba3192c048277fa7953f71932f"
+      "sha256": "1db69bec64f5cb3ce5cd4e574529fa854cf6174af0a06650e28649654f80313d"
     },
     {
       "path": "js/health/model.js",
@@ -131,7 +131,7 @@
     },
     {
       "path": "js/health/ui.js",
-      "sha256": "81c169a9634b318b25f2dedf7bdaea740d26efd3b780b0fc8f240df756d699f1"
+      "sha256": "b7b50b36d5f1823dae14fc752f381a316e87b6eb7fdbc980351f938398b39f7e"
     },
     {
       "path": "js/meal-time.js",
@@ -179,7 +179,7 @@
     },
     {
       "path": "js/settings/ui.js",
-      "sha256": "f5fb67728eaa240a43ac7126c074b9b5fc4161825553087118a6baf6fde85403"
+      "sha256": "e61a423d07f9b912689f220deab8338770da3a5c6de4321081360e4a6f196a46"
     },
     {
       "path": "js/settings/updater.js",
@@ -239,7 +239,7 @@
     },
     {
       "path": "sw.js",
-      "sha256": "1d063fc0892d2a9cd6ef6e1f5853b705a1046dddbef80ff0292a0352e09ee4b4"
+      "sha256": "96993a1ca7c8d3fa8cf4bc6f02bfccc9e657e8247b8631871d852bef57e259b1"
     },
     {
       "path": "vendor/codemirror/codemirror.js",

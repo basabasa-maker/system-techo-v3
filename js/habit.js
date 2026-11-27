@@ -11,7 +11,7 @@ import { bindHabitTextInput, persistHabitText, replayHabitTextRecovery, getHabit
 import { latestMealTime } from "./meal-time.js";
 import { healthBridge, loadHealthSettings, saveHealthSettings, REQUEST_TTL_MS } from "./health/bridge.js";
 import { selectHealthPatch } from "./health/model.js";
-import { confirmHealthValues } from "./health/ui.js";
+import { confirmHealthValues, showHealthStepObservation } from "./health/ui.js";
 import {
   HABIT_DEFAULT_ITEMS,
   LS_KEY_HABIT_DAY_PREFIX,
@@ -742,15 +742,7 @@ export async function pullAndRender() {
         resumeHealthSync();
         return;
       }
-      clearTimeout(healthTimer);
-      healthReady = null;
-      const { url } = healthBridge.prepare(state.date, state.values);
-      healthMessage = "ショートカットで読み取り中です。完了したら元の手帳へ戻ってください。";
-      notifyHealthSyncChange();
-      // Must stay synchronous with this user gesture on iPhone.
-      window.location.assign(url);
-      healthPollUntil = Date.now() + 60000;
-      healthTimer = setTimeout(() => resumeHealthSync(true), 1500);
+      launchHealthRead();
       return;
     }
   } catch (error) { toast(error.message, "error");return; }
@@ -767,6 +759,38 @@ export async function pullAndRender() {
 
 
 // ---------- iPhone Health bridge (only an explicitly requested day) ----------
+// The diagnostic uses the existing Shortcut and POST protocol, but its local
+// pending mode never enters the ordinary habit refresh or save path.
+function launchHealthRead(options = {}) {
+  clearTimeout(healthTimer);
+  healthReady = null;
+  const { url } = healthBridge.prepare(state.date, state.values, options);
+  healthMessage = options.mode === "inspect"
+    ? "歩数を確認するため読み取り中です。この確認ではヘルスケアの値を保存しません。元の手帳へ戻ってください。"
+    : "ショートカットで読み取り中です。完了したら元の手帳へ戻ってください。";
+  notifyHealthSyncChange();
+  // Keep the OS handoff synchronous with the user's click, including Settings.
+  window.location.assign(url);
+  healthPollUntil = Date.now() + 60000;
+  healthTimer = setTimeout(() => resumeHealthSync(true), 1500);
+}
+export function inspectHealthSteps() {
+  try {
+    if (!rootEl?.isConnected || state.sub !== "input") {
+      toast("習慣の入力画面で、歩数を確認してください。", "error");return false;
+    }
+    if (!loadHealthSettings().enabled) {
+      toast("先にヘルスケア連携を設定してください。", "error");return false;
+    }
+    if (healthResumePromise || healthSaving || healthBridge.pending()) {
+      toast("読み取り処理中です。完了してから歩数を確認してください。", "error");return false;
+    }
+    launchHealthRead({mode:"inspect"});
+    return true;
+  } catch (error) { toast(error.message, "error");return false; }
+}
+
+
 // Settings reads only this presentation state; credentials and measurements stay private.
 export function getHealthSyncView() {
   try {
@@ -779,9 +803,10 @@ export function getHealthSyncView() {
           : settings.enabled ? "習慣の入力画面の更新でヘルスケアを読み取ります。"
             : "ヘルスケア連携は停止中です。");
     if (request && !message.includes(request.date)) message = `${request.date}：${message}`;
-    return { message, pending: !!request, saving: healthSaving, enabled: settings.enabled };
+    return { message, pending: !!request, saving: healthSaving, enabled: settings.enabled,
+      inspectAvailable: !!rootEl?.isConnected && state.sub === "input" && !healthResumePromise };
   } catch (_) {
-    return { message: "連携設定を確認してください。", pending: false, saving: healthSaving, enabled: false };
+    return { message: "連携設定を確認してください。", pending: false, saving: healthSaving, enabled: false, inspectAvailable: false };
   }
 }
 export function cancelHealthSync() {
@@ -810,8 +835,10 @@ function healthInputBusy() {
     || !!document.querySelector(".modal-backdrop");
 }
 function healthContext(request) {
+  const current = healthBridge.pending();
   return rootEl?.isConnected && state.sub === "input" && state.date === request.date
-    && document.visibilityState !== "hidden" && healthBridge.pending()?.request_id === request.request_id;
+    && document.visibilityState !== "hidden" && current?.request_id === request.request_id
+    && current.mode === request.mode;
 }
 function scheduleHealth(request, delay=1500) {
   clearTimeout(healthTimer);
@@ -844,11 +871,23 @@ export function resumeHealthSync(internal = false) {
 }
 async function receiveHealth(request) {
   if (Date.now()-request.issued_at >= REQUEST_TTL_MS) throw new Error("読み取りが期限切れです。もう一度更新してください。");
-  let values=healthReady?.request_id === request.request_id ? healthReady.values : await healthBridge.read(request);
+  const cached=healthReady?.request_id === request.request_id ? healthReady : null;
+  const values=cached ? cached.values : await healthBridge.read(request);
   if (!healthContext(request)) return;
   if (values === null) { scheduleHealth(request);return; }
-  healthReady={request_id:request.request_id,values};
+  healthReady={request_id:request.request_id,values,receivedAt:cached?.receivedAt ?? Date.now()};
   if (healthInputBusy()) { scheduleHealth(request,500);return; }
+  if (request.mode === "inspect") {
+    await showHealthStepObservation(request.date, {
+      steps:values.steps, current:loadDay(request.date).steps, receivedAt:healthReady.receivedAt,
+    });
+    if (await healthBridge.finish(request,[],[],{recordSync:false})) {
+      if (healthReady?.request_id === request.request_id) healthReady=null;
+      healthMessage="歩数の確認を終了しました。この確認ではヘルスケアの値を保存していません。";
+      notifyHealthSyncChange();
+    }
+    return;
+  }
   let settings=loadHealthSettings();
   const receivedKeys=Object.keys(values);
   const needsCheck=receivedKeys.some(key=>!settings.verifiedKeys.includes(key));

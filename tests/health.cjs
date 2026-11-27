@@ -4,7 +4,7 @@ const {chromium,webkit}=require(process.env.PLAYWRIGHT_PATH||'playwright');
 const vm=require('node:vm');
 const root=process.env.APP_ROOT||path.resolve(__dirname,'..'),clone=x=>JSON.parse(JSON.stringify(x)),delay=ms=>new Promise(r=>setTimeout(r,ms));
 const TODAY='2027-01-01',PREV='2026-12-31',NEXT='2027-01-02',PAIR_KEY='a'.repeat(43);
-const SETTINGS='sth_v3_health_settings',PENDING='sth_v3_health_pending';
+const SETTINGS='sth_v3_health_settings',PENDING='sth_v3_health_pending',INSPECTION_PENDING='sth_v3_health_inspection_pending';
 const items=[
  {id:'weight',label:'体重',type:'decimal',icon:'•',unit:'kg'},
  {id:'bodyFat',label:'体脂肪率',type:'decimal',icon:'•',unit:'%'},
@@ -61,7 +61,7 @@ const field=(page,key)=>page.locator(`[data-id="${key}"] input`);
 const healthReads=posts=>posts.filter(p=>p.type==='health_bridge_read');
 const habitWrites=posts=>posts.filter(p=>p.type==='habit_day_upsert');
 const metricWrites=posts=>habitWrites(posts).filter(p=>Object.keys(p.set||{}).some(key=>['bodyFat','kcal','steps'].includes(key)));
-async function pending(page){return page.evaluate(key=>JSON.parse(localStorage.getItem(key)||'null'),PENDING);}
+async function pending(page){return page.evaluate(keys=>JSON.parse(localStorage.getItem(keys[0])||localStorage.getItem(keys[1])||'null'),[PENDING,INSPECTION_PENDING]);}
 async function begin(page,posts){
  assert.equal(await page.evaluate(()=>!!window.navigation),true,'test browser must support cancelling external protocol navigation');
  await page.locator('#btn-refresh').click();await until(async()=>!!await pending(page),'manual refresh must create a pending Health request');
@@ -156,6 +156,87 @@ async function scenario(name,fn,{enabled=true,verified=true}={}){
  await new Promise(r=>server.listen(0,'127.0.0.1',r));base='http://127.0.0.1:'+server.address().port;
  const engine=process.env.BROWSER_ENGINE==='webkit'?webkit:chromium;
  browser=await engine.launch({headless:true,...(engine===chromium?{executablePath:process.env.CHROME_PATH||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'}:{})});
+ async function startStepObservation(page) {
+  await openHealthTools(page);
+  assert.equal(await page.locator('#settings-inspect-steps').isEnabled(),true,'read-only step observation is available from Habit input');
+  await page.locator('#settings-inspect-steps').click();
+  await until(async()=>!!await pending(page),'observation request exists');
+  const request=await pending(page);assert.equal(request.mode,'inspect');
+  assert.equal(await page.evaluate(key=>localStorage.getItem(key),PENDING),null,'legacy clients cannot see or import the observation request');
+  const launch=await page.evaluate(()=>window.testShortcutLaunches.at(-1)),input=JSON.parse(new URL(launch).searchParams.get('text'));
+  assert.deepEqual(Object.keys(input).sort(),['date','issued_at','request_id'],'existing Shortcut input is unchanged');assert(!launch.includes(PAIR_KEY));
+  return request;
+ }
+ async function shownStepObservation(page){await page.locator('.health-step-observation').waitFor();}
+ const observedValue=(page,name)=>page.locator('.health-step-observation [data-observation-value="'+name+'"]').textContent();
+ const storedHealthSnapshot=page=>page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>/^(sth_v3_(habitday_|mealday_|health_settings|health_last_sync)|preserve:health-test)/.test(key))));
+ await scenario('step observation shows incoming values without saving or marking a real import',async({page,posts,values})=>{
+  await page.evaluate(()=>localStorage.setItem('sth_v3_health_last_sync',' { "date":"2026-12-31", "synced_at":7, "keys":["steps"], "skipped":[], "keep":true } '));
+  const before=await storedHealthSnapshot(page),server=clone(values);
+  await startStepObservation(page);await shownStepObservation(page);
+  assert((await observedValue(page,'steps')).replaceAll(',','').includes('8040'));
+  assert((await observedValue(page,'current')).replaceAll(',','').includes('1234'));
+  const message=await page.locator('.health-step-observation').textContent();
+  assert(!message.includes(PAIR_KEY));assert(!message.includes('体脂肪'));assert(!message.includes('体重'));
+  assert.equal(await page.locator('#health-confirm').count(),0,'observation never offers an import button');
+  await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('pageshow'));document.dispatchEvent(new Event('visibilitychange'));});
+  await delay(100);assert.equal(await page.locator('.health-step-observation').count(),1);
+  assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,server);assert.deepEqual(await storedHealthSnapshot(page),before);
+  await page.locator('#health-step-observation-close').click();await done(page,posts);
+  assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,server);assert.deepEqual(await storedHealthSnapshot(page),before,'closing observation preserves last import and all saved values');
+ });
+ await scenario('step observation survives restart and never marks first-time metrics verified',async({page,posts,opts,values})=>{
+  opts.healthStatus='waiting';const before=await storedHealthSnapshot(page),server=clone(values);
+  const request=await startStepObservation(page);await until(()=>Promise.resolve(healthReads(posts).length>0),'initial observation waits');
+  await page.reload();await field(page,'steps').waitFor();opts.healthStatus='ready';
+  await shownStepObservation(page);assert.equal((await pending(page)).request_id,request.request_id);
+  assert.equal(await page.locator('#health-confirm').count(),0);
+  assert.deepEqual(await storedHealthSnapshot(page),before);assert.deepEqual(values,server);
+  await page.locator('#health-step-observation-close').click();await done(page,posts);
+  assert.deepEqual(await storedHealthSnapshot(page),before);assert.equal(habitWrites(posts).length,0);
+ },{verified:false});
+ await scenario('step observation distinguishes no sample and real zero, then ordinary update still saves',async({page,posts,opts,values})=>{
+  const before=await storedHealthSnapshot(page);
+  for(const step of [undefined,0]){
+   opts.healthValues=step===undefined?{}:{steps:step};opts.healthUnits=step===undefined?{}:{steps:'count'};
+   await startStepObservation(page);await shownStepObservation(page);
+   const text=await observedValue(page,'steps');if(step===undefined)assert(text.includes('未取得'));else assert(text.includes('0')&&!text.includes('未取得'));
+   await page.locator('#health-step-observation-close').click();await done(page,posts);
+   assert.equal(habitWrites(posts).length,0);assert.deepEqual(await storedHealthSnapshot(page),before);
+  }
+  opts.healthValues={steps:8040};opts.healthUnits={steps:'count'};
+  await begin(page,posts);await done(page,posts);assert.equal(values[TODAY].steps,8040);
+  assert.deepEqual(habitWrites(posts).at(-1).set,{steps:8040});
+ });
+ await scenario('step observation stays read-only even when upstream readings rise between requests',async({page,posts,opts,values})=>{
+  const before=await storedHealthSnapshot(page),server=clone(values);
+  for(const step of [8040,9040]){
+   opts.healthValues={steps:step};opts.healthUnits={steps:'count'};
+   await startStepObservation(page);await shownStepObservation(page);
+   assert((await observedValue(page,'steps')).replaceAll(',','').includes(String(step)));
+   assert((await observedValue(page,'current')).replaceAll(',','').includes('1234'));
+   await page.locator('#health-step-observation-close').click();await done(page,posts);
+  }
+  assert.equal(habitWrites(posts).length,0);assert.deepEqual(values,server);assert.deepEqual(await storedHealthSnapshot(page),before);
+ });
+ await scenario('step observation cannot replace an existing request or start outside Habit input',async({page,posts,opts})=>{
+  await page.locator('[data-sub="chart"]').click();await openHealthTools(page);
+  assert.equal(await page.locator('#settings-inspect-steps').isEnabled(),false);await closeHealthTools(page);
+  await page.locator('[data-sub="input"]').click();opts.healthStatus='waiting';
+  const request=await begin(page,posts),launches=await page.evaluate(()=>window.testShortcutLaunches.length);
+  await openHealthTools(page);assert.equal(await page.locator('#settings-inspect-steps').isEnabled(),false);
+  assert.equal(await page.evaluate(async()=>(await import('/js/habit.js')).inspectHealthSteps()),false);
+  assert.equal((await pending(page)).request_id,request.request_id);
+  assert.equal(await page.evaluate(()=>window.testShortcutLaunches.length),launches);
+  await page.locator('#settings-cancel-health').click();await closeHealthTools(page);
+  assert.equal(habitWrites(posts).length,0);
+ });
+ await scenario('step observation stays disabled until Health pairing is enabled',async({page,posts})=>{
+  await openHealthTools(page);assert.equal(await page.locator('#settings-inspect-steps').isEnabled(),false);
+  assert.equal(await page.evaluate(async()=>(await import('/js/habit.js')).inspectHealthSteps()),false);
+  assert.equal(await pending(page),null);assert.equal(healthReads(posts).length,0);assert.equal(habitWrites(posts).length,0);
+  await closeHealthTools(page);
+ },{enabled:false});
  await scenario('Health controls live only in Settings and preserve record keys across mobile layouts',async({page,posts,values})=>{
   assert.equal(await page.locator('#health-disclosure,.health-tools').count(),0,'Habit top has no Health panel');
   const saved=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>/^(sth_v3_(habitday_|mealday_|health_settings)|preserve:health-test)/.test(key))));
